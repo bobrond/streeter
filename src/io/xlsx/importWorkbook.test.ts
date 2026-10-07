@@ -1,13 +1,13 @@
 // Test d'acceptation sur le vrai tableur (docs/, exclu du dépôt) : sauté quand le fichier est absent (CI).
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import { deloadTemplate } from '../../domain/deload';
 import { estimateDuration } from '../../domain/duration';
 import { VOLUME_STATUS_LABEL } from '../../domain/labels';
 import { objectiveState } from '../../domain/objectives';
-import type { SeqDay, SessionTemplate } from '../../domain/types';
+import type { ID, SeqDay, SessionTemplate, Settings } from '../../domain/types';
 import { plannedComponentVolume, programIssues, skillTotals, type Program } from '../../domain/volume';
 import { buildImport, emptyExisting, type ImportResult } from './importWorkbook';
 import { readWorkbook } from './readWorkbook';
@@ -20,20 +20,32 @@ function runImport(existing = emptyExisting()): ImportResult {
   return buildImport(data, existing, { newId: () => `id-${++n}-${Math.random().toString(36).slice(2, 8)}`, today: '2026-10-07' });
 }
 
+// Le corps d'un `describe` sauté est quand même exécuté pour recenser les tests :
+// la lecture du fichier se fait donc dans `beforeAll`, qui ne tourne pas quand la suite est sautée.
 describe.skipIf(!existsSync(FILE))('import du tableur programme_planche_touch_fl_1.xlsx', () => {
-  const result = runImport();
-  const { settings } = result;
-  const byId = new Map(result.templates.map((t) => [t.id, t]));
+  let result: ImportResult;
+  let settings: Settings;
+  let byId: Map<ID, SessionTemplate>;
+  let exerciseName: Map<ID, string>;
+  let elementName: Map<ID, string>;
+  let blockName: Map<ID, string>;
+  let program: Program;
   const templateAt = (day: SeqDay, moment: 'morning' | 'evening') => byId.get(settings.weekPlan[day][moment] ?? '') ?? null;
-  const exerciseName = new Map(result.exercises.map((e) => [e.id, e.name]));
-  const elementName = new Map(result.elements.map((e) => [e.id, e.name]));
-  const blockName = new Map(result.blockTypes.map((b) => [b.id, b.name]));
-  const program: Program = {
-    weekPlan: settings.weekPlan,
-    templates: byId,
-    elements: result.elements,
-    blocks: new Map(result.blockTypes.map((b) => [b.id, b])),
-  };
+
+  beforeAll(() => {
+    result = runImport();
+    settings = result.settings;
+    byId = new Map(result.templates.map((t) => [t.id, t]));
+    exerciseName = new Map(result.exercises.map((e) => [e.id, e.name]));
+    elementName = new Map(result.elements.map((e) => [e.id, e.name]));
+    blockName = new Map(result.blockTypes.map((b) => [b.id, b.name]));
+    program = {
+      weekPlan: settings.weekPlan,
+      templates: byId,
+      elements: result.elements,
+      blocks: new Map(result.blockTypes.map((b) => [b.id, b])),
+    };
+  });
 
   it('se fait sans erreur', () => {
     expect(result.report.issues.filter((i) => i.level === 'error')).toEqual([]);
