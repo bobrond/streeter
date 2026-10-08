@@ -11,3 +11,7 @@ coverage
 *.xlsx
 *.xls
 *.csv
+
+# Vault de suivi (second cerveau) : privé, il reste sur ce PC et ne doit jamais être publié.
+vault/
+.obsidian/

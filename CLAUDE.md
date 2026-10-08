@@ -9,8 +9,19 @@ PWA personnelle de programmation et de suivi d'entraînement street workout : un
 ## Méthode de travail
 
 - Phases livrables et testables sur téléphone : 0 socle, import, calculs testés, mise en ligne → 1 Aujourd'hui et mode séance, hors ligne, export JSON de secours → 2 édition complète dans Réglages → 3 Semaine, Journal, Objectifs → 4 sauvegarde complète, exports, finitions PWA.
-- Fin de phase : tests verts, `git commit`, `git push` (déploiement automatique), puis court récapitulatif (ce qui marche, ce qui reste, quoi tester sur le téléphone).
+- Fin de phase : tests verts, journal de bord du jour à jour, `git commit`, `git push` (déploiement automatique), puis court récapitulatif (ce qui marche, ce qui reste, quoi tester sur le téléphone).
 - Échanges en français, en tutoyant l'utilisateur. Son téléphone : Android (Chrome).
+
+## Journal de bord (vault)
+
+Le dossier `vault/` est le second cerveau du projet (lisible dans Obsidian et VS Code) : `vault/index.md` donne l'état du projet et pointe vers un journal de bord par jour de travail, `vault/journal/AAAA-MM-JJ.md`. À ne pas confondre avec l'écran Journal de l'appli.
+
+- **Privé : le vault reste sur ce PC.** Il est ignoré par git (`.gitignore`) et ne doit jamais être commité ni poussé : le dépôt est public (décidé avec l'utilisateur le 08/10/2026). Il n'a pas de sauvegarde en ligne.
+- **Chaque session de travail le tient à jour, sans attendre qu'on le demande.** En début de session, lire l'index et le dernier journal pour reprendre le fil.
+- `npm run journal` crée le journal du jour depuis le modèle `vault/templates/journal.md`, régénère sa liste de commits (heure locale) et la navigation entre les jours, et ajoute sa ligne dans l'index. Ne jamais modifier à la main ce qui est entre les repères `commits:début` / `commits:fin`.
+- À la main, au fil de la journée : Actions (ce qui a été fait, par thème), Décisions (qui a tranché ; « décidé avec l'utilisateur » ou « choix sans l'utilisateur, à valider »), Problèmes et corrections, Mises à jour (dépendances, versions, schéma Dexie, format de sauvegarde, déploiement), Suite (cases à cocher).
+- En fin de session, après le dernier commit : `npm run journal`, puis « En bref » du jour, ligne du jour dans l'index (une phrase), « État actuel » et « En attente / à décider » de l'index.
+- Les liens sont des liens Markdown relatifs (pas de `[[…]]`), pour fonctionner partout.
 
 ## Stack
 
