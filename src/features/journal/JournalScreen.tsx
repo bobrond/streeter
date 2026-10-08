@@ -13,6 +13,7 @@ import { CloseIcon } from '../../ui/icons';
 import { Screen } from '../../ui/Screen';
 import { Sheet } from '../../ui/Sheet';
 import { chipClass } from '../../ui/styles';
+import { ExportView } from '../settings/ExportView';
 import { ExerciseDetail } from './ExerciseDetail';
 import { SessionDetail } from './SessionDetail';
 
@@ -179,6 +180,10 @@ function JournalList({ data, path }: { data: AppData; path: string }) {
             <SessionCard key={entry.session.id} entry={entry} lookups={lookups} />
           ))}
           {entries.length === 0 && <p className="text-ink-2">Aucune séance{isFilterActive(filter) ? ' pour ce filtre' : ''}.</p>}
+          <section className="mt-2 flex flex-col gap-2 rounded-2xl border border-line bg-card p-4">
+            <h2 className="text-lg font-semibold">Exporter tout le journal</h2>
+            <ExportView data={data} />
+          </section>
         </>
       )}
 

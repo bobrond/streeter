@@ -2,10 +2,14 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import pkg from './package.json' with { type: 'json' };
 
 // L'appli est publiée sur https://bobrond.github.io/streeter/
 export default defineConfig({
   base: '/streeter/',
+  define: {
+    __APP_VERSION__: JSON.stringify(`${pkg.version} (${new Date().toISOString().slice(0, 10)})`),
+  },
   plugins: [
     react(),
     tailwindcss(),

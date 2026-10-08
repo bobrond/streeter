@@ -199,6 +199,14 @@ Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en do
 - Totaux skills (min / max / nombre de séances / allégée appli) : Skill planche 28 / 38 / 5 / 22 ; Skill FL 28 / 34 / 5 / 20 ; Skill assisté planche 13 / 18 / 6 / 12 ; Skill assisté FL 13 / 18 / 6 / 12 ; Renfo spé planche 8 / 12 / 4 / 4 ; Renfo spé FL 8 / 12 / 4 / 4.
 - Le test d'import relit les valeurs attendues dans les cellules de l'onglet Volume hebdo ; le rapport d'import affiché dans l'appli fait la même comparaison.
 
+## Sauvegarde et exports
+
+- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate`. La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
+- Rappel de sauvegarde sur Aujourd'hui : dernière sauvegarde de plus de 7 jours, ou aucune alors qu'au moins une séance a été faite dans l'appli. Sur Android, « Envoyer une sauvegarde » ouvre le menu de partage (Drive, e-mail).
+- Export du journal ([src/io/journal/exportJournal.ts](src/io/journal/exportJournal.ts)) : .xlsx (onglet « Journal », vraies dates Excel) et .csv pour Excel en français (« ; », CRLF, marque UTF-8). Les notes de ligne reprennent la note de séance (1re ligne), les notes de série, « Séance abandonnée » et les numéros des séries dégradées.
+- Version affichée dans Réglages → Sauvegarde et données → Appli : `version` du package.json et date du build.
+- `vite-plugin-pwa` reste en 1.3 (la 2.0, sortie le 03/10/2026, était trop récente). Mise à jour proposée par un message, jamais imposée.
+
 ## Hors périmètre de la v1
 
 - Synchronisation cloud, comptes, applications natives, coaching automatique ou IA, multi-utilisateur.

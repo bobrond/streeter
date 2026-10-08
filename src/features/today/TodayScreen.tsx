@@ -18,6 +18,7 @@ import { Screen } from '../../ui/Screen';
 import { ConfirmSheet, Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/toastStore';
 import { TemplateItems } from '../week/TemplateItems';
+import { BackupReminder, InstallCard } from './Reminders';
 import { startTemplate } from './startTemplate';
 
 interface Planned {
@@ -206,6 +207,9 @@ export function TodayScreen({ data }: { data: AppData }) {
           <h2 className="text-2xl font-bold">Repos</h2>
         </article>
       )}
+
+      <BackupReminder data={data} now={now} />
+      <InstallCard />
 
       <section className="mt-2 flex flex-col gap-2">
         <h2 className="text-sm font-bold tracking-wide text-ink-3 uppercase">Autres options</h2>

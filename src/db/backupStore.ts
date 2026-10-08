@@ -19,3 +19,14 @@ export async function readBackup(db: StreeterDB, now: number): Promise<Backup> {
 export async function markBackupDone(db: StreeterDB, at: number): Promise<void> {
   await db.settings.update('settings', { lastBackupAt: at });
 }
+
+/** Remplace toutes les données par celles d'une sauvegarde, dans une seule transaction (tout ou rien). */
+export async function restoreBackup(db: StreeterDB, backup: Backup): Promise<void> {
+  await db.transaction('rw', db.tables, async () => {
+    for (const name of BACKUP_TABLES) {
+      const table = db.table(name);
+      await table.clear();
+      await table.bulkPut(backup.tables[name]);
+    }
+  });
+}

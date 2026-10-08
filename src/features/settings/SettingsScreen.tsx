@@ -49,7 +49,7 @@ function SettingsMenu({ data }: { data: AppData }) {
       </ListGroup>
       <ListGroup title="Données">
         <ListRow
-          title="Sauvegarde et tableur"
+          title="Sauvegarde et données"
           subtitle={lastBackup ? `Dernière sauvegarde le ${formatDateShort(localISODate(new Date(lastBackup)))}` : 'Aucune sauvegarde pour l’instant'}
           onClick={() => navigate('/settings/data')}
         />

@@ -75,3 +75,22 @@ export function downloadFile(fileName: string, blob: Blob): void {
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+
+/** Partage de fichier possible (Android : Drive, e-mail, messagerie…). */
+export function canShareFiles(): boolean {
+  try {
+    return typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File([''], 'test.json', { type: 'application/json' })] });
+  } catch {
+    return false;
+  }
+}
+
+/** Ouvre le menu de partage du téléphone avec le fichier ; `false` si l'utilisateur annule. */
+export async function shareFile(fileName: string, blob: Blob, title: string): Promise<boolean> {
+  try {
+    await navigator.share({ files: [new File([blob], fileName, { type: blob.type })], title });
+    return true;
+  } catch {
+    return false;
+  }
+}
