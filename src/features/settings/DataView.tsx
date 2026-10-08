@@ -48,7 +48,9 @@ export function DataView({
         </Button>
       )}
       <p className="text-ink-2">
-        Réimporter met à jour le programme, le catalogue et les objectifs, et ajoute les séances du journal sans doublon.
+        Réimporter met à jour le catalogue et les objectifs, ajoute les séances du journal sans doublon, et{' '}
+        <span className="font-semibold text-warn">remplace les modèles de séance et la semaine type par ceux du tableur</span> : les modifications du
+        programme faites dans l’appli sont alors perdues.
       </p>
       {error && <p className="rounded-xl border border-danger/60 bg-danger/10 p-3 whitespace-pre-line text-danger">{error}</p>}
       <FileButton variant="secondary" accept={XLSX_ACCEPT} onFile={run} disabled={importing}>

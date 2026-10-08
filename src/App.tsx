@@ -42,7 +42,7 @@ export default function App() {
     return (
       <>
         <SessionScreen sessionId={session.id} data={data} />
-        <ToastHost position="top" />
+        <ToastHost belowHeader />
       </>
     );
   }
@@ -59,7 +59,7 @@ export default function App() {
       screen = <ObjectivesScreen data={data} />;
       break;
     case '/settings':
-      screen = <SettingsScreen data={data} onImported={setReport} onShowReport={setReport} />;
+      screen = <SettingsScreen data={data} path={path} onImported={setReport} onShowReport={setReport} />;
       break;
     default:
       screen = <TodayScreen data={data} />;

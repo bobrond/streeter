@@ -1,6 +1,8 @@
 // Routage par hash (#/journal…) : fonctionne sur un hébergement statique et hors ligne.
+// Chaque entrée d'historique de l'appli porte sa profondeur : « retour » remonte l'historique
+// tant qu'on est dans l'appli, sans jamais la quitter par erreur.
 import { useSyncExternalStore } from 'react';
-import { unwindBackEntries } from './backStack';
+import { historyDepth, unwindBackEntries } from './backStack';
 
 function currentPath(): string {
   return window.location.hash.replace(/^#/, '') || '/';
@@ -19,13 +21,26 @@ export function useRoute(): string {
 export function navigate(path: string, options: { replace?: boolean } = {}): void {
   unwindBackEntries(() => {
     if (currentPath() === path) return;
-    if (options.replace) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${path}`);
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
-    } else {
-      window.location.hash = path;
-    }
+    const url = `${window.location.pathname}${window.location.search}#${path}`;
+    const depth = historyDepth();
+    if (options.replace) window.history.replaceState({ depth }, '', url);
+    else window.history.pushState({ depth: depth + 1 }, '', url);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
   });
+}
+
+/** Retour à l'écran précédent de l'appli, ou à `fallback` si on y est arrivé directement. */
+export function goBack(fallback: string): void {
+  unwindBackEntries(() => {
+    if (historyDepth() > 0) window.history.back();
+    else navigate(fallback, { replace: true });
+  });
+}
+
+/** Chemin et paramètres de requête : « /settings/templates/x?block=y ». */
+export function queryParam(path: string, name: string): string | null {
+  const query = path.split('?')[1];
+  return query ? new URLSearchParams(query).get(name) : null;
 }
 
 /** « /session/:id » et « /session/abc » → { id: 'abc' } ; `null` si le chemin ne correspond pas. */

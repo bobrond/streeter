@@ -7,14 +7,29 @@ interface Entry {
   close: () => void;
 }
 
+interface HistoryState {
+  /** Profondeur dans l'historique de l'appli (0 : premier écran ouvert). */
+  depth?: number;
+  /** Entrée ajoutée par une feuille ouverte. */
+  backEntry?: number;
+}
+
 let stack: Entry[] = [];
 let counter = 0;
 /** Événements `popstate` provoqués par l'appli elle-même, à ignorer. */
 let ownPops = 0;
 let afterOwnPops: (() => void)[] = [];
 
+function state(): HistoryState | null {
+  return window.history.state as HistoryState | null;
+}
+
 function topId(): number | undefined {
-  return (window.history.state as { backEntry?: number } | null)?.backEntry;
+  return state()?.backEntry;
+}
+
+export function historyDepth(): number {
+  return state()?.depth ?? 0;
 }
 
 if (typeof window !== 'undefined') {
@@ -35,7 +50,7 @@ if (typeof window !== 'undefined') {
 /** Ajoute une entrée d'historique ; le bouton retour appellera `close`. */
 export function pushBackEntry(close: () => void): number {
   const id = ++counter;
-  window.history.pushState({ backEntry: id }, '');
+  window.history.pushState({ backEntry: id, depth: historyDepth() } satisfies HistoryState, '');
   stack.push({ id, close });
   return id;
 }

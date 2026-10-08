@@ -2,8 +2,8 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { CloseIcon } from './icons';
 import { currentToast, dismissToast, subscribeToast } from './toastStore';
 
-/** Affiche les messages brefs ; en haut de l'écran en séance, pour ne pas cacher « Valider ». */
-export function ToastHost({ position = 'bottom' }: { position?: 'top' | 'bottom' }) {
+/** Messages brefs en haut de l'écran : ils ne cachent jamais les actions du bas (« Valider », « Enregistrer »). */
+export function ToastHost({ belowHeader = false }: { belowHeader?: boolean }) {
   const toast = useSyncExternalStore(subscribeToast, currentToast);
   useEffect(() => {
     if (!toast || toast.sticky) return;
@@ -11,7 +11,7 @@ export function ToastHost({ position = 'bottom' }: { position?: 'top' | 'bottom'
     return () => window.clearTimeout(id);
   }, [toast]);
   if (!toast) return null;
-  const place = position === 'top' ? 'top-[calc(env(safe-area-inset-top)+4rem)]' : 'bottom-[calc(var(--tabbar-h,0px)+1rem)]';
+  const place = belowHeader ? 'top-[calc(env(safe-area-inset-top)+4rem)]' : 'top-[max(0.75rem,env(safe-area-inset-top))]';
   return (
     <div className={`pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4 ${place}`} role="status">
       <div
