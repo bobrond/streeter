@@ -3,6 +3,7 @@ import { block, element, item, settings, template, weekPlan } from '../test/buil
 import type { SessionLog, SessionTemplate, SetLog } from './types';
 import {
   plannedComponentVolume,
+  realizedSkillSets,
   programIssues,
   realizedComponentVolume,
   skillTotals,
@@ -145,5 +146,21 @@ describe('programIssues', () => {
     expect(issues).toContainEqual({ kind: 'evening_missing_skill', templateId: onlyPlanche.id, elementId: fl.id });
     expect(issues).toContainEqual({ kind: 'component_volume', elementId: dentele.id, status: 'under_min' });
     expect(issues).toContainEqual({ kind: 'morning_too_long', templateId: longMorning.id, maxSec: 2100 });
+  });
+});
+
+describe('realizedSkillSets', () => {
+  it('compte les séries de skill de la semaine par bloc', () => {
+    const w1 = { id: 'w1', week: 1 } as SessionLog;
+    const w2 = { id: 'w2', week: 2 } as SessionLog;
+    const sessions = new Map([w1, w2].map((x) => [x.id, x]));
+    const sets = [
+      { sessionId: 'w1', blockTypeId: skill.id, elementId: planche.id },
+      { sessionId: 'w1', blockTypeId: skill.id, elementId: planche.id },
+      { sessionId: 'w1', blockTypeId: renfo.id, elementId: dentele.id },
+      { sessionId: 'w2', blockTypeId: skill.id, elementId: fl.id },
+    ] as SetLog[];
+    const counts = realizedSkillSets(sets, sessions, elements, 1);
+    expect([...counts]).toEqual([[`${skill.id}|${planche.id}`, 2]]);
   });
 });

@@ -53,10 +53,10 @@ export default function App() {
       screen = <WeekScreen data={data} />;
       break;
     case '/journal':
-      screen = <JournalScreen data={data} />;
+      screen = <JournalScreen data={data} path={path} />;
       break;
     case '/objectives':
-      screen = <ObjectivesScreen data={data} />;
+      screen = <ObjectivesScreen data={data} path={path} />;
       break;
     case '/settings':
       screen = <SettingsScreen data={data} path={path} onImported={setReport} onShowReport={setReport} />;

@@ -233,3 +233,20 @@ export function programIssues(
   }
   return issues;
 }
+
+/** Séries de skill réellement faites dans la semaine `week`, par (bloc, skill) : clé « blocId|elementId ». */
+export function realizedSkillSets(
+  sets: readonly SetLog[],
+  sessions: ReadonlyMap<ID, SessionLog>,
+  elements: readonly Element[],
+  week: number,
+): Map<string, number> {
+  const skills = new Set(elements.filter((e) => e.kind === 'skill').map((e) => e.id));
+  const counts = new Map<string, number>();
+  for (const set of sets) {
+    if (!set.elementId || !skills.has(set.elementId) || sessions.get(set.sessionId)?.week !== week) continue;
+    const key = `${set.blockTypeId ?? ''}|${set.elementId}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}

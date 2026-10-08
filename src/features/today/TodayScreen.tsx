@@ -109,16 +109,22 @@ function TestDayBanner({ data }: { data: AppData }) {
   return (
     <section className="rounded-2xl border border-warn/70 bg-warn/10 p-4">
       <h2 className="text-xl font-bold text-warn">Jour de test des objectifs</h2>
-      <p className="mt-1 text-ink-2">Début de cycle, séance Max : teste tes objectifs après l’échauffement, puis note les résultats dans l’onglet Objectifs.</p>
+      <p className="mt-1 text-ink-2">Début de cycle, séance Max : teste tes objectifs après l’échauffement, puis touche un objectif pour noter le résultat.</p>
       <ul className="mt-2 flex flex-col gap-1">
         {data.objectives.map((objective) => {
           const state = objectiveState(objective);
           return (
-            <li key={objective.id} className="flex justify-between gap-3">
-              <span>{objective.name}</span>
-              <span className="shrink-0 text-ink-2">
-                {formatValue(objective.target, objective.unit)} · {OBJECTIVE_STATUS_LABEL[state.status]}
-              </span>
+            <li key={objective.id}>
+              <button
+                type="button"
+                onClick={() => navigate(`/objectives/${objective.id}`)}
+                className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl px-2 text-left active:bg-card-2"
+              >
+                <span>{objective.name}</span>
+                <span className="shrink-0 text-ink-2">
+                  {formatValue(objective.target, objective.unit)} · {OBJECTIVE_STATUS_LABEL[state.status]}
+                </span>
+              </button>
             </li>
           );
         })}

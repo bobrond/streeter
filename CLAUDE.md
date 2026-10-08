@@ -149,6 +149,7 @@ J2 et J6 (soir) sont identiques : un seul modèle partagé. J1 et J5 diffèrent 
 ### Journal
 
 - Une `SetLog` par série. Le nombre de séries faites **se déduit** des `SetLog` et n'est jamais saisi (le tableur contient « 3 séries » avec 4 valeurs, ce qui doit être impossible dans l'appli).
+- Fiche exercice : courbe de la meilleure valeur par séance, une courbe par élastique (« sans élastique » en blanc), séries dégradées exclues ; record = meilleure série sans élastique et non dégradée (comme pour les objectifs). Choix d'affichage de la phase 3.
 - Export .xlsx et .csv avec exactement les colonnes de l'onglet Journal : Date, Semaine, Jour, Moment, Type séance, Bloc, Exercice, Séries faites, Reps / durée (« v1 ; v2 ; … »), Élastique, RPE, Ressenti / notes. Une ligne par (séance, bloc, exercice). Jour au format « J3 ». RPE : une valeur si toutes les séries ont la même, sinon « 6 ; 7 ; 8 ». Les séries dégradées sont signalées dans les notes.
 
 ## Modèle de données (Dexie)
