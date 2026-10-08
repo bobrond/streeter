@@ -2,7 +2,7 @@ import type { AppData } from '../../db/hooks';
 import { OBJECTIVE_STATUS_LABEL, formatDateShort, formatValue } from '../../domain/labels';
 import { bestSessionPerformance, objectiveState, type ObjectiveStatus } from '../../domain/objectives';
 import { Badge, type Tone } from '../../ui/Badge';
-import type { Lookups } from './lookups';
+import type { Lookups } from '../../db/lookups';
 
 const STATUS_TONE: Record<ObjectiveStatus, Tone> = { to_test: 'neutral', in_progress: 'warn', achieved: 'ok' };
 

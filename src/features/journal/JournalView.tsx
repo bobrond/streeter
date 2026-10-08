@@ -2,7 +2,7 @@ import type { AppData } from '../../db/hooks';
 import { MOMENT_LABEL, UNIT_SHORT, formatDateLong, seqDayLabel } from '../../domain/labels';
 import type { SetLog } from '../../domain/types';
 import { Badge } from '../../ui/Badge';
-import type { Lookups } from './lookups';
+import type { Lookups } from '../../db/lookups';
 
 function distinct<T>(values: T[]): T[] {
   return [...new Set(values)];

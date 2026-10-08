@@ -10,7 +10,7 @@ import {
   type VolumeStatus,
 } from '../../domain/volume';
 import { Badge, type Tone } from '../../ui/Badge';
-import type { Lookups } from './lookups';
+import type { Lookups } from '../../db/lookups';
 
 const STATUS_TONE: Record<VolumeStatus, Tone> = { ok: 'ok', under_min: 'danger', over_max: 'warn', deload: 'accent' };
 

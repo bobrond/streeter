@@ -143,6 +143,51 @@ export interface Settings {
 
 export type SessionStatus = 'in_progress' | 'done' | 'abandoned';
 
+/** Saisie d'une série pas encore validée. */
+export interface SetDraft {
+  value: number | null;
+  bandId: ID | null;
+  rpe: number | null;
+  quality: Quality | null;
+  note: string;
+}
+
+/** Minuteur de repos, lancé à la validation d'une série. */
+export interface RestTimer {
+  /** Ligne dont la série a lancé le repos. */
+  itemId: ID;
+  startedAt: number;
+  /** `null` : repos libre (simple chronomètre). */
+  minSec: number | null;
+  maxSec: number | null;
+  /** Secondes ajoutées avec « +30 s ». */
+  extraSec: number;
+}
+
+/** Minuteur de hold : décompte puis comptage. */
+export interface HoldTimer {
+  itemId: ID;
+  /** Début du décompte. */
+  startedAt: number;
+  countdownSec: number;
+  /** Bip distinct à cette durée ; `null` sans cible. */
+  targetSec: number | null;
+}
+
+/** État d'interface d'une séance en cours, écrit à chaque action pour une reprise exacte. */
+export interface SessionResume {
+  /** Carte affichée ; `null` : la série proposée. */
+  activeItemId: ID | null;
+  /** Exercice choisi par ligne. */
+  chosenExercise: Record<ID, ID>;
+  /** Lignes terminées ou passées avant leurs séries max. */
+  closedItems: ID[];
+  /** Brouillon de série par ligne. */
+  drafts: Record<ID, SetDraft>;
+  rest: RestTimer | null;
+  hold: HoldTimer | null;
+}
+
 export interface SessionLog {
   id: ID;
   date: string;
@@ -162,8 +207,8 @@ export interface SessionLog {
   endedAt: number | null;
   note: string;
   source: 'app' | 'xlsx';
-  /** État d'interface de la séance en cours, pour la reprise. */
-  resume: unknown;
+  /** État d'interface de la séance en cours, pour la reprise ; `null` une fois terminée. */
+  resume: SessionResume | null;
 }
 
 export interface SetLog {

@@ -1,7 +1,7 @@
 import { formatIntensity, formatRest, formatSets, formatTarget } from '../../domain/labels';
 import type { PrescriptionItem, SessionTemplate } from '../../domain/types';
 import { Badge } from '../../ui/Badge';
-import type { Lookups } from './lookups';
+import type { Lookups } from '../../db/lookups';
 
 function ItemCard({ item, lookups }: { item: PrescriptionItem; lookups: Lookups }) {
   const element = lookups.elements.get(item.elementId);

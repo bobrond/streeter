@@ -4,10 +4,13 @@ import type {
   BlockType,
   Element,
   ElementKind,
+  Exercise,
   Moment,
   PrescriptionItem,
   SeqDay,
+  SessionLog,
   SessionTemplate,
+  SetLog,
   Settings,
   WeekPlan,
   WeekSlot,
@@ -60,4 +63,62 @@ export function weekPlan(slots: Partial<Record<SeqDay, Partial<WeekSlot>>>): Wee
 
 export function settings(overrides: Partial<Settings> = {}): Settings {
   return { ...DEFAULT_SETTINGS, cycleStartDate: '2026-10-05', weekPlan: emptyWeekPlan(), ...overrides };
+}
+
+export function exercise(name: string, elementId: string | null, options: Partial<Exercise> = {}): Exercise {
+  return {
+    id: testId('ex'),
+    name,
+    category: '',
+    elementId,
+    measure: 'reps',
+    quick: false,
+    active: true,
+    notes: '',
+    aliases: [],
+    order: 0,
+    ...options,
+  };
+}
+
+let clock = Date.UTC(2026, 9, 7, 18);
+export function setLog(base: Pick<SetLog, 'sessionId' | 'exerciseId'> & Partial<SetLog>): SetLog {
+  clock += 1000;
+  return {
+    id: testId('set'),
+    itemId: null,
+    blockTypeId: null,
+    elementId: null,
+    setIndex: 1,
+    value: null,
+    bandId: null,
+    rpe: null,
+    quality: null,
+    note: '',
+    createdAt: clock,
+    ...base,
+  };
+}
+
+export function sessionLog(date: string, overrides: Partial<SessionLog> = {}): SessionLog {
+  return {
+    id: testId('ses'),
+    date,
+    week: 1,
+    cycleWeek: 1,
+    seqDay: 1,
+    moment: 'evening',
+    templateId: null,
+    templateSnapshot: null,
+    sessionTypeId: null,
+    sessionTypeName: '',
+    deload: false,
+    status: 'done',
+    startedAt: null,
+    endedAt: null,
+    note: '',
+    source: 'app',
+    resume: null,
+    ...overrides,
+  };
 }

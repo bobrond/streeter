@@ -3,7 +3,7 @@ import { estimateDuration } from '../../domain/duration';
 import { MOMENT_LABEL, formatDateLong, formatDuration, seqDayLabel } from '../../domain/labels';
 import { SEQ_DAYS, type ID, type Moment, type Settings } from '../../domain/types';
 import { Badge } from '../../ui/Badge';
-import type { Lookups } from './lookups';
+import type { Lookups } from '../../db/lookups';
 import { TemplateItems } from './TemplateItems';
 
 function SlotView({ moment, templateId, lookups, settings }: { moment: Moment; templateId: ID | null; lookups: Lookups; settings: Settings }) {

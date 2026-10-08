@@ -59,6 +59,14 @@ PWA personnelle de programmation et de suivi d'entraînement street workout : un
 8. Minuteur de repos : démarre à la validation d'une série avec le repos prescrit. Pour une fourchette (« 90 s-2 min »), un premier signal au minimum et la fin au maximum. « Libre » : simple chronomètre.
 9. L'écran reste allumé pendant la séance (Wake Lock, ré-acquis au retour au premier plan).
 
+Choix d'interface du mode séance (phase 1, [src/domain/session.ts](src/domain/session.ts)) :
+
+- Série proposée : on reste dans l'unité en cours (paire planche / FL, superset) en prenant la ligne qui a le moins de séries, sinon la première unité inachevée. Une ligne est proposée jusqu'à ses séries **max** ; « Terminer cet exercice » la clôt dès le min (ou avant).
+- Exercice par défaut : la dernière fois **dans le même bloc** parmi les candidats ; « dernière performance » : la dernière séance où l'exercice a été fait dans le même bloc (le skill sans élastique ne se compare pas au skill assisté), sinon dans un autre bloc, signalé.
+- Saisie pré-remplie : série précédente de la ligne, sinon 1re série de la dernière performance, sinon bas de la cible ; qualité « propre » par défaut sur un skill, rien ailleurs. Le bip distinct du hold sonne à la valeur saisie (sinon au bas de la cible).
+- Après validation : repos prescrit lancé, carte suivante affichée, « Annuler la série » dans le bandeau de repos.
+- Abandon : une séance sans série est supprimée ; sinon elle reste au journal, marquée abandonnée. Une seule séance en cours à la fois ; au lancement, l'appli rouvre la séance en cours.
+
 ### Types de séance (paramétrables)
 
 | Type | Moment | Principe |

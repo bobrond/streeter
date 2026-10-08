@@ -94,3 +94,26 @@ export function formatDateLong(iso: string): string {
 export function formatDateShort(iso: string): string {
   return SHORT_DATE_FORMAT.format(new Date(`${iso}T12:00:00`));
 }
+
+/** Chronomètre : « 1:30 », « 0:05 », « 12:00 ». */
+export function formatClock(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** Valeur d'une série : « 4 s », « 3 reps », « 1 combo » ; « fait » sans mesure, « — » sans valeur. */
+export function formatSetValue(value: number | null, measure: Measure): string {
+  if (measure === 'none') return 'fait';
+  if (value === null) return '—';
+  return formatValue(value, measure);
+}
+
+/** Valeurs de plusieurs séries, unité à la fin, comme dans le tableur : « 3 ; 3 ; 2 s ». */
+export function formatValueList(values: readonly (number | null)[], measure: Measure): string {
+  if (measure === 'none') return `${values.length} série${values.length > 1 ? 's' : ''}`;
+  const list = values.map((v) => (v === null ? '–' : String(v).replace('.', ','))).join(' ; ');
+  const numbers = values.filter((v): v is number => v !== null);
+  if (numbers.length === 0) return list;
+  const unit = measure === 'seconds' ? 's' : measure === 'reps' ? (Math.max(...numbers) > 1 ? 'reps' : 'rep') : Math.max(...numbers) > 1 ? 'combos' : 'combo';
+  return `${list} ${unit}`;
+}

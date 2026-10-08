@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, formatRest, formatTarget, formatValue } from './labels';
+import { formatClock, formatDuration, formatRest, formatSetValue, formatTarget, formatValue, formatValueList } from './labels';
 
 describe('formats', () => {
   it('accorde les unités', () => {
@@ -17,5 +17,22 @@ describe('formats', () => {
     expect(formatRest(60, 60)).toBe('1 min');
     expect(formatDuration(17 * 60)).toBe('17 min');
     expect(formatDuration(86 * 60)).toBe('1 h 26');
+  });
+
+  it('formate le chronomètre', () => {
+    expect(formatClock(0)).toBe('0:00');
+    expect(formatClock(5.9)).toBe('0:05');
+    expect(formatClock(90)).toBe('1:30');
+    expect(formatClock(-3)).toBe('0:00');
+  });
+
+  it('formate les valeurs des séries', () => {
+    expect(formatSetValue(4, 'seconds')).toBe('4 s');
+    expect(formatSetValue(null, 'reps')).toBe('—');
+    expect(formatSetValue(null, 'none')).toBe('fait');
+    expect(formatValueList([3, 3, 2, 2], 'reps')).toBe('3 ; 3 ; 2 ; 2 reps');
+    expect(formatValueList([1, 1], 'reps')).toBe('1 ; 1 rep');
+    expect(formatValueList([7, null, 4], 'seconds')).toBe('7 ; – ; 4 s');
+    expect(formatValueList([null, null], 'none')).toBe('2 séries');
   });
 });
