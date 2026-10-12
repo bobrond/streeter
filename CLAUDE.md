@@ -3,7 +3,7 @@
 PWA personnelle de programmation et de suivi d'entraînement street workout : un seul utilisateur, hors ligne, sans backend. Objectifs actuels : **planche** et **touch front lever** (FL). Elle remplace un tableur Excel et doit rester aussi paramétrable que lui, avec une interface pour téléphone utilisable d'une main entre deux séries, dehors, sans réseau.
 
 - Cahier des charges complet : [docs/cahier_des_charges.md](docs/cahier_des_charges.md).
-- **Source de vérité** pour les données de départ et la logique : `docs/programme_planche_touch_fl_1.xlsx` (le cahier des charges le nomme sans `_1`). Onglets : Lisez-moi, Programme, Volume hebdo, Journal, Objectifs, Exercices. Le fichier est exclu du dépôt (`.gitignore`) : il n'existe qu'en local.
+- **Source de vérité** pour les données de départ et la logique : `docs/programme_planche_touch_fl_1.xlsx` (le cahier des charges le nomme sans `_1`). Onglets : Lisez-moi, Programme, Volume hebdo, Journal, Objectifs, Exercices. Le fichier est exclu du dépôt (`.gitignore`) : il n'existe qu'en local. Depuis le 12/10/2026, le programme de l'appli s'en écarte (voir « Rotateurs externes » plus bas).
 - **En cas de doute sur une règle d'entraînement, demander à l'utilisateur au lieu de supposer.** Les règles ci-dessous marquées « décidé » ont été tranchées avec lui le 07/10/2026 et priment sur le tableur.
 
 ## Méthode de travail
@@ -102,6 +102,17 @@ Choix d'interface du mode séance (phase 1, [src/domain/session.ts](src/domain/s
 | J7 | — | Technique léger (optionnel) |
 
 J2 et J6 (soir) sont identiques : un seul modèle partagé. J1 et J5 diffèrent (J1 a rhomboïde + extension thoracique) : deux modèles Max.
+
+### Rotateurs externes (coiffe), ajoutés le 12/10/2026
+
+Saisis par l'utilisateur dans Réglages, absents du tableur : **ne plus réimporter le tableur**, qui remplacerait les modèles et effacerait ces lignes. Décidé avec l'utilisateur sauf mention contraire.
+
+- But : tenir la tête humérale centrée sous charge statique en planche. Force et endurance en position, pas d'hypertrophie. Le grand dentelé reste prioritaire ; la coiffe est un complément.
+- Élément « Rotateurs externes », nature `other` : hors du contrôle 4-6 séries des composantes.
+- Isométrie bras devant en fin d'échauffement des J1, J3 et J5 : 3 séries, 20-30 s, RPE ≤ 6, repos libre.
+- Dynamique (descente en 3-4 s) en fin de renfo composantes du J3 (4 séries, 10-15 reps, 1-2 reps en réserve, repos 30 s) et du Matin B (même ligne, optionnelle, 2 reps en réserve car Combo le soir). Matin B plutôt que Matin A : le Matin A suit le J3 de 12 h et précède le Max J5 (choix sans l'utilisateur).
+- Une ligne par exercice (choix sans l'utilisateur) : chaque série = droite puis gauche, la dernière à droite seule, pour le volume en plus à droite. Pas de suivi par côté : l'indicateur reste la planche, et si elle est propre.
+- Arrêt de série si le corps tourne ou si l'épaule monte. Prone W et Prone Y forment un seul exercice. Progression : qualité, puis position du bras (coude au corps → 90° → bras devant), puis durée ou reps, l'élastique en dernier.
 
 ### Calendrier et cycle
 
