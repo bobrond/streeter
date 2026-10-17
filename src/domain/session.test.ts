@@ -13,6 +13,7 @@ import {
   progressOf,
   proposeNext,
   readResume,
+  restAfterSet,
   type ItemProgress,
   type SessionPlan,
 } from './session';
@@ -144,6 +145,78 @@ describe('proposeNext', () => {
   it('renvoie null quand tout est fait', () => {
     const progress = new Map(plan.items.map((i) => [i.id, { done: i.setsMax, closed: false }]));
     expect(proposeNext(plan, progress)).toBeNull();
+  });
+});
+
+describe('restAfterSet', () => {
+  const plan = buildPlan(j1, blocksById, elementsById);
+
+  /** Fait toujours la série proposée ; « · » : repos lancé après la série. */
+  function simulateRests(p: SessionPlan): string {
+    const progress = new Map<ID, ItemProgress>();
+    const out: string[] = [];
+    let current: ID | null = null;
+    for (let guard = 0; guard < 100; guard++) {
+      current = proposeNext(p, progress, current);
+      if (!current) break;
+      const before = progress.get(current) ?? { done: 0, closed: false };
+      progress.set(current, { ...before, done: before.done + 1 });
+      out.push(`${names.get(current)}${restAfterSet(p, progress, current) ? '·' : ''}`);
+    }
+    return out.join(' ');
+  }
+
+  it('enchaîne planche et FL sans repos, repose après la paire ; ailleurs, après chaque série', () => {
+    expect(simulateRests(plan)).toBe(
+      [
+        'CARs· CARs·',
+        'PH FH· PH FH· PH FH· PH FH· PH FH·',
+        'PN FPU· PN FPU· PN FPU· PN· PN·',
+        'PA FA· PA FA· PA FA·',
+        'R· R· E· E·',
+      ].join(' '),
+    );
+  });
+
+  it('repose après chaque série d’un superset du matin', () => {
+    const a = item({ blockTypeId: renfo.id, elementId: rhomboide.id, superset: true, restMinSec: 60, restMaxSec: 90 });
+    const b = item({ blockTypeId: renfo.id, elementId: extension.id, superset: true, restMinSec: 60, restMaxSec: 90 });
+    const morning = buildPlan(template('Matin B', 'morning', [a, b]), blocksById, elementsById);
+    const progress = new Map<ID, ItemProgress>([[a.id, { done: 1, closed: false }]]);
+    expect(restAfterSet(morning, progress, a.id)).toEqual({ minSec: 60, maxSec: 90 });
+  });
+
+  it('prend le plus long repos des lignes du tour ; un repos libre seulement si aucune n’a de décompte', () => {
+    const p = item({ blockTypeId: skill.id, elementId: planche.id, restMinSec: 90, restMaxSec: 120 });
+    const f = item({ blockTypeId: skill.id, elementId: fl.id, restMinSec: 120, restMaxSec: 180 });
+    const pair = buildPlan(template('x', 'evening', [p, f]), blocksById, elementsById);
+    const round = new Map<ID, ItemProgress>([
+      [p.id, { done: 1, closed: false }],
+      [f.id, { done: 1, closed: false }],
+    ]);
+    expect(restAfterSet(pair, round, f.id)).toEqual({ minSec: 120, maxSec: 180 });
+    const free = item({ blockTypeId: skill.id, elementId: fl.id, restMinSec: null, restMaxSec: null });
+    const mixed = buildPlan(template('x', 'evening', [p, free]), blocksById, elementsById);
+    const mixedRound = new Map<ID, ItemProgress>([
+      [p.id, { done: 1, closed: false }],
+      [free.id, { done: 1, closed: false }],
+    ]);
+    expect(restAfterSet(mixed, mixedRound, free.id)).toEqual({ minSec: 90, maxSec: 120 });
+  });
+
+  it('repose quand on refait la même ligne avant l’autre (écart)', () => {
+    const progress = new Map<ID, ItemProgress>([[plancheHold.id, { done: 1, closed: false }]]);
+    expect(restAfterSet(plan, progress, plancheHold.id)).toBeNull();
+    progress.set(plancheHold.id, { done: 2, closed: false });
+    expect(restAfterSet(plan, progress, plancheHold.id)).toEqual({ minSec: 90, maxSec: 90 });
+  });
+
+  it('repose après chaque série quand l’autre ligne de la paire est terminée avant ses séries max', () => {
+    const progress = new Map<ID, ItemProgress>([
+      [flHold.id, { done: 1, closed: true }],
+      [plancheHold.id, { done: 2, closed: false }],
+    ]);
+    expect(restAfterSet(plan, progress, plancheHold.id)).toEqual({ minSec: 90, maxSec: 90 });
   });
 });
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { formatClock } from '../../domain/labels';
-import { holdSignals, holdView, restSignals, restView } from '../../domain/timers';
+import { holdSignals, holdView, restView } from '../../domain/timers';
 import type { HoldTimer, RestTimer } from '../../domain/types';
 import { useNow, vibrate } from '../../lib/device';
 import { useTimerSignals } from './signals';
@@ -13,22 +13,12 @@ const PHASE_STYLE = {
   over: 'border-warn/70 bg-warn/10',
 } as const;
 
-/** Repos : décompte jusqu'au maximum (signal au minimum d'une fourchette), chronomètre si « Libre ». */
-export function RestBanner({
-  rest,
-  sound,
-  onAdd,
-  onSkip,
-  onUndo,
-}: {
-  rest: RestTimer;
-  sound: boolean;
-  onAdd: () => void;
-  onSkip: () => void;
-  onUndo: () => void;
-}) {
+/**
+ * Repos : décompte jusqu'au maximum, chronomètre si « Libre ». Affichage seulement : les signaux (minimum
+ * d'une fourchette, fin) sont joués au niveau de l'appli (`SessionRuntime`), même hors de l'écran Séance.
+ */
+export function RestBanner({ rest, onAdd, onSkip, onUndo }: { rest: RestTimer; onAdd: () => void; onSkip: () => void; onUndo: () => void }) {
   const now = useNow(200);
-  useTimerSignals(rest, now, restSignals, sound);
   const view = restView(rest, now);
   const remaining = view.remainingMs ?? 0;
   let clock: string;

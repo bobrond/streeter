@@ -51,6 +51,12 @@ describe('journal', () => {
     ]);
   });
 
+  it('ne trace pas les séries d’échauffement', () => {
+    const warmUp = setLog({ sessionId: s2.id, exerciseId: 'hold', blockTypeId: 'skill', value: 9, kind: 'warmup' });
+    const failure = setLog({ sessionId: s2.id, exerciseId: 'hold', blockTypeId: 'skill', value: 7, kind: 'failure' });
+    expect(progressPoints('hold', [warmUp, failure], sessionsById)).toEqual([{ sessionId: s2.id, date: '2026-10-09', bandId: null, best: 7 }]);
+  });
+
   it('liste les exercices du journal, du plus récent au plus ancien, et la durée d’une séance', () => {
     expect(loggedExerciseIds(sets)).toEqual(['hold', 'wall']);
     expect(sessionDurationSec({ startedAt: 1000, endedAt: 61_000 })).toBe(60);

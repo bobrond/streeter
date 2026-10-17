@@ -1,7 +1,10 @@
 // Sauvegarde JSON complète : toutes les tables, avec un numéro de version de format.
 export const BACKUP_APP = 'streeter';
-/** À incrémenter à chaque changement du format, avec une conversion à l'import. */
-export const BACKUP_FORMAT_VERSION = 1;
+/**
+ * À incrémenter à chaque changement du format, avec une conversion à l'import.
+ * 2 (17/10/2026) : type de série (`kind`) sur chaque série.
+ */
+export const BACKUP_FORMAT_VERSION = 2;
 
 export const BACKUP_TABLES = [
   'settings',
@@ -56,7 +59,13 @@ const isObject = (x: unknown): x is Record<string, unknown> => typeof x === 'obj
  * À compléter à chaque nouvelle version du format (une étape par version).
  */
 function migrate(backup: Backup): Backup {
-  return backup;
+  let current = backup;
+  if (current.formatVersion < 2) {
+    // Format 1 → 2 : les séries d'avant le type de série sont des séries normales.
+    const sets = current.tables.sets.map((set) => ({ kind: 'normal', ...(set as Record<string, unknown>) }));
+    current = { ...current, formatVersion: 2, tables: { ...current.tables, sets } };
+  }
+  return current;
 }
 
 /** Lit et vérifie un fichier de sauvegarde ; lève une `BackupError` au message lisible sinon. */

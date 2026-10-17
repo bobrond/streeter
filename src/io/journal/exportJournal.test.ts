@@ -52,6 +52,22 @@ describe('journalExportRows', () => {
     expect(rows[1]).toMatchObject({ block: 'Skill assisté', values: '14 ; 11', band: 'jaune', rpe: '6 ; 8', notes: '' });
     expect(rows[2]).toMatchObject({ day: 'J4', moment: 'Matin', sessionType: 'Matin A', block: '', values: '-', rpe: '', notes: 'Séance abandonnée' });
   });
+
+  it('garde l’échauffement et l’échec dans la ligne et les signale dans les notes', () => {
+    const session = sessionLog('2026-10-16', { week: 2, seqDay: 5, sessionTypeName: 'Max' });
+    const sets = [
+      setLog({ sessionId: session.id, exerciseId: hold.id, blockTypeId: skill.id, value: 4, kind: 'warmup' }),
+      setLog({ sessionId: session.id, exerciseId: hold.id, blockTypeId: skill.id, value: 6 }),
+      setLog({ sessionId: session.id, exerciseId: hold.id, blockTypeId: skill.id, value: 5, kind: 'failure', quality: 'degraded' }),
+      setLog({ sessionId: session.id, exerciseId: hold.id, blockTypeId: skill.id, value: 3, kind: 'failure' }),
+    ];
+    const [row] = journalExportRows({ ...data(), sessions: [session], sets });
+    expect(row).toMatchObject({
+      setsDone: 4,
+      values: '4 ; 6 ; 5 ; 3',
+      notes: 'Série d’échauffement : 1 · Séries à l’échec : 3, 4 · Série dégradée : 3',
+    });
+  });
 });
 
 describe('journalCsv', () => {

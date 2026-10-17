@@ -36,8 +36,8 @@ export interface SessionPerformance {
 }
 
 /**
- * Meilleure performance enregistrée en séance sur un exercice : séries sans élastique et non dégradées.
- * Les séries sans qualité notée (import du tableur) comptent.
+ * Meilleure performance enregistrée en séance sur un exercice : séries sans élastique, non dégradées,
+ * hors échauffement. Les séries sans qualité notée (import du tableur) comptent.
  */
 export function bestSessionPerformance(
   exerciseId: ID,
@@ -47,7 +47,7 @@ export function bestSessionPerformance(
   let best: SessionPerformance | null = null;
   for (const set of sets) {
     if (set.exerciseId !== exerciseId || set.value === null || set.bandId !== null) continue;
-    if (set.quality === 'degraded') continue;
+    if (set.quality === 'degraded' || set.kind === 'warmup') continue;
     const date = sessions.get(set.sessionId)?.date;
     if (!date) continue;
     if (!best || set.value > best.value || (set.value === best.value && date < best.date)) {

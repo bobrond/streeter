@@ -16,13 +16,14 @@ function emit(): void {
   for (const listener of listeners) listener();
 }
 
-/** Message bref, avec une action facultative (« Annuler »). */
+/** Message bref, avec une action facultative (« Annuler ») ; renvoie son identifiant (pour le fermer). */
 export function showToast(
   message: string,
   options: { tone?: 'info' | 'error'; action?: ToastMessage['action']; sticky?: boolean } = {},
-): void {
+): number {
   current = { id: ++counter, message, tone: options.tone ?? 'info', action: options.action, sticky: options.sticky ?? false };
   emit();
+  return current.id;
 }
 
 export function dismissToast(id: number): void {

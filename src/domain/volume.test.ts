@@ -135,6 +135,16 @@ describe('realizedComponentVolume', () => {
     const [d] = realizedComponentVolume([set('s1', dentele.id)], sessions, elements, s, { week: 1, isDeload: true });
     expect(d.status).toBe('deload');
   });
+
+  it('ne compte pas l’échauffement, compte l’échec', () => {
+    const sets: SetLog[] = [
+      { ...set('s1', dentele.id), kind: 'warmup' },
+      { ...set('s1', dentele.id), kind: 'normal' },
+      { ...set('s1', dentele.id), kind: 'failure' },
+    ];
+    const [d] = realizedComponentVolume(sets, sessions, elements, s, { week: 1, isDeload: false });
+    expect(d).toMatchObject({ evening: 2, total: 2 });
+  });
 });
 
 describe('programIssues', () => {
@@ -162,5 +172,14 @@ describe('realizedSkillSets', () => {
     ] as SetLog[];
     const counts = realizedSkillSets(sets, sessions, elements, 1);
     expect([...counts]).toEqual([[`${skill.id}|${planche.id}`, 2]]);
+  });
+
+  it('ne compte pas les séries d’échauffement', () => {
+    const sessions = new Map([['w1', { id: 'w1', week: 1 } as SessionLog]]);
+    const sets = [
+      { sessionId: 'w1', blockTypeId: skill.id, elementId: planche.id, kind: 'warmup' },
+      { sessionId: 'w1', blockTypeId: skill.id, elementId: planche.id, kind: 'failure' },
+    ] as SetLog[];
+    expect([...realizedSkillSets(sets, sessions, elements, 1)]).toEqual([[`${skill.id}|${planche.id}`, 1]]);
   });
 });

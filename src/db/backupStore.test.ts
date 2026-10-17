@@ -49,4 +49,25 @@ describe('sauvegarde JSON', () => {
     expect(() => parseBackup(JSON.stringify({ ...base, tables: { settings: [] } }), 1)).toThrow('réglages manquants');
     expect(parseBackup(JSON.stringify({ ...base, tables: { settings } }), 1).tables.sets).toEqual([]);
   });
+
+  it('convertit une sauvegarde du format 1 : les séries deviennent normales', async () => {
+    const oldSet = { id: 's1', sessionId: 'ses', exerciseId: 'hold', value: 12, quality: 'clean', createdAt: 1 };
+    const text = JSON.stringify({
+      app: 'streeter',
+      formatVersion: 1,
+      dbVersion: 1,
+      exportedAt: 0,
+      tables: { settings: [{ id: 'settings', weekPlan: {} }], sets: [oldSet, { ...oldSet, id: 's2', kind: 'warmup' }] },
+    });
+    const backup = parseBackup(text, 2);
+    expect(backup.formatVersion).toBe(2);
+    expect(backup.tables.sets).toEqual([
+      { ...oldSet, kind: 'normal' },
+      { ...oldSet, id: 's2', kind: 'warmup' },
+    ]);
+
+    const target = freshDb();
+    await restoreBackup(target, backup);
+    expect(await target.sets.get('s1')).toMatchObject({ kind: 'normal', value: 12 });
+  });
 });

@@ -94,6 +94,7 @@ export function setLog(base: Pick<SetLog, 'sessionId' | 'exerciseId'> & Partial<
     bandId: null,
     rpe: null,
     quality: null,
+    kind: 'normal',
     note: '',
     createdAt: clock,
     ...base,

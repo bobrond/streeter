@@ -1,5 +1,5 @@
 // Vibration, écran allumé et préférences propres à l'appareil.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 export function vibrate(pattern: number | number[]): void {
   try {
@@ -62,6 +62,31 @@ export function writeSoundPref(on: boolean): void {
   } catch {
     // Stockage indisponible : la préférence ne sera pas gardée.
   }
+}
+
+// Préférence partagée : le menu de la séance la change, les minuteurs (au niveau de l'appli) la lisent.
+let soundOn: boolean | null = null;
+const soundListeners = new Set<() => void>();
+
+function currentSoundPref(): boolean {
+  soundOn ??= readSoundPref();
+  return soundOn;
+}
+
+function subscribeSoundPref(listener: () => void): () => void {
+  soundListeners.add(listener);
+  return () => soundListeners.delete(listener);
+}
+
+export function setSoundPref(on: boolean): void {
+  soundOn = on;
+  writeSoundPref(on);
+  for (const listener of soundListeners) listener();
+}
+
+/** Sons des minuteurs activés (préférence gardée sur l'appareil). */
+export function useSoundPref(): boolean {
+  return useSyncExternalStore(subscribeSoundPref, currentSoundPref);
 }
 
 /** Enregistre un fichier dans les téléchargements du téléphone. */

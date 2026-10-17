@@ -50,6 +50,11 @@ describe('bestSessionPerformance', () => {
     expect(bestSessionPerformance('planche-hold', sets, sessions)).toEqual({ value: 4, date: '2026-10-12', setId: '4' });
   });
 
+  it('ignore l’échauffement, garde l’échec', () => {
+    const sets = [set('1', 'a', 8, { kind: 'warmup' }), set('2', 'b', 5, { kind: 'failure' })];
+    expect(bestSessionPerformance('planche-hold', sets, sessions)).toEqual({ value: 5, date: '2026-10-12', setId: '2' });
+  });
+
   it('compte les séries importées sans qualité notée', () => {
     expect(bestSessionPerformance('planche-hold', [set('1', 'a', 3)], sessions)?.value).toBe(3);
   });

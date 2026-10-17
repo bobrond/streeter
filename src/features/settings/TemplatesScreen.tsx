@@ -50,7 +50,7 @@ export function TemplatesScreen({ data }: { data: AppData }) {
           <ListGroup key={moment} title={moment === 'evening' ? 'Soir' : 'Matin'}>
             {templates.map((template) => {
               const days = templateDays(template.id, data.settings.weekPlan);
-              const { minSec, maxSec } = estimateDuration(template, data.settings);
+              const { minSec, maxSec } = estimateDuration(template, data.settings, lookups);
               return (
                 <ListRow
                   key={template.id}

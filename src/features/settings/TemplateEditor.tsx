@@ -93,7 +93,7 @@ function TemplateForm({ template, data, lookups }: { template: SessionTemplate; 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const error = nameError(name, template.id, data.templates);
   const days = templateDays(template.id, data.settings.weekPlan);
-  const { minSec, maxSec } = estimateDuration(template, data.settings);
+  const { minSec, maxSec } = estimateDuration(template, data.settings, lookups);
   const save = (patch: Partial<SessionTemplate>) => void saveTemplate(db, { ...template, ...patch });
   const groups = itemsByBlock(template.items, lookups.blocks);
   const types = [...data.sessionTypes].sort((a, b) => Number(b.moment === template.moment) - Number(a.moment === template.moment));

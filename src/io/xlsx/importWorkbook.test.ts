@@ -305,8 +305,9 @@ describe.skipIf(!existsSync(FILE))('import du tableur programme_planche_touch_fl
   });
 
   it('estime les matins entre 17 et 25 min et ne relève aucun problème dans le programme', () => {
+    const structure = { blocks: program.blocks, elements: new Map(program.elements.map((e) => [e.id, e])) };
     for (const day of [4, 6] as SeqDay[]) {
-      expect(estimateDuration(templateAt(day, 'morning')!, settings)).toEqual({ minSec: 17 * 60, maxSec: 25 * 60 });
+      expect(estimateDuration(templateAt(day, 'morning')!, settings, structure)).toEqual({ minSec: 17 * 60, maxSec: 25 * 60 });
     }
     expect(programIssues(program, settings)).toEqual([]);
   });

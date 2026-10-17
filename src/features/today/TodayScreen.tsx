@@ -69,7 +69,7 @@ function PlannedCard({
 }) {
   const { template, practiced, hidden, done } = planned;
   const type = lookups.sessionTypes.get(template.sessionTypeId);
-  const { minSec, maxSec } = estimateDuration(practiced, data.settings);
+  const { minSec, maxSec } = estimateDuration(practiced, data.settings, lookups);
   const doneSets = done.reduce((sum, s) => sum + data.sets.filter((set) => set.sessionId === s.id).length, 0);
   return (
     <article className={`rounded-2xl border bg-card p-4 ${primary ? 'border-accent/70' : 'border-line'} ${hidden ? 'opacity-60' : ''}`}>

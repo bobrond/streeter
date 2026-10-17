@@ -17,6 +17,21 @@ export interface MetaRecord {
   value: unknown;
 }
 
+/** Schéma de la version 1, publiée le 07/10/2026 (gardé à part pour tester les migrations). */
+export const SCHEMA_V1 = {
+  elements: 'id, name',
+  blockTypes: 'id, name',
+  sessionTypes: 'id, name',
+  exercises: 'id, name, category, elementId',
+  bands: 'id, name',
+  templates: 'id, name',
+  settings: 'id',
+  sessions: 'id, date, [date+moment], week, status',
+  sets: 'id, sessionId, exerciseId, elementId, createdAt',
+  objectives: 'id, name',
+  meta: 'key',
+} as const;
+
 export class StreeterDB extends Dexie {
   elements!: EntityTable<Element, 'id'>;
   blockTypes!: EntityTable<BlockType, 'id'>;
@@ -34,19 +49,18 @@ export class StreeterDB extends Dexie {
     super(name);
     // Schéma publié : ne jamais modifier une version existante. Pour tout changement, ajouter
     // `this.version(n + 1).stores({...}).upgrade(tx => ...)` et tester la migration (voir CLAUDE.md).
-    this.version(1).stores({
-      elements: 'id, name',
-      blockTypes: 'id, name',
-      sessionTypes: 'id, name',
-      exercises: 'id, name, category, elementId',
-      bands: 'id, name',
-      templates: 'id, name',
-      settings: 'id',
-      sessions: 'id, date, [date+moment], week, status',
-      sets: 'id, sessionId, exerciseId, elementId, createdAt',
-      objectives: 'id, name',
-      meta: 'key',
-    });
+    this.version(1).stores(SCHEMA_V1);
+    // 2 (17/10/2026) : type de série (`SetLog.kind`), sans nouvel index ; les séries existantes sont normales.
+    this.version(2)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table('sets')
+          .toCollection()
+          .modify((set: Partial<SetLog>) => {
+            set.kind ??= 'normal';
+          }),
+      );
   }
 }
 

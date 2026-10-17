@@ -54,6 +54,7 @@ Le dossier `vault/` est le second cerveau du projet (lisible dans Obsidian et VS
 | Jour de séquence J1…J7 · Matin / Soir | `seqDay` 1…7 · `'morning'` / `'evening'` |
 | Semaine allégée · Élastique | `deload` · `Band` |
 | Séance faite · Série faite · Propre / dégradée | `SessionLog` · `SetLog` · `'clean'` / `'degraded'` |
+| Type de série : normale · échauffement · échec | `SetLog.kind` : `'normal'` · `'warmup'` · `'failure'` |
 | Objectif · Test d'objectif | `Objective` · `ObjectiveTest` |
 
 ## Interface V2 (décidée le 17/10/2026, en cours)
@@ -65,30 +66,27 @@ Décidé avec l'utilisateur :
 - 4 onglets : Aujourd'hui, Séance, Programmes, Progression. Hors de l'écran Séance, une barre de séance active (nom, chrono total, repos) rouvre la séance d'un toucher : changer d'onglet ne perd jamais la séance.
 - Programme = la semaine J1-J7 actuelle (matin / soir, cycles, semaine allégée, jour de test, décalage de séquence). Un seul programme, pas de rotation A → B → C.
 - Séance en tableau : une ligne par série (numéro ou type, précédent, valeur, ✓) ; le ✓ valide la série et lance le repos ; « + Ajouter une série » copie la dernière ligne.
-- Alternance planche / FL : **pas de repos entre la série planche et la série FL d'une paire**, comme un superset ; le repos vient après la paire. Partout ailleurs, supersets du matin compris : repos après chaque série, comme aujourd'hui.
-- Types de série : normale, échauffement (hors volume hebdo), échec (aller chercher l'échec total). La qualité reste à part : dégradée = mouvement mal maîtrisé.
+- Alternance planche / FL (blocs Skill et Skill assisté) : **pas de repos entre la série planche et la série FL d'une paire**, comme un superset ; le repos vient après la paire. Partout ailleurs, supersets du matin compris : repos après chaque série, comme aujourd'hui. Détails : règles 3 et 8.
+- Types de série : normale, échauffement (hors volume hebdo), échec (aller chercher l'échec total ; compte dans le volume). La qualité reste à part : dégradée = mouvement mal maîtrisé. Les records excluent les séries dégradées et d'échauffement.
 - Plus de minuteur de hold : l'utilisateur ne s'en sert pas. Il filme ses séries avec le même téléphone et saisit la durée après coup.
 - Quitter l'appli pour filmer ne doit jamais couper la séance : reprise exacte au retour (déjà le cas, à préserver). Les sons quand l'appli n'est pas à l'écran ne sont pas nécessaires.
 - Pas de charge (kg) pour l'instant. Composantes : les 4 actuelles (poussée / tirage / gainage des maquettes étaient illustratifs).
-- Pas de règle de passage ni de badge « Prêt à passer » : l'utilisateur gère seul ses progressions.
+- Pas de règle de passage ni de badge « Prêt à passer » : l'utilisateur gère seul ses progressions. **Pas d'échelles de progression** : la vue Skills montre les objectifs, les records par élastique et les courbes ; l'exercice se change parmi les candidats de la ligne (règle 4 inchangée).
 - Objectifs gardés. Records : un par élastique, en plus du record sans élastique.
-- Vue calendrier des jours d'entraînement.
-- Séance express (20, 30 ou 45 min) : elle remplace la séance du jour, matin ou soir ; la fatigue de la veille n'entre pas en compte.
+- Vue calendrier des jours d'entraînement, dans Progression › Historique (calendrier du mois, liste des séances, export).
+- Séance express (20, 30 ou 45 min) : elle remplace la séance du jour, matin ou soir ; la fatigue de la veille n'entre pas en compte. Elle reprend les lignes planche / FL de la séance remplacée (donc son intensité), puis les composantes selon leur retard (minimum − séries faites − séries du soir encore prévues dans la semaine), puis le bonus jusqu'au maximum.
 - Une série d'échauffement ne compte pas dans le volume ; une série assistée compte à part (totaux Skill et Skill assisté séparés, déjà le cas) ; un exercice nourrit une seule composante.
 
 Choix sans l'utilisateur, à valider :
 
-- Navigation : réglages derrière une roue crantée dans Programmes ; Progression en 3 vues : Skills (objectifs, records par élastique, courbes ; pas d'échelles de progression), Volume (jauges, totaux skills, semaines passées), Historique (calendrier du mois, liste des séances, export).
-- Alternance : vaut dans les deux blocs qui alternent (Skill et Skill assisté) ; repos après la paire = le plus long des deux (identiques dans le programme : 90 s-2 min en Skill, 90 s en Skill assisté) ; une ligne qui continue seule se repose après chaque série.
-- Une série à l'échec compte dans le volume ; les records excluent les séries dégradées et d'échauffement.
-- Tableau : lignes de 56 px ; toucher une valeur ouvre un pavé en bas (valeur, élastique, RPE, qualité, note) ; un bouton « Valider » reste en bas pour la série proposée ; autant de lignes que le min de séries, puis « + Ajouter une série » jusqu'au max ; décocher une ligne annule la série. L'exercice se change parmi les candidats de la ligne (règle 4 inchangée).
-- Express : lignes planche / FL reprises de la séance remplacée (donc son intensité) ; composantes choisies selon le retard (minimum − séries faites − séries du soir encore prévues dans la semaine), puis bonus jusqu'au maximum.
+- Navigation : réglages derrière une roue crantée dans Programmes ; Progression en 3 vues : Skills, Volume (jauges, totaux skills, semaines passées), Historique.
+- Tableau : lignes de 56 px ; toucher une valeur ouvre un pavé en bas (valeur, élastique, RPE, qualité, note) ; un bouton « Valider » reste en bas pour la série proposée ; autant de lignes que le min de séries, puis « + Ajouter une série » jusqu'au max ; décocher une ligne annule la série.
 - Charte des maquettes (orange `#FF5114`, bleu `#2BABE8`, Bebas Neue et Heebo embarquées) ajustée pour le plein soleil : orange en aplat plutôt qu'en petit texte, gris éclaircis.
 
 Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 
-- 0 : « Envoyer une sauvegarde » corrigé ; l'utilisateur fait une vraie sauvegarde avant toute migration.
-- A : fondations : état de séance au niveau de l'appli (repos et sons qui survivent au changement d'onglet), schéma Dexie v2 (type de série), sauvegarde et export.
+- 0 (livrée le 17/10/2026, v1.0.1) : « Envoyer une sauvegarde » corrigé ; l'utilisateur fait une vraie sauvegarde avant toute migration (faite le 17/10/2026).
+- A (livrée le 17/10/2026, v1.1.0) : fondations : repos et sons de la séance au niveau de l'appli ([src/features/session/SessionRuntime.tsx](src/features/session/SessionRuntime.tsx) ; ils continuent hors de l'écran Séance), schéma Dexie v2 (type de série), sauvegarde et export ; repos de l'alternance planche / FL et durée estimée. Le type de série n'a pas encore de saisie : elle viendra avec le tableau (phase C).
 - B : charte, polices, 4 onglets, barre de séance active, roue crantée, Historique avec le calendrier.
 - C : séance en tableau, sans minuteur de hold.
 - D : Programmes : semaine J1-J7, éditeur de modèle, bibliothèque d'exercices.
@@ -101,20 +99,20 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 
 1. Les blocs suivent un ordre paramétrable, par défaut : Échauffement (connexion + élastique) → Skill → Skill assisté (élastique) → Renfo spé skill → Renfo composantes. Chaque ligne de prescription est une carte.
 2. Planche **et** touch FL sont travaillés à chaque séance du soir, jamais l'un sans l'autre. L'éditeur signale un modèle du soir auquel il manque l'un des deux.
-3. Dans les blocs Skill **et Skill assisté** (décidé ; réglage par bloc `alternateSkills`), les séries planche et FL **alternent**, appariées par ordre : 1re ligne planche avec 1re ligne FL, 2e avec 2e (J1 : planche hold ↔ touch FL hold, puis P/N ↔ FL PU). Quand une ligne a fini ses séries, l'autre continue seule. L'appli propose la série suivante, l'utilisateur peut dévier. V2 : pas de repos entre les deux séries d'une paire (voir « Interface V2 »).
+3. Dans les blocs Skill **et Skill assisté** (décidé ; réglage par bloc `alternateSkills`), les séries planche et FL **alternent**, appariées par ordre : 1re ligne planche avec 1re ligne FL, 2e avec 2e (J1 : planche hold ↔ touch FL hold, puis P/N ↔ FL PU). Quand une ligne a fini ses séries, l'autre continue seule. L'appli propose la série suivante, l'utilisateur peut dévier. **Pas de repos entre les deux séries d'une paire**, comme un superset (décidé le 17/10/2026) : le repos vient à la fin du tour, le plus long des repos des lignes du tour. Une ligne qui continue seule se repose après chaque série ; refaire la même ligne avant l'autre (écart) donne aussi un repos (choix sans l'utilisateur).
 4. L'exercice se choisit **le jour même** parmi les candidats de la ligne (puces). Par défaut : l'exercice fait la dernière fois sur cette ligne ; si un candidat a déjà été fait plus tôt dans la séance (cas « même combo qu'au bloc skill »), celui-là. L'exercice est enregistré par série, on peut en changer entre deux séries.
 5. Une série de skill s'arrête dès que la protraction (grand dentelé) ou le verrouillage du coude lâche. Chaque série peut être marquée **propre** ou **dégradée**.
 6. Progression : une seule variable à la fois (+1 s de hold, +1 rep, ou élastique plus fin). Chaque carte affiche la dernière performance sur l'exercice (valeurs, élastique, date) pour viser juste au-dessus.
 7. Minuteur de hold (**retiré en V2**, phase C : l'utilisateur ne s'en sert pas) : décompte de 3 s, puis comptage avec un bip à chaque seconde et un bip distinct quand la cible est atteinte (on ne regarde pas l'écran en planche), plus vibration. Arrêt en touchant n'importe où ; la valeur est reportée dans la série et reste ajustable au +/−.
-8. Minuteur de repos : démarre à la validation d'une série avec le repos prescrit. Pour une fourchette (« 90 s-2 min »), un premier signal au minimum et la fin au maximum. « Libre » : simple chronomètre.
-9. L'écran reste allumé pendant la séance (Wake Lock, ré-acquis au retour au premier plan).
+8. Minuteur de repos : démarre à la validation d'une série avec le repos prescrit (sauf au milieu d'une paire planche / FL, règle 3). Pour une fourchette (« 90 s-2 min »), un premier signal au minimum et la fin au maximum. « Libre » : simple chronomètre. Ses sons et vibrations continuent hors de l'écran Séance, tant que l'appli est à l'écran.
+9. L'écran reste allumé tant qu'une séance est en cours, quel que soit l'écran affiché (Wake Lock, ré-acquis au retour au premier plan ; « quel que soit l'écran » : choix sans l'utilisateur).
 
 Choix d'interface du mode séance (phase 1, [src/domain/session.ts](src/domain/session.ts)) :
 
 - Série proposée : on reste dans l'unité en cours (paire planche / FL, superset) en prenant la ligne qui a le moins de séries, sinon la première unité inachevée. Une ligne est proposée jusqu'à ses séries **max** ; « Terminer cet exercice » la clôt dès le min (ou avant).
 - Exercice par défaut : la dernière fois **dans le même bloc** parmi les candidats ; « dernière performance » : la dernière séance où l'exercice a été fait dans le même bloc (le skill sans élastique ne se compare pas au skill assisté), sinon dans un autre bloc, signalé.
 - Saisie pré-remplie : série précédente de la ligne, sinon 1re série de la dernière performance, sinon bas de la cible ; qualité « propre » par défaut sur un skill, rien ailleurs. Le bip distinct du hold sonne à la valeur saisie (sinon au bas de la cible).
-- Après validation : repos prescrit lancé, carte suivante affichée, « Annuler la série » dans le bandeau de repos.
+- Après validation : repos prescrit lancé, carte suivante affichée, « Annuler la série » dans le bandeau de repos. Au milieu d'une paire planche / FL : pas de repos, la carte de l'autre skill s'affiche et un message « Série enregistrée » propose « Annuler ».
 - Abandon : une séance sans série est supprimée ; sinon elle reste au journal, marquée abandonnée. Une seule séance en cours à la fois ; au lancement, l'appli rouvre la séance en cours.
 
 ### Types de séance (paramétrables)
@@ -179,13 +177,13 @@ Saisis par l'utilisateur dans Réglages, absents du tableur : **ne plus réimpor
   - **Contrôle du maximum** = Σ séries **max** de toutes les lignes, soir + matin, optionnelles comprises.
   - Le tableur additionne la colonne Séries max et filtre sur le bloc « Renfo composantes » : même résultat avec le programme actuel.
 - Statut (formule du tableur) : minimum garanti < min → « Sous le min (soir) » ; sinon total > max → « Au-dessus du max » ; sinon « OK ». En semaine allégée, afficher « Semaine allégée » au lieu de ce statut.
-- Réalisé (semaine en cours) : nombre de `SetLog` de la semaine sur la composante, soir / matin / total, avec le même statut.
+- Réalisé (semaine en cours) : nombre de `SetLog` de la semaine sur la composante, hors séries d'échauffement, soir / matin / total, avec le même statut. Même règle pour les séries de skill réalisées.
 - Contrôle à l'édition : toute modification du programme recalcule le volume et signale aussitôt une composante hors bornes.
 - Totaux par skill (Planche, Touch FL) et par bloc (Skill, Skill assisté, Renfo spé skill) : Σ séries min, Σ séries max, nombre de séances (jours de séquence distincts, matin et soir confondus, lignes optionnelles comprises), max en semaine allégée.
 
 ### Matins
 
-- Durée maximum 30 min (paramètre). Durée estimée = Σ séries × (temps de travail moyen par série + repos prescrit), affichée en fourchette (séries et repos min → séries et repos max), avec 30 s de travail par série et 30 s pour un repos « Libre » par défaut. Alerte si la borne haute d'un modèle du matin dépasse la durée maximum. Matin A et Matin B : 17 à 25 min.
+- Durée maximum 30 min (paramètre). Durée estimée = Σ séries × (temps de travail moyen par série + repos prescrit), sauf dans une alternance planche / FL : un seul repos par tour, le plus long des lignes du tour. Affichée en fourchette (séries et repos min → séries et repos max), avec 30 s de travail par série et 30 s pour un repos « Libre » par défaut. Alerte si la borne haute d'un modèle du matin dépasse la durée maximum. Matin A et Matin B : 17 à 25 min.
 - Exercices « rapides » (sans barre, peu d'installation) mis en avant le matin (badge, en tête de liste) mais pas filtrés : les candidats renfo spé des matins ne sont pas marqués rapides dans le catalogue.
 - Composantes du matin en superset (deux composantes alternées), 60-90 s de repos entre deux séries.
 
@@ -193,7 +191,7 @@ Saisis par l'utilisateur dans Réglages, absents du tableur : **ne plus réimpor
 
 - Nom, critère de qualité, cible, unité, exercice lié (optionnel), historique de tests {date, valeur, note}.
 - Statut sur le **meilleur** test (décidé ; le tableur utilise le dernier) : aucun test → « À tester » ; meilleur test ≥ cible → « Atteint » ; sinon « En cours ». Écart = cible − meilleur test.
-- L'exercice lié sert à afficher la meilleure performance en séance : séries **sans élastique** et **non dégradées** (décidé). Les séries importées du tableur, sans qualité notée, comptent.
+- L'exercice lié sert à afficher la meilleure performance en séance : séries **sans élastique**, **non dégradées** (décidé) et hors échauffement (décidé le 17/10/2026). Les séries importées du tableur, sans qualité notée, comptent.
 
 | Objectif | Critère de qualité | Cible | Exercice lié |
 |---|---|---|---|
@@ -210,8 +208,8 @@ Saisis par l'utilisateur dans Réglages, absents du tableur : **ne plus réimpor
 ### Journal
 
 - Une `SetLog` par série. Le nombre de séries faites **se déduit** des `SetLog` et n'est jamais saisi (le tableur contient « 3 séries » avec 4 valeurs, ce qui doit être impossible dans l'appli).
-- Fiche exercice : courbe de la meilleure valeur par séance, une courbe par élastique (« sans élastique » en blanc), séries dégradées exclues ; record = meilleure série sans élastique et non dégradée (comme pour les objectifs). Choix d'affichage de la phase 3.
-- Export .xlsx et .csv avec exactement les colonnes de l'onglet Journal : Date, Semaine, Jour, Moment, Type séance, Bloc, Exercice, Séries faites, Reps / durée (« v1 ; v2 ; … »), Élastique, RPE, Ressenti / notes. Une ligne par (séance, bloc, exercice). Jour au format « J3 ». RPE : une valeur si toutes les séries ont la même, sinon « 6 ; 7 ; 8 ». Les séries dégradées sont signalées dans les notes.
+- Fiche exercice : courbe de la meilleure valeur par séance, une courbe par élastique (« sans élastique » en blanc), séries dégradées et d'échauffement exclues ; record = meilleure série sans élastique, non dégradée et hors échauffement (comme pour les objectifs). Choix d'affichage de la phase 3.
+- Export .xlsx et .csv avec exactement les colonnes de l'onglet Journal : Date, Semaine, Jour, Moment, Type séance, Bloc, Exercice, Séries faites, Reps / durée (« v1 ; v2 ; … »), Élastique, RPE, Ressenti / notes. Une ligne par (séance, bloc, exercice). Jour au format « J3 ». RPE : une valeur si toutes les séries ont la même, sinon « 6 ; 7 ; 8 ». Les séries dégradées, d'échauffement et à l'échec sont signalées dans les notes par leur numéro ; elles restent dans « Séries faites » et « Reps / durée » (choix sans l'utilisateur pour l'échauffement et l'échec).
 
 ## Modèle de données (Dexie)
 
@@ -235,10 +233,11 @@ SessionLog       { id, date, week, cycleWeek, seqDay, moment, templateId, templa
                    sessionTypeName, deload, status: 'in_progress' | 'done' | 'abandoned', startedAt, endedAt,
                    note, source: 'app' | 'xlsx', resume }
 SetLog           { id, sessionId, itemId, blockTypeId, elementId, exerciseId, setIndex, value, bandId, rpe,
-                   quality: 'clean' | 'degraded' | null, note, createdAt }
+                   quality: 'clean' | 'degraded' | null, kind: 'normal' | 'warmup' | 'failure', note, createdAt }
 Objective        { id, name, criterion, target, unit, exerciseId, order, tests: { id, date, value, note }[] }
 ```
 
+- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal`.
 - Dans `weekPlan`, `null` signifie « rien » : Repos le soir, pas de séance le matin.
 - `SessionLog.resume` contient l'état d'interface de la séance en cours (carte active, exercice choisi par ligne, brouillon de série, minuteurs).
 - `PrescriptionItem.superset` : des lignes consécutives du même bloc marquées superset alternent série par série.
@@ -262,7 +261,7 @@ Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en do
 
 ## Sauvegarde et exports
 
-- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate`. La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
+- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
 - Rappel de sauvegarde sur Aujourd'hui : dernière sauvegarde de plus de 7 jours, ou aucune alors qu'au moins une séance a été faite dans l'appli. Sur Android, « Envoyer une sauvegarde » ouvre le menu de partage (Drive, e-mail). Le fichier envoyé est en `.txt` (`text/plain`) : Chrome ne partage qu'une liste fermée de types, sans le JSON, et `navigator.canShare` ne vérifie pas le type. La restauration accepte `.json` et `.txt`. Une annulation ne dit rien ; un refus s'affiche avec « Enregistrer » (téléchargement) à la place.
 - Export du journal ([src/io/journal/exportJournal.ts](src/io/journal/exportJournal.ts)) : .xlsx (onglet « Journal », vraies dates Excel) et .csv pour Excel en français (« ; », CRLF, marque UTF-8). Les notes de ligne reprennent la note de séance (1re ligne), les notes de série, « Séance abandonnée » et les numéros des séries dégradées.
 - Version affichée dans Réglages → Sauvegarde et données → Appli : `version` du package.json et date du build.

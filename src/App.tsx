@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useAppData } from './db/hooks';
+import { SessionRuntime } from './features/session/SessionRuntime';
 import { SessionScreen } from './features/session/SessionScreen';
 import { ImportReportScreen } from './features/setup/ImportReportView';
 import { WelcomeScreen } from './features/setup/WelcomeScreen';
@@ -45,11 +46,14 @@ export default function App() {
     );
   }
 
+  // Repos (sons, vibrations) et écran allumé de la séance en cours, quel que soit l'écran affiché.
+  const runtime = <SessionRuntime sessions={data.sessions} />;
   const session = matchRoute('/session/:id', path);
   if (session) {
     return (
       <>
         <SessionScreen sessionId={session.id} data={data} />
+        {runtime}
         <ToastHost belowHeader />
       </>
     );
@@ -76,6 +80,7 @@ export default function App() {
     <div style={WITH_TAB_BAR} className="pb-[var(--tabbar-h)]">
       <Suspense fallback={null}>{screen}</Suspense>
       <TabBar path={path} />
+      {runtime}
       <ToastHost />
     </div>
   );

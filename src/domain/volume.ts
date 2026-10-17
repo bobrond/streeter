@@ -121,7 +121,12 @@ export interface RealizedComponentVolume {
   status: VolumeStatus;
 }
 
-/** Séries réellement faites dans la semaine `week` (numéro absolu). */
+/** Les séries d'échauffement ne comptent pas dans le volume (décision de l'utilisateur). */
+export function countsInVolume(set: Pick<SetLog, 'kind'>): boolean {
+  return set.kind !== 'warmup';
+}
+
+/** Séries réellement faites dans la semaine `week` (numéro absolu), hors échauffement. */
 export function realizedComponentVolume(
   sets: readonly SetLog[],
   sessions: ReadonlyMap<ID, SessionLog>,
@@ -132,7 +137,7 @@ export function realizedComponentVolume(
   const counts = new Map<ID, { evening: number; morning: number }>();
   for (const set of sets) {
     const session = sessions.get(set.sessionId);
-    if (!session || session.week !== week.week || !set.elementId) continue;
+    if (!session || session.week !== week.week || !set.elementId || !countsInVolume(set)) continue;
     const count = counts.get(set.elementId) ?? { evening: 0, morning: 0 };
     count[session.moment] += 1;
     counts.set(set.elementId, count);
@@ -214,6 +219,7 @@ export function programIssues(
     }
   }
   const skills = program.elements.filter((e) => e.kind === 'skill');
+  const structure = { blocks: program.blocks, elements: new Map(program.elements.map((e) => [e.id, e])) };
   const seen = new Set<ID>();
   for (const { moment, template } of plannedSlots(program.weekPlan, program.templates)) {
     if (seen.has(template.id)) continue;
@@ -225,7 +231,7 @@ export function programIssues(
         }
       }
     } else {
-      const { maxSec } = estimateDuration(template, settings);
+      const { maxSec } = estimateDuration(template, settings, structure);
       if (maxSec > settings.morningMaxMinutes * 60) {
         issues.push({ kind: 'morning_too_long', templateId: template.id, maxSec });
       }
@@ -234,7 +240,7 @@ export function programIssues(
   return issues;
 }
 
-/** Séries de skill réellement faites dans la semaine `week`, par (bloc, skill) : clé « blocId|elementId ». */
+/** Séries de skill réellement faites dans la semaine `week`, hors échauffement, par (bloc, skill) : clé « blocId|elementId ». */
 export function realizedSkillSets(
   sets: readonly SetLog[],
   sessions: ReadonlyMap<ID, SessionLog>,
@@ -244,7 +250,7 @@ export function realizedSkillSets(
   const skills = new Set(elements.filter((e) => e.kind === 'skill').map((e) => e.id));
   const counts = new Map<string, number>();
   for (const set of sets) {
-    if (!set.elementId || !skills.has(set.elementId) || sessions.get(set.sessionId)?.week !== week) continue;
+    if (!set.elementId || !skills.has(set.elementId) || sessions.get(set.sessionId)?.week !== week || !countsInVolume(set)) continue;
     const key = `${set.blockTypeId ?? ''}|${set.elementId}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }

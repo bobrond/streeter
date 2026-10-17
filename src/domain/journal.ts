@@ -77,12 +77,12 @@ export interface ProgressPoint {
 
 /**
  * Courbe de progression : meilleure valeur par séance et par élastique (le skill sans élastique
- * et le skill assisté ne se comparent pas). Les séries dégradées ne comptent pas.
+ * et le skill assisté ne se comparent pas). Les séries dégradées et d'échauffement ne comptent pas.
  */
 export function progressPoints(exerciseId: ID, sets: readonly SetLog[], sessionsById: ReadonlyMap<ID, Pick<SessionLog, 'date'>>): ProgressPoint[] {
   const points = new Map<string, ProgressPoint>();
   for (const set of sets) {
-    if (set.exerciseId !== exerciseId || set.value === null || set.quality === 'degraded') continue;
+    if (set.exerciseId !== exerciseId || set.value === null || set.quality === 'degraded' || set.kind === 'warmup') continue;
     const date = sessionsById.get(set.sessionId)?.date;
     if (!date) continue;
     const key = `${set.sessionId}|${set.bandId ?? ''}`;

@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
 import { abandonSession, deleteSet, finishSession, updateSet } from '../../db/sessionStore';
 import { formatDuration, seqDayLabel } from '../../domain/labels';
 import type { SessionLog, SetLog } from '../../domain/types';
-import { unlockAudio } from '../../lib/audio';
-import { readSoundPref, useNow, useWakeLock, writeSoundPref } from '../../lib/device';
+import { setSoundPref, useNow, useSoundPref } from '../../lib/device';
 import { navigate } from '../../lib/router';
 import { Button } from '../../ui/Button';
 import { BackIcon, CheckIcon, DotsIcon, ListIcon } from '../../ui/icons';
@@ -38,16 +37,9 @@ function SessionView({ session, data, lookups }: { session: SessionLog; data: Ap
   const { resume, plan, sessionSets, progress, proposedId, activeId, activeView, viewOf, actions } = useSessionController(session, data, lookups);
   const [sheet, setSheet] = useState<SheetName>(null);
   const [editedSet, setEditedSet] = useState<SetLog | null>(null);
-  const [sound, setSound] = useState(readSoundPref);
+  // Écran allumé, son débloqué au toucher et signaux du repos : voir `SessionRuntime` (au niveau de l'appli).
+  const sound = useSoundPref();
   const now = useNow(15_000);
-  useWakeLock(true);
-
-  // Le son n'est autorisé qu'après un geste : chaque toucher le (ré)active.
-  useEffect(() => {
-    const unlock = () => unlockAudio();
-    window.addEventListener('pointerup', unlock);
-    return () => window.removeEventListener('pointerup', unlock);
-  }, []);
 
   const bands = data.bands.filter((b) => b.active || b.id === activeView?.draft.bandId);
   const elapsedSec = session.startedAt ? Math.max(0, (now - session.startedAt) / 1000) : 0;
@@ -105,7 +97,6 @@ function SessionView({ session, data, lookups }: { session: SessionLog; data: Ap
       {resume.rest && (
         <RestBanner
           rest={resume.rest}
-          sound={sound}
           onAdd={() => actions.addRest(30)}
           onSkip={actions.skipRest}
           onUndo={actions.undoLastSet}
@@ -174,10 +165,7 @@ function SessionView({ session, data, lookups }: { session: SessionLog; data: Ap
         open={sheet === 'menu'}
         onClose={() => setSheet(null)}
         sound={sound}
-        onToggleSound={() => {
-          writeSoundPref(!sound);
-          setSound(!sound);
-        }}
+        onToggleSound={() => setSoundPref(!sound)}
         onLeave={() => {
           setSheet(null);
           navigate('/');

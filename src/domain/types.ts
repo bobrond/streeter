@@ -13,6 +13,8 @@ export type ElementKind = 'skill' | 'component' | 'other';
 export type Measure = 'reps' | 'seconds' | 'combos' | 'none';
 export type TargetUnit = Exclude<Measure, 'none'>;
 export type Quality = 'clean' | 'degraded';
+/** Type de série : l'échauffement ne compte ni dans le volume ni dans les records ; `failure` : à l'échec total. */
+export type SetKind = 'normal' | 'warmup' | 'failure';
 
 export interface Element {
   id: ID;
@@ -225,6 +227,7 @@ export interface SetLog {
   bandId: ID | null;
   rpe: number | null;
   quality: Quality | null;
+  kind: SetKind;
   note: string;
   createdAt: number;
 }

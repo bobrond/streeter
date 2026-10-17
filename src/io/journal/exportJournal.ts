@@ -52,6 +52,13 @@ function joinValues(values: readonly (number | null)[]): string {
   return values.map((v) => (v === null ? '-' : String(v).replace('.', ','))).join(' ; ');
 }
 
+/** « Série dégradée : 2 », « Séries à l’échec : 3, 4 » : numéros, dans la ligne, des séries qui vérifient `test`. */
+function markedSets(sets: readonly SetLog[], test: (set: SetLog) => boolean, one: string, many: string): string | null {
+  const numbers = sets.map((s, i) => (test(s) ? i + 1 : 0)).filter(Boolean);
+  if (numbers.length === 0) return null;
+  return `${numbers.length > 1 ? many : one} : ${numbers.join(', ')}`;
+}
+
 function rpeCell(rpes: readonly (number | null)[]): number | string {
   const known = rpes.filter((r): r is number => r !== null);
   if (known.length === 0) return '';
@@ -80,8 +87,13 @@ export function journalExportRows(data: JournalExportData): JournalExportRow[] {
         if (session.note) notes.push(`Séance : ${session.note}`);
       }
       notes.push(...line.sets.map((s) => s.note).filter(Boolean));
-      const degraded = line.sets.map((s, i) => (s.quality === 'degraded' ? i + 1 : 0)).filter(Boolean);
-      if (degraded.length > 0) notes.push(`Série${degraded.length > 1 ? 's' : ''} dégradée${degraded.length > 1 ? 's' : ''} : ${degraded.join(', ')}`);
+      for (const mark of [
+        markedSets(line.sets, (s) => s.kind === 'warmup', 'Série d’échauffement', 'Séries d’échauffement'),
+        markedSets(line.sets, (s) => s.kind === 'failure', 'Série à l’échec', 'Séries à l’échec'),
+        markedSets(line.sets, (s) => s.quality === 'degraded', 'Série dégradée', 'Séries dégradées'),
+      ]) {
+        if (mark) notes.push(mark);
+      }
       const bands = [...new Set(line.sets.map((s) => (s.bandId ? (data.bands.get(s.bandId)?.name ?? '') : '')))].filter(Boolean);
       rows.push({
         date: session.date,

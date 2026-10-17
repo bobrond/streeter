@@ -171,6 +171,44 @@ export function proposeNext(plan: SessionPlan, progress: ReadonlyMap<ID, ItemPro
   return null;
 }
 
+/** Repos prescrit d'une ligne ; `null` en min et max : repos libre. */
+export interface RestPrescription {
+  minSec: number | null;
+  maxSec: number | null;
+}
+
+/** Le plus long repos d'un groupe de lignes (repos libre seulement si aucune n'a de décompte). */
+function longestRest(items: readonly PrescriptionItem[]): RestPrescription {
+  let best: PrescriptionItem | null = null;
+  for (const item of items) {
+    if (item.restMaxSec !== null && (best === null || best.restMaxSec === null || item.restMaxSec > best.restMaxSec)) best = item;
+  }
+  const ref = best ?? items[0];
+  return { minSec: ref.restMinSec, maxSec: ref.restMaxSec };
+}
+
+/**
+ * Repos à lancer après une série validée ; `null` : enchaîner sans repos.
+ * Alternance planche / FL (décision de l'utilisateur) : pas de repos tant qu'une autre ligne inachevée de la paire
+ * n'a pas fait sa série de ce tour ; à la fin du tour, le plus long repos des lignes du tour. Une ligne qui continue
+ * seule, ou qu'on refait avant l'autre, se repose après chaque série. Ailleurs (lignes seules, supersets du matin) :
+ * le repos de la ligne après chaque série. `progress` compte déjà la série validée.
+ */
+export function restAfterSet(plan: SessionPlan, progress: ReadonlyMap<ID, ItemProgress>, itemId: ID): RestPrescription | null {
+  const item = plan.itemsById.get(itemId);
+  if (!item) return null;
+  const unit = plan.unitOf.get(itemId);
+  if (unit?.mode !== 'alternate') return { minSec: item.restMinSec, maxSec: item.restMaxSec };
+  const done = progress.get(itemId)?.done ?? 0;
+  const partners = unit.itemIds
+    .filter((id) => id !== itemId)
+    .map((id) => plan.itemsById.get(id))
+    .filter((p): p is PrescriptionItem => p !== undefined);
+  const doneOf = (p: PrescriptionItem) => progress.get(p.id)?.done ?? 0;
+  if (partners.some((p) => !isItemComplete(p, progress.get(p.id)) && doneOf(p) === done - 1)) return null;
+  return longestRest([item, ...partners.filter((p) => doneOf(p) >= done)]);
+}
+
 /** Exercices proposés pour une ligne ; le matin, les exercices rapides en tête. */
 export function itemCandidates(
   item: PrescriptionItem,

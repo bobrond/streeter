@@ -15,6 +15,7 @@ import {
   progressOf,
   proposeNext,
   readResume,
+  restAfterSet,
   targetFor,
   type ItemProgress,
   type ItemStatus,
@@ -26,7 +27,7 @@ import type { Exercise, ID, PrescriptionItem, SessionLog, SessionResume, SetDraf
 import { unlockAudio } from '../../lib/audio';
 import { vibrate } from '../../lib/device';
 import { newId } from '../../lib/id';
-import { showToast } from '../../ui/toastStore';
+import { dismissToast, showToast } from '../../ui/toastStore';
 
 export interface ItemView {
   item: PrescriptionItem;
@@ -56,6 +57,12 @@ function reportError(error: unknown): void {
 export function useSessionController(session: SessionLog, data: AppData, lookups: Lookups) {
   const [resume, setResume] = useState<SessionResume>(() => readResume(session.resume));
   const resumeRef = useRef(resume);
+  /** Message « Série enregistrée · Annuler » d'une série sans repos : fermé à la série suivante. */
+  const savedToast = useRef<number | null>(null);
+  const closeSavedToast = useCallback(() => {
+    if (savedToast.current !== null) dismissToast(savedToast.current);
+    savedToast.current = null;
+  }, []);
 
   const commit = useCallback(
     (next: SessionResume, write?: (r: SessionResume) => Promise<void>) => {
@@ -109,6 +116,30 @@ export function useSessionController(session: SessionLog, data: AppData, lookups
 
   const update = useCallback((fn: (r: SessionResume) => SessionResume) => commit(fn(resumeRef.current)), [commit]);
 
+  /** Annule une série validée et revient sur sa ligne, valeurs remises dans la saisie ; son repos s'arrête. */
+  const undoSet = useCallback(
+    (set: SetLog) => {
+      closeSavedToast();
+      const r = resumeRef.current;
+      const itemId = set.itemId;
+      commit(
+        {
+          ...r,
+          activeItemId: itemId,
+          rest: r.rest?.startedAt === set.createdAt ? null : r.rest,
+          drafts: itemId
+            ? { ...r.drafts, [itemId]: { value: set.value, bandId: set.bandId, rpe: set.rpe, quality: set.quality, note: set.note } }
+            : r.drafts,
+        },
+        async (next) => {
+          await deleteSet(db, set.id);
+          await saveResume(db, session.id, next);
+        },
+      );
+    },
+    [closeSavedToast, commit, session.id],
+  );
+
   const actions = useMemo(
     () => ({
       goTo(itemId: ID) {
@@ -123,7 +154,10 @@ export function useSessionController(session: SessionLog, data: AppData, lookups
         update((r) => ({ ...r, drafts: { ...r.drafts, [view.item.id]: { ...(r.drafts[view.item.id] ?? view.draft), ...patch } } }));
       },
 
-      /** Valide la série, lance le repos prescrit et passe à la série proposée. */
+      /**
+       * Valide la série et passe à la série proposée. Repos prescrit, sauf au milieu d'une paire planche / FL :
+       * on enchaîne, et un message propose d'annuler la série (pas de bandeau de repos pour le faire).
+       */
       validate(view: ItemView) {
         const { item, exercise, draft } = view;
         if (!exercise) return;
@@ -142,46 +176,41 @@ export function useSessionController(session: SessionLog, data: AppData, lookups
           bandId: draft.bandId,
           rpe: draft.rpe,
           quality: draft.quality,
+          kind: 'normal',
           note: draft.note.trim(),
           createdAt: now,
         };
         const nextProgress = new Map(progress);
         const p = progress.get(item.id);
         nextProgress.set(item.id, { done: (p?.done ?? 0) + 1, closed: p?.closed ?? false });
+        const rest = restAfterSet(plan, nextProgress, item.id);
+        const nextId = proposeNext(plan, nextProgress, item.id);
         const r = resumeRef.current;
         commit(
           {
             ...r,
-            activeItemId: proposeNext(plan, nextProgress, item.id),
+            activeItemId: nextId,
             chosenExercise: { ...r.chosenExercise, [item.id]: exercise.id },
             drafts: without(r.drafts, item.id),
             hold: null,
-            rest: { itemId: item.id, startedAt: now, minSec: item.restMinSec, maxSec: item.restMaxSec, extraSec: 0 },
+            rest: rest ? { itemId: item.id, startedAt: now, minSec: rest.minSec, maxSec: rest.maxSec, extraSec: 0 } : null,
           },
           (next) => logSet(db, set, next),
         );
+        closeSavedToast();
+        if (!rest) {
+          const nextItem = nextId ? plan.itemsById.get(nextId) : undefined;
+          const nextName = nextItem ? lookups.elements.get(nextItem.elementId)?.name : undefined;
+          savedToast.current = showToast(nextName ? `Série enregistrée : enchaîne avec ${nextName}.` : 'Série enregistrée.', {
+            action: { label: 'Annuler', run: () => undoSet(set) },
+          });
+        }
       },
 
-      /** Annule la dernière série validée et revient sur sa ligne, valeurs remises dans la saisie. */
+      /** Annule la dernière série validée (« Annuler la série » du bandeau de repos). */
       undoLastSet() {
         const last = sessionSets.at(-1);
-        if (!last) return;
-        const r = resumeRef.current;
-        const itemId = last.itemId;
-        commit(
-          {
-            ...r,
-            activeItemId: itemId,
-            rest: null,
-            drafts: itemId
-              ? { ...r.drafts, [itemId]: { value: last.value, bandId: last.bandId, rpe: last.rpe, quality: last.quality, note: last.note } }
-              : r.drafts,
-          },
-          async (next) => {
-            await deleteSet(db, last.id);
-            await saveResume(db, session.id, next);
-          },
-        );
+        if (last) undoSet(last);
       },
 
       /** Termine une ligne avant ses séries max (ou la passe). */
@@ -231,7 +260,7 @@ export function useSessionController(session: SessionLog, data: AppData, lookups
         update((r) => ({ ...r, rest: null }));
       },
     }),
-    [commit, plan, progress, proposedId, session.id, sessionSets, update, viewOf],
+    [closeSavedToast, commit, lookups.elements, plan, progress, proposedId, session.id, sessionSets, undoSet, update, viewOf],
   );
 
   return { resume, plan, sessionSets, progress, proposedId, activeId, activeView, viewOf, actions };

@@ -691,6 +691,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
           bandId: band?.id ?? null,
           rpe: row.rpe,
           quality: null,
+          kind: 'normal',
           note: i === count - 1 ? row.notes : '',
           createdAt: noon + rowIndex * 1000 + i,
         });
