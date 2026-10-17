@@ -81,7 +81,7 @@ Décidé avec l'utilisateur :
 Choix sans l'utilisateur, à valider :
 
 - Navigation : réglages derrière une roue crantée dans Programmes ; Progression en 3 vues : Skills, Volume (jauges, totaux skills, semaines passées), Historique.
-- Tableau : lignes de 56 px ; toucher une valeur ouvre un pavé en bas (valeur, élastique, RPE, qualité, note) ; un bouton « Valider » reste en bas pour la série proposée ; autant de lignes que le min de séries, puis « + Ajouter une série » jusqu'au max ; décocher une ligne annule la série.
+- Tableau de séance : voir « Choix d'interface du mode séance » (phase C).
 - Charte des maquettes (orange `#FF5114`, bleu `#2BABE8`, Bebas Neue et Heebo embarquées) ajustée pour le plein soleil : orange en aplat plutôt qu'en petit texte, gris éclaircis.
 
 Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
@@ -89,7 +89,7 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 - 0 (livrée le 17/10/2026, v1.0.1) : « Envoyer une sauvegarde » corrigé ; l'utilisateur fait une vraie sauvegarde avant toute migration (faite le 17/10/2026).
 - A (livrée le 17/10/2026, v1.1.0) : fondations : repos et sons de la séance au niveau de l'appli ([src/features/session/SessionRuntime.tsx](src/features/session/SessionRuntime.tsx) ; ils continuent hors de l'écran Séance), schéma Dexie v2 (type de série), sauvegarde et export ; repos de l'alternance planche / FL et durée estimée. Le type de série n'a pas encore de saisie : elle viendra avec le tableau (phase C).
 - B (livrée le 17/10/2026, v1.2.0) : charte, polices, 4 onglets, barre de séance active, roue crantée, Historique avec le calendrier. Voir « Navigation et charte ».
-- C : séance en tableau, sans minuteur de hold.
+- C (livrée le 17/10/2026, v1.3.0) : séance en tableau, sans minuteur de hold, avec le type de série. Voir « Choix d'interface du mode séance ».
 - D : Programmes : semaine J1-J7, éditeur de modèle, bibliothèque d'exercices.
 - E : Progression : Skills (objectifs, records par élastique), Volume.
 - F : Aujourd'hui refondu et séance express.
@@ -138,23 +138,41 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 
 ### Séance
 
-1. Les blocs suivent un ordre paramétrable, par défaut : Échauffement (connexion + élastique) → Skill → Skill assisté (élastique) → Renfo spé skill → Renfo composantes. Chaque ligne de prescription est une carte.
+1. Les blocs suivent un ordre paramétrable, par défaut : Échauffement (connexion + élastique) → Skill → Skill assisté (élastique) → Renfo spé skill → Renfo composantes. Chaque ligne de prescription est une carte du tableau de la séance, avec une ligne par série.
 2. Planche **et** touch FL sont travaillés à chaque séance du soir, jamais l'un sans l'autre. L'éditeur signale un modèle du soir auquel il manque l'un des deux.
 3. Dans les blocs Skill **et Skill assisté** (décidé ; réglage par bloc `alternateSkills`), les séries planche et FL **alternent**, appariées par ordre : 1re ligne planche avec 1re ligne FL, 2e avec 2e (J1 : planche hold ↔ touch FL hold, puis P/N ↔ FL PU). Quand une ligne a fini ses séries, l'autre continue seule. L'appli propose la série suivante, l'utilisateur peut dévier. **Pas de repos entre les deux séries d'une paire**, comme un superset (décidé le 17/10/2026) : le repos vient à la fin du tour, le plus long des repos des lignes du tour. Une ligne qui continue seule se repose après chaque série ; refaire la même ligne avant l'autre (écart) donne aussi un repos (choix sans l'utilisateur).
 4. L'exercice se choisit **le jour même** parmi les candidats de la ligne (puces). Par défaut : l'exercice fait la dernière fois sur cette ligne ; si un candidat a déjà été fait plus tôt dans la séance (cas « même combo qu'au bloc skill »), celui-là. L'exercice est enregistré par série, on peut en changer entre deux séries.
 5. Une série de skill s'arrête dès que la protraction (grand dentelé) ou le verrouillage du coude lâche. Chaque série peut être marquée **propre** ou **dégradée**.
 6. Progression : une seule variable à la fois (+1 s de hold, +1 rep, ou élastique plus fin). Chaque carte affiche la dernière performance sur l'exercice (valeurs, élastique, date) pour viser juste au-dessus.
-7. Minuteur de hold (**retiré en V2**, phase C : l'utilisateur ne s'en sert pas) : décompte de 3 s, puis comptage avec un bip à chaque seconde et un bip distinct quand la cible est atteinte (on ne regarde pas l'écran en planche), plus vibration. Arrêt en touchant n'importe où ; la valeur est reportée dans la série et reste ajustable au +/−.
-8. Minuteur de repos : démarre à la validation d'une série avec le repos prescrit (sauf au milieu d'une paire planche / FL, règle 3). Pour une fourchette (« 90 s-2 min »), un premier signal au minimum et la fin au maximum. « Libre » : simple chronomètre. Ses sons et vibrations continuent hors de l'écran Séance, tant que l'appli est à l'écran.
+7. Pas de minuteur de hold (retiré le 17/10/2026 : l'utilisateur filme ses séries avec le même téléphone et saisit la durée après coup).
+8. Minuteur de repos : démarre à la validation d'une série avec le repos prescrit (sauf au milieu d'une paire planche / FL, règle 3). Pour une fourchette (« 90 s-2 min »), un premier signal au minimum et la fin au maximum ; « −15 s » / « +15 s » déplacent la fin, jamais avant le début. « Libre » : simple chronomètre. Ses sons et vibrations continuent hors de l'écran Séance, tant que l'appli est à l'écran.
 9. L'écran reste allumé tant qu'une séance est en cours, quel que soit l'écran affiché (Wake Lock, ré-acquis au retour au premier plan ; « quel que soit l'écran » : choix sans l'utilisateur).
 
-Choix d'interface du mode séance (phase 1, [src/domain/session.ts](src/domain/session.ts)) :
+Choix d'interface du mode séance (tableau de la phase C, [src/domain/sessionTable.ts](src/domain/sessionTable.ts), [src/features/session/](src/features/session/)) ; choix sans l'utilisateur, à valider à l'usage :
 
-- Série proposée : on reste dans l'unité en cours (paire planche / FL, superset) en prenant la ligne qui a le moins de séries, sinon la première unité inachevée. Une ligne est proposée jusqu'à ses séries **max** ; « Terminer cet exercice » la clôt dès le min (ou avant).
-- Exercice par défaut : la dernière fois **dans le même bloc** parmi les candidats ; « dernière performance » : la dernière séance où l'exercice a été fait dans le même bloc (le skill sans élastique ne se compare pas au skill assisté), sinon dans un autre bloc, signalé.
-- Saisie pré-remplie : série précédente de la ligne, sinon 1re série de la dernière performance, sinon bas de la cible ; qualité « propre » par défaut sur un skill, rien ailleurs. Le bip distinct du hold sonne à la valeur saisie (sinon au bas de la cible).
-- Après validation : repos prescrit lancé, carte suivante affichée, « Annuler la série » dans le bandeau de repos. Au milieu d'une paire planche / FL : pas de repos, la carte de l'autre skill s'affiche et un message « Série enregistrée » propose « Annuler ».
-- Abandon : une séance sans série est supprimée ; sinon elle reste au journal, marquée abandonnée. Une seule séance en cours à la fois ; au lancement, l'appli rouvre la séance en cours.
+- **Lignes** : autant que le **minimum** de séries de la ligne, puis « + Ajouter une série » (le maximum est indiqué, on peut le dépasser).
+  - Une ligne est proposée jusqu'à ses séries prévues : le minimum, plus les lignes ajoutées.
+  - « Terminer cet exercice » ou « Passer cet exercice » est dans les options (⋯ ou appui long sur l'en-tête).
+- **Série proposée** : on reste dans l'unité en cours (paire planche / FL, superset) en prenant la ligne qui a le moins de séries, sinon la première unité inachevée.
+  - Elle est surlignée (trait orange) et revient au milieu de l'écran après chaque validation.
+  - Le gros bouton du bas « Valider la série N » la valide et rappelle ce qui sera enregistré.
+  - ✓ valide n'importe quelle série ; ✓ d'une série faite la décoche : elle redevient à faire avec ses valeurs, et son repos s'arrête.
+- **Exercice par défaut** : la dernière fois **dans le même bloc** parmi les candidats ; on en change dans les options de la ligne (règle 4).
+  - « Dernière performance » : la dernière séance où l'exercice a été fait dans le même bloc (le skill sans élastique ne se compare pas au skill assisté), sinon dans un autre bloc, signalé.
+  - La colonne « Précédent » montre sa série de même rang ; la toucher la recopie.
+- **Pré-remplissage** :
+  - 1re série à faire : la série précédente de la ligne (hors échauffement), sinon la 1re série de la dernière performance, sinon le bas de la cible ;
+  - séries suivantes : recopie de la dernière série normale au-dessus ;
+  - qualité « propre » par défaut sur un skill, rien ailleurs ; série normale.
+- **Type de série** : toucher le numéro d'une série à faire fait défiler normale → échauffement (« E », pointillés) → échec (numéro sur fond rouge). Le choix existe aussi dans le pavé.
+  - Une série d'échauffement s'ajoute sans prendre la place d'une série prévue, et ne compte pas dans l'avancement de la ligne.
+- **Pavé de saisie** (toucher une valeur) : le premier chiffre remplace la valeur pré-remplie ; ⌫, C, −1 / +1 ; type, élastique, RPE, qualité, note.
+  - Série à faire : « Valider la série » ou « Garder ces valeurs ».
+  - Série faite : corriger, exercice compris, ou supprimer.
+- **Gestes** : glisser une ligne à gauche révèle « Supprimer » (série faite, avec « Annuler ») ou « Retirer » (série à faire : une série prévue de moins). Appui long sur l'en-tête d'un exercice : ses options.
+- **En-tête** : « Réduire » (chevron), nom, chrono total, exercices finis / total, « Terminer », ⋯ (son, accueil, abandon).
+- **Repos** : en bas de l'écran, à la place du bouton de validation. Plus de feuille « Plan » ni de carte unique : le tableau montre toute la séance.
+- **Abandon** : une séance sans série est supprimée ; sinon elle reste au journal, marquée abandonnée. Une seule séance en cours à la fois ; au lancement, l'appli rouvre la séance en cours.
 
 ### Types de séance (paramétrables)
 
@@ -280,7 +298,12 @@ Objective        { id, name, criterion, target, unit, exerciseId, order, tests: 
 
 - Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal`.
 - Dans `weekPlan`, `null` signifie « rien » : Repos le soir, pas de séance le matin.
-- `SessionLog.resume` contient l'état d'interface de la séance en cours (carte active, exercice choisi par ligne, brouillon de série, minuteurs).
+- `SessionLog.resume` contient l'état d'interface de la séance en cours :
+  - ligne où l'on vient d'agir, exercice choisi par ligne, lignes terminées ;
+  - séries à faire modifiées (`pendingDrafts`, par ligne et par rang), lignes ajoutées ou retirées (`extraRows`) ;
+  - repos.
+
+  Une séance commencée avant le tableau garde son brouillon comme première série à faire (`readResume`).
 - `PrescriptionItem.superset` : des lignes consécutives du même bloc marquées superset alternent série par série.
 
 ## Import du tableur

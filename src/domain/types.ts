@@ -151,6 +151,7 @@ export interface SetDraft {
   bandId: ID | null;
   rpe: number | null;
   quality: Quality | null;
+  kind: SetKind;
   note: string;
 }
 
@@ -162,32 +163,23 @@ export interface RestTimer {
   /** `null` : repos libre (simple chronomètre). */
   minSec: number | null;
   maxSec: number | null;
-  /** Secondes ajoutées avec « +30 s ». */
+  /** Secondes ajoutées ou retirées avec « +15 s » et « −15 s ». */
   extraSec: number;
-}
-
-/** Minuteur de hold : décompte puis comptage. */
-export interface HoldTimer {
-  itemId: ID;
-  /** Début du décompte. */
-  startedAt: number;
-  countdownSec: number;
-  /** Bip distinct à cette durée ; `null` sans cible. */
-  targetSec: number | null;
 }
 
 /** État d'interface d'une séance en cours, écrit à chaque action pour une reprise exacte. */
 export interface SessionResume {
-  /** Carte affichée ; `null` : la série proposée. */
+  /** Ligne où l'on vient d'agir : la série proposée reste dans son unité (paire, superset). */
   activeItemId: ID | null;
   /** Exercice choisi par ligne. */
   chosenExercise: Record<ID, ID>;
-  /** Lignes terminées ou passées avant leurs séries max. */
+  /** Lignes terminées ou passées avant leurs séries prévues. */
   closedItems: ID[];
-  /** Brouillon de série par ligne. */
-  drafts: Record<ID, SetDraft>;
+  /** Séries à faire modifiées avant validation, par ligne et par rang (`null` : pré-remplie). */
+  pendingDrafts: Record<ID, (SetDraft | null)[]>;
+  /** Lignes ajoutées (« + Ajouter une série ») ou retirées, par rapport au minimum de séries. */
+  extraRows: Record<ID, number>;
   rest: RestTimer | null;
-  hold: HoldTimer | null;
 }
 
 export interface SessionLog {

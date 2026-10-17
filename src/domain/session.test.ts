@@ -14,6 +14,7 @@ import {
   proposeNext,
   readResume,
   restAfterSet,
+  tableProgress,
   type ItemProgress,
   type SessionPlan,
 } from './session';
@@ -341,6 +342,7 @@ describe('prefillDraft', () => {
       bandId: null,
       rpe: null,
       quality: 'clean',
+      kind: 'normal',
       note: '',
     });
   });
@@ -372,8 +374,22 @@ describe('prefillDraft', () => {
       bandId: 'jaune',
       rpe: null,
       quality: null,
+      kind: 'normal',
       note: '',
     });
+  });
+
+  it('ne reprend pas une série d’échauffement', () => {
+    const warmUp = setLog({ sessionId: 'now', exerciseId: hold.id, itemId: line.id, value: 2, kind: 'warmup' });
+    expect(prefillDraft({ item: line, exercise: hold, isSkill: true, itemSets: [warmUp], last: null })).toMatchObject({ value: 3, kind: 'normal' });
+    const last = {
+      sessionId: 's1',
+      date: '2026-10-05',
+      sameBlock: true,
+      blockTypeId: skill.id,
+      sets: [setLog({ sessionId: 's1', exerciseId: hold.id, value: 2, kind: 'warmup' }), setLog({ sessionId: 's1', exerciseId: hold.id, value: 6 })],
+    };
+    expect(prefillDraft({ item: line, exercise: hold, isSkill: true, itemSets: [], last }).value).toBe(6);
   });
 
   it('reprend la série précédente de la ligne dans la séance, sans recopier la qualité', () => {
@@ -416,5 +432,65 @@ describe('readResume', () => {
   it('complète un état incomplet ou illisible', () => {
     expect(readResume(null)).toEqual(emptyResume());
     expect(readResume({ activeItemId: 'a', closedItems: ['b', 3] })).toEqual({ ...emptyResume(), activeItemId: 'a', closedItems: ['b'] });
+  });
+
+  it('reprend une séance commencée avant le tableau : le brouillon devient la première série à faire', () => {
+    const old = {
+      activeItemId: 'a',
+      chosenExercise: { a: 'x' },
+      closedItems: [],
+      drafts: { a: { value: 7, bandId: null, rpe: 8, quality: 'clean', note: 'ok' } },
+      rest: null,
+      hold: { itemId: 'a', startedAt: 1, countdownSec: 3, targetSec: 5 },
+    };
+    const resume = readResume(old);
+    expect(resume.pendingDrafts).toEqual({ a: [{ value: 7, bandId: null, rpe: 8, quality: 'clean', kind: 'normal', note: 'ok' }] });
+    expect(resume.extraRows).toEqual({});
+    expect('hold' in resume).toBe(false);
+  });
+
+  it('relit les séries à faire et les lignes ajoutées', () => {
+    const resume = readResume({ pendingDrafts: { a: [null, { value: 3, kind: 'warmup' }] }, extraRows: { a: 1, b: 'x' } });
+    expect(resume.pendingDrafts.a).toEqual([null, { value: 3, kind: 'warmup', note: '' }]);
+    expect(resume.extraRows).toEqual({ a: 1 });
+  });
+});
+
+describe('tableProgress', () => {
+  const plan = buildPlan(j1, blocksById, elementsById);
+
+  /** Fait toujours la série proposée, avec les séries prévues du tableau (le minimum de chaque ligne). */
+  function simulateTable(extraRows: Record<ID, number> = {}): string[] {
+    const sets: ReturnType<typeof setLog>[] = [];
+    const done: string[] = [];
+    let current: ID | null = null;
+    for (let guard = 0; guard < 100; guard++) {
+      current = proposeNext(plan, tableProgress(plan, sets, [], extraRows), current);
+      if (!current) break;
+      sets.push(setLog({ sessionId: 'now', exerciseId: 'x', itemId: current }));
+      done.push(names.get(current) ?? '?');
+    }
+    return done;
+  }
+
+  it('propose les séries prévues, le minimum de chaque ligne, en gardant l’alternance', () => {
+    expect(simulateTable()).toEqual([
+      'CARs', 'CARs',
+      'PH', 'FH', 'PH', 'FH', 'PH', 'FH', 'PH', 'FH',
+      'PN', 'FPU', 'PN', 'FPU', 'PN', 'FPU',
+      'PA', 'FA', 'PA', 'FA',
+      'R', 'R', 'E', 'E',
+    ]);
+  });
+
+  it('propose une série ajoutée ; l’autre ligne finie, celle-ci continue seule', () => {
+    expect(simulateTable({ [plancheHold.id]: 1 }).slice(2, 11)).toEqual(['PH', 'FH', 'PH', 'FH', 'PH', 'FH', 'PH', 'FH', 'PH']);
+  });
+
+  it('ne compte pas l’échauffement dans les séries faites', () => {
+    const sets = [setLog({ sessionId: 'now', exerciseId: 'x', itemId: cars.id, kind: 'warmup' }), setLog({ sessionId: 'now', exerciseId: 'x', itemId: cars.id })];
+    expect(progressOf(sets, []).get(cars.id)).toEqual({ done: 1, closed: false });
+    expect(tableProgress(plan, sets, [], {}).get(cars.id)).toEqual({ done: 1, closed: false });
+    expect(tableProgress(plan, sets, [], { [cars.id]: -1 }).get(cars.id)).toEqual({ done: 1, closed: true });
   });
 });

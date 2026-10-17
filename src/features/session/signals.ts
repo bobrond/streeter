@@ -1,22 +1,10 @@
-// Sons et vibrations des minuteurs : on ne regarde pas l'écran en planche.
+// Sons et vibrations du minuteur de repos.
 import { useEffect, useRef } from 'react';
 import { strongestSignal, type TimerSignal } from '../../domain/timers';
 import { playTones, type Tone } from '../../lib/audio';
 import { vibrate } from '../../lib/device';
 
 const SIGNALS: Record<TimerSignal, { tones: Tone[]; vibrate?: number | number[] }> = {
-  count: { tones: [{ freq: 880, ms: 120 }] },
-  go: { tones: [{ freq: 1320, ms: 380 }], vibrate: 120 },
-  tick: { tones: [{ freq: 1000, ms: 70, gain: 0.18 }] },
-  // Cible atteinte : trois notes montantes, nettement différentes du bip des secondes.
-  target: {
-    tones: [
-      { freq: 1320, ms: 140 },
-      { freq: 1760, ms: 140, at: 170 },
-      { freq: 2350, ms: 320, at: 340 },
-    ],
-    vibrate: [250, 100, 250],
-  },
   rest_min: {
     tones: [
       { freq: 880, ms: 200 },

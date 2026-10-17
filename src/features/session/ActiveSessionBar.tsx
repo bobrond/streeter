@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import type { AppData } from '../../db/hooks';
 import type { Lookups } from '../../db/lookups';
 import { formatClock } from '../../domain/labels';
-import { buildPlan, progressOf, proposeNext, readResume } from '../../domain/session';
+import { buildPlan, proposeNext, readResume, tableProgress } from '../../domain/session';
 import { restView } from '../../domain/timers';
 import type { SessionLog } from '../../domain/types';
 import { useNow } from '../../lib/device';
@@ -18,11 +18,14 @@ export function ActiveSessionBar({ session, data, lookups }: { session: SessionL
   const now = useNow(1000);
   const resume = readResume(session.resume);
   const plan = useMemo(() => buildPlan(session.templateSnapshot ?? { items: [] }, lookups.blocks, lookups.elements), [session.templateSnapshot, lookups.blocks, lookups.elements]);
-  const progress = progressOf(
+  // Même série proposée que dans le tableau de la séance.
+  const progress = tableProgress(
+    plan,
     data.sets.filter((s) => s.sessionId === session.id),
     resume.closedItems,
+    resume.extraRows,
   );
-  const itemId = resume.activeItemId && plan.itemsById.has(resume.activeItemId) ? resume.activeItemId : proposeNext(plan, progress, null);
+  const itemId = proposeNext(plan, progress, resume.activeItemId);
   const item = itemId ? plan.itemsById.get(itemId) : undefined;
   const current = item ? `${lookups.elements.get(item.elementId)?.name ?? '?'}, série ${(progress.get(item.id)?.done ?? 0) + 1}` : 'séries prévues faites';
   const elapsed = session.startedAt ? (now - session.startedAt) / 1000 : 0;

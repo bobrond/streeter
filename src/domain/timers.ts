@@ -1,24 +1,5 @@
-// Minuteurs de hold et de repos, calculés à partir d'horodatages (jamais en accumulant des ticks).
-import type { HoldTimer, RestTimer } from './types';
-
-export type HoldView =
-  | { phase: 'countdown'; /** 3, 2, 1 */ count: number }
-  | { phase: 'running'; elapsedMs: number; /** Secondes entières tenues. */ seconds: number; targetReached: boolean };
-
-export function holdView(hold: HoldTimer, now: number): HoldView {
-  const sinceStart = Math.max(0, now - hold.startedAt);
-  const countdownMs = hold.countdownSec * 1000;
-  if (sinceStart < countdownMs) return { phase: 'countdown', count: hold.countdownSec - Math.floor(sinceStart / 1000) };
-  const elapsedMs = sinceStart - countdownMs;
-  const seconds = Math.floor(elapsedMs / 1000);
-  return { phase: 'running', elapsedMs, seconds, targetReached: hold.targetSec !== null && seconds >= hold.targetSec };
-}
-
-/** Valeur reportée dans la série à l'arrêt : secondes entières tenues après le décompte. */
-export function holdResult(hold: HoldTimer, now: number): number {
-  const view = holdView(hold, now);
-  return view.phase === 'running' ? view.seconds : 0;
-}
+// Minuteur de repos, calculé à partir d'horodatages (jamais en accumulant des ticks).
+import type { RestTimer } from './types';
 
 export type RestPhase = 'free' | 'running' | 'can_go' | 'over';
 
@@ -36,21 +17,19 @@ export interface RestView {
 export function restView(rest: RestTimer, now: number): RestView {
   const elapsedMs = Math.max(0, now - rest.startedAt);
   if (rest.maxSec === null) return { phase: 'free', elapsedMs, endMs: null, minMs: null, remainingMs: null };
-  const endMs = (rest.maxSec + rest.extraSec) * 1000;
+  const endMs = Math.max(0, rest.maxSec + rest.extraSec) * 1000;
   const minMs = rest.minSec !== null && rest.minSec * 1000 < endMs ? rest.minSec * 1000 : null;
   const phase: RestPhase = elapsedMs >= endMs ? 'over' : minMs !== null && elapsedMs >= minMs ? 'can_go' : 'running';
   return { phase, elapsedMs, endMs, minMs, remainingMs: endMs - elapsedMs };
 }
 
+/** « +15 s » / « −15 s » : déplace la fin du repos, jamais avant son début ; sans effet sur un repos libre. */
+export function adjustRest(rest: RestTimer, deltaSec: number): RestTimer {
+  if (rest.maxSec === null) return rest;
+  return { ...rest, extraSec: Math.max(-rest.maxSec, rest.extraSec + deltaSec) };
+}
+
 export type TimerSignal =
-  /** Décompte du hold : 3, 2, 1. */
-  | 'count'
-  /** Début du hold. */
-  | 'go'
-  /** Chaque seconde de hold. */
-  | 'tick'
-  /** Cible du hold atteinte. */
-  | 'target'
   /** Minimum d'une fourchette de repos atteint. */
   | 'rest_min'
   /** 3, 2, 1 secondes avant la fin du repos. */
@@ -59,18 +38,6 @@ export type TimerSignal =
   | 'rest_end';
 
 const inWindow = (t: number, from: number, to: number) => t > from && t <= to;
-
-/** Signaux du hold dont l'instant est dans ]from, to]. */
-export function holdSignals(hold: HoldTimer, from: number, to: number): TimerSignal[] {
-  const signals: TimerSignal[] = [];
-  for (let k = 0; k < hold.countdownSec; k++) if (inWindow(hold.startedAt + k * 1000, from, to)) signals.push('count');
-  const go = hold.startedAt + hold.countdownSec * 1000;
-  if (inWindow(go, from, to)) signals.push('go');
-  const first = Math.max(1, Math.floor((from - go) / 1000) + 1);
-  const last = Math.floor((to - go) / 1000);
-  for (let s = first; s <= last; s++) signals.push(s === hold.targetSec ? 'target' : 'tick');
-  return signals;
-}
 
 /** Signaux du repos dont l'instant est dans ]from, to]. */
 export function restSignals(rest: RestTimer, from: number, to: number): TimerSignal[] {
@@ -87,7 +54,7 @@ export function restSignals(rest: RestTimer, from: number, to: number): TimerSig
   return signals;
 }
 
-const PRIORITY: TimerSignal[] = ['target', 'rest_end', 'go', 'rest_min', 'tick', 'count', 'rest_soon'];
+const PRIORITY: TimerSignal[] = ['rest_end', 'rest_min', 'rest_soon'];
 
 /** Le signal le plus important d'un lot (un seul son à la fois, même après une longue pause). */
 export function strongestSignal(signals: readonly TimerSignal[]): TimerSignal | null {

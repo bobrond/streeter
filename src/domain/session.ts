@@ -111,13 +111,33 @@ export interface ItemProgress {
   closed: boolean;
 }
 
+/** Séries faites par ligne, hors échauffement (il ne prend pas la place d'une série prévue). */
 export function progressOf(sets: readonly SetLog[], closedItems: readonly ID[]): Map<ID, ItemProgress> {
   const progress = new Map<ID, ItemProgress>();
   for (const id of closedItems) progress.set(id, { done: 0, closed: true });
   for (const set of sets) {
-    if (!set.itemId) continue;
+    if (!set.itemId || set.kind === 'warmup') continue;
     const p = progress.get(set.itemId) ?? { done: 0, closed: false };
     progress.set(set.itemId, { ...p, done: p.done + 1 });
+  }
+  return progress;
+}
+
+/** Séries prévues dans le tableau : le minimum de la ligne, plus les lignes ajoutées (ou moins les retirées). */
+export function rowTarget(item: Pick<PrescriptionItem, 'setsMin'>, extraRows: number | undefined): number {
+  return Math.max(0, item.setsMin + (extraRows ?? 0));
+}
+
+/**
+ * Avancement pour proposer la série suivante dans le tableau : une ligne est finie quand ses séries prévues
+ * sont faites (le minimum, sauf lignes ajoutées) ou qu'on l'a terminée.
+ */
+export function tableProgress(plan: SessionPlan, sets: readonly SetLog[], closedItems: readonly ID[], extraRows: Readonly<Record<ID, number>>): Map<ID, ItemProgress> {
+  const base = progressOf(sets, closedItems);
+  const progress = new Map<ID, ItemProgress>();
+  for (const item of plan.items) {
+    const p = base.get(item.id) ?? { done: 0, closed: false };
+    progress.set(item.id, { done: p.done, closed: p.closed || p.done >= rowTarget(item, extraRows[item.id]) });
   }
   return progress;
 }
@@ -308,8 +328,9 @@ export function targetFor(item: Pick<PrescriptionItem, 'targets'>, measure: Meas
 }
 
 /**
- * Saisie pré-remplie : la série précédente de la ligne sur le même exercice ; sinon la 1re série
- * de la dernière performance ; sinon le bas de la cible. Qualité « propre » par défaut sur un skill.
+ * Saisie pré-remplie de la prochaine série d'une ligne : la série précédente de la ligne sur le même exercice
+ * (hors échauffement) ; sinon la 1re série de la dernière performance ; sinon le bas de la cible.
+ * Qualité « propre » par défaut sur un skill ; série normale.
  */
 export function prefillDraft(args: {
   item: PrescriptionItem;
@@ -322,31 +343,51 @@ export function prefillDraft(args: {
   const { item, exercise, itemSets, last } = args;
   const measured = exercise.measure !== 'none';
   const quality = args.isSkill ? 'clean' : null;
-  const previous = itemSets.filter((s) => s.exerciseId === exercise.id).at(-1);
-  if (previous) return { value: measured ? previous.value : null, bandId: previous.bandId, rpe: previous.rpe, quality, note: '' };
-  const ref = last?.sets[0];
-  if (ref) return { value: measured ? ref.value : null, bandId: ref.bandId, rpe: null, quality, note: '' };
+  const previous = itemSets.filter((s) => s.exerciseId === exercise.id && s.kind !== 'warmup').at(-1);
+  if (previous) return { value: measured ? previous.value : null, bandId: previous.bandId, rpe: previous.rpe, quality, kind: 'normal', note: '' };
+  const ref = last?.sets.find((s) => s.kind !== 'warmup') ?? last?.sets[0];
+  if (ref) return { value: measured ? ref.value : null, bandId: ref.bandId, rpe: null, quality, kind: 'normal', note: '' };
   const target = targetFor(item, exercise.measure);
-  return { value: measured ? (target?.min ?? target?.max ?? null) : null, bandId: null, rpe: null, quality, note: '' };
+  return { value: measured ? (target?.min ?? target?.max ?? null) : null, bandId: null, rpe: null, quality, kind: 'normal', note: '' };
 }
 
 export function emptyResume(): SessionResume {
-  return { activeItemId: null, chosenExercise: {}, closedItems: [], drafts: {}, rest: null, hold: null };
+  return { activeItemId: null, chosenExercise: {}, closedItems: [], pendingDrafts: {}, extraRows: {}, rest: null };
 }
 
 const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
-/** État de reprise relu de la base, complété si un champ manque. */
+function readDraft(raw: unknown): SetDraft | null {
+  if (!isRecord(raw)) return null;
+  const kind = raw.kind === 'warmup' || raw.kind === 'failure' ? raw.kind : 'normal';
+  return { ...(raw as unknown as SetDraft), kind, note: typeof raw.note === 'string' ? raw.note : '' };
+}
+
+/**
+ * État de reprise relu de la base, complété si un champ manque. Une séance commencée avant le tableau
+ * (brouillon unique par ligne) garde son brouillon comme première série à faire ; le minuteur de hold disparaît.
+ */
 export function readResume(raw: unknown): SessionResume {
   const base = emptyResume();
   if (!isRecord(raw)) return base;
+  const pendingDrafts: SessionResume['pendingDrafts'] = {};
+  if (isRecord(raw.pendingDrafts)) {
+    for (const [id, list] of Object.entries(raw.pendingDrafts)) if (Array.isArray(list)) pendingDrafts[id] = list.map(readDraft);
+  } else if (isRecord(raw.drafts)) {
+    for (const [id, draft] of Object.entries(raw.drafts)) {
+      const read = readDraft(draft);
+      if (read) pendingDrafts[id] = [read];
+    }
+  }
+  const extraRows: SessionResume['extraRows'] = {};
+  if (isRecord(raw.extraRows)) for (const [id, n] of Object.entries(raw.extraRows)) if (typeof n === 'number' && Number.isFinite(n)) extraRows[id] = n;
   return {
     activeItemId: typeof raw.activeItemId === 'string' ? raw.activeItemId : null,
     chosenExercise: isRecord(raw.chosenExercise) ? (raw.chosenExercise as Record<ID, ID>) : {},
     closedItems: Array.isArray(raw.closedItems) ? raw.closedItems.filter((x): x is ID => typeof x === 'string') : [],
-    drafts: isRecord(raw.drafts) ? (raw.drafts as SessionResume['drafts']) : {},
+    pendingDrafts,
+    extraRows,
     rest: isRecord(raw.rest) ? (raw.rest as unknown as SessionResume['rest']) : null,
-    hold: isRecord(raw.hold) ? (raw.hold as unknown as SessionResume['hold']) : null,
   };
 }
 

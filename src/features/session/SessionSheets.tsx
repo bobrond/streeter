@@ -1,91 +1,19 @@
 import { useState } from 'react';
 import type { Lookups } from '../../db/lookups';
-import { UNIT_SHORT, formatDuration, formatSets } from '../../domain/labels';
-import { itemStatus, type ItemProgress, type ItemStatus, type SessionPlan } from '../../domain/session';
-import type { Band, Exercise, ID, PrescriptionItem, SetLog } from '../../domain/types';
+import { UNIT_SHORT, formatDuration } from '../../domain/labels';
+import type { Band, Exercise, SetKind, SetLog } from '../../domain/types';
 import { Button } from '../../ui/Button';
-import { CheckIcon, PlayIcon, SoundIcon } from '../../ui/icons';
+import { CheckIcon, SoundIcon } from '../../ui/icons';
 import { BandPicker, QualityToggle, RpePicker, ValueStepper } from '../../ui/inputs';
+import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
 import { chipClass } from '../../ui/styles';
 
-const STATUS_MARK: Record<ItemStatus, { mark: string; className: string }> = {
-  todo: { mark: '○', className: 'text-ink-3' },
-  started: { mark: '◐', className: 'text-accent' },
-  min_reached: { mark: '◕', className: 'text-ok' },
-  done: { mark: '●', className: 'text-ok' },
-  skipped: { mark: '–', className: 'text-ink-3' },
-};
-
-export function PlanSheet({
-  open,
-  onClose,
-  plan,
-  progress,
-  activeId,
-  proposedId,
-  lookups,
-  exerciseNameOf,
-  onGoTo,
-}: {
-  open: boolean;
-  onClose: () => void;
-  plan: SessionPlan;
-  progress: ReadonlyMap<ID, ItemProgress>;
-  activeId: ID | null;
-  proposedId: ID | null;
-  lookups: Lookups;
-  exerciseNameOf: (item: PrescriptionItem) => string;
-  onGoTo: (itemId: ID) => void;
-}) {
-  return (
-    <Sheet open={open} onClose={onClose} title="Plan de la séance">
-      <div className="flex flex-col gap-4">
-        {plan.blocks.map((block, i) => (
-          <section key={`${block.blockTypeId}-${i}`}>
-            <h3 className="mb-1 text-sm font-bold tracking-wide text-ink-3 uppercase">
-              {lookups.blocks.get(block.blockTypeId)?.name ?? '?'}
-              {block.units.some((u) => u.mode === 'alternate') && <span className="font-normal normal-case"> · en alternance</span>}
-              {block.units.some((u) => u.mode === 'superset') && <span className="font-normal normal-case"> · superset</span>}
-            </h3>
-            <ul className="flex flex-col gap-1">
-              {block.items.map((item) => {
-                const p = progress.get(item.id);
-                const status = itemStatus(item, p);
-                const { mark, className } = STATUS_MARK[status];
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onGoTo(item.id);
-                        onClose();
-                      }}
-                      className={`flex min-h-14 w-full items-center gap-3 rounded-2xl px-3 py-2 text-left active:bg-card-2 ${item.id === activeId ? 'bg-card-2 ring-2 ring-accent' : ''}`}
-                    >
-                      <span className={`w-5 text-center text-xl ${className}`} aria-hidden>
-                        {mark}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-semibold">{lookups.elements.get(item.elementId)?.name ?? '?'}</span>
-                        <span className="block truncate text-ink-2">{exerciseNameOf(item)}</span>
-                      </span>
-                      {item.id === proposedId && item.id !== activeId && <PlayIcon className="size-4 text-accent" />}
-                      <span className="shrink-0 text-lg tabular-nums">
-                        {p?.done ?? 0}
-                        <span className="text-ink-2">/{formatSets(item.setsMin, item.setsMax)}</span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))}
-      </div>
-    </Sheet>
-  );
-}
+const KINDS: readonly { value: SetKind; label: string }[] = [
+  { value: 'normal', label: 'Normale' },
+  { value: 'warmup', label: 'Échauffement' },
+  { value: 'failure', label: 'Échec' },
+];
 
 export function MenuSheet({
   open,
@@ -194,38 +122,7 @@ export function FinishSheet({
   );
 }
 
-export function NoteSheet({ open, initial, onClose, onSave }: { open: boolean; initial: string; onClose: () => void; onSave: (note: string) => void }) {
-  return (
-    <Sheet open={open} onClose={onClose} title="Note de la série">
-      {open && <NoteForm initial={initial} onSave={onSave} onClose={onClose} />}
-    </Sheet>
-  );
-}
-
-function NoteForm({ initial, onSave, onClose }: { initial: string; onSave: (note: string) => void; onClose: () => void }) {
-  const [note, setNote] = useState(initial);
-  return (
-    <div className="flex flex-col gap-3">
-      <textarea
-        autoFocus
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        rows={3}
-        placeholder="Sensations, gêne, réglage de l’élastique…"
-        className="rounded-2xl border border-line bg-page p-3 text-lg outline-none focus:border-accent"
-      />
-      <Button
-        onClick={() => {
-          onSave(note.trim());
-          onClose();
-        }}
-      >
-        Enregistrer la note
-      </Button>
-    </div>
-  );
-}
-
+/** Correction d'une série enregistrée, depuis le journal. */
 export function SetEditSheet({
   set,
   candidates,
@@ -286,6 +183,7 @@ function SetEditForm({
       {exercise && exercise.measure !== 'none' && (
         <ValueStepper value={draft.value} onChange={(value) => patch({ value })} unit={UNIT_SHORT[exercise.measure]} />
       )}
+      <Segmented label="Type de série" options={KINDS} value={draft.kind} onChange={(kind) => patch({ kind })} />
       <BandPicker bands={bands} value={draft.bandId} onChange={(bandId) => patch({ bandId })} />
       <RpePicker value={draft.rpe} onChange={(rpe) => patch({ rpe })} />
       <QualityToggle value={draft.quality} onChange={(quality) => patch({ quality })} />
@@ -304,6 +202,7 @@ function SetEditForm({
             bandId: draft.bandId,
             rpe: draft.rpe,
             quality: draft.quality,
+            kind: draft.kind,
             note: draft.note.trim(),
           });
           onClose();
