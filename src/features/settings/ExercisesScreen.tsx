@@ -23,7 +23,7 @@ export function ExercisesScreen({ data }: { data: AppData }) {
     <Screen
       title="Exercices"
       subtitle="⚡ = rapide (mis en avant le matin)"
-      onBack={() => goBack('/settings')}
+      onBack={() => goBack('/programs')}
       actions={
         <Button onClick={() => navigate('/settings/exercises/new')}>
           <PlusIcon /> Nouvel exercice

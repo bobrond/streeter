@@ -87,7 +87,7 @@ export function ConfirmSheet({
         <>
           <button
             type="button"
-            className={`min-h-14 rounded-2xl px-5 text-lg font-semibold active:scale-[0.98] ${danger ? 'border border-danger/60 bg-card-2 text-danger' : 'bg-accent text-accent-ink'}`}
+            className={`min-h-14 rounded-2xl px-5 text-lg font-semibold active:scale-[0.98] ${danger ? 'border border-danger/60 bg-card-2 text-danger' : 'bg-action font-bold text-action-ink'}`}
             onClick={() => {
               onClose();
               onConfirm();

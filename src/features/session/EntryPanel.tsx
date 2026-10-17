@@ -58,7 +58,7 @@ export function EntryPanel({
         type="button"
         onClick={onValidate}
         disabled={!exercise}
-        className="mt-1 flex min-h-16 items-center justify-center gap-2 rounded-2xl bg-accent px-5 text-xl font-bold text-accent-ink active:scale-[0.98] disabled:opacity-40"
+        className="mt-1 flex min-h-16 items-center justify-center gap-2 rounded-2xl bg-action px-5 text-xl font-bold text-action-ink active:scale-[0.98] disabled:opacity-40"
       >
         <CheckIcon className="size-7" />
         {status === 'done' ? `Ajouter une série (${nextNumber})` : `Valider la série ${nextNumber}`}

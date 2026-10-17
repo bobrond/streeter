@@ -110,7 +110,7 @@ export function BandSwatch({ band }: { band: Pick<Band, 'color'> | null }) {
   return (
     <span
       aria-hidden
-      className="inline-block size-3.5 shrink-0 rounded-full border border-white/40"
+      className="inline-block size-3.5 shrink-0 rounded-full border border-ink-3"
       style={{ backgroundColor: band ? band.color : 'transparent' }}
     />
   );

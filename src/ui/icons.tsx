@@ -20,41 +20,38 @@ function Icon({ children, className = 'size-6' }: { children: ReactNode; classNa
 
 type IconProps = { className?: string };
 
-export const TodayIcon = (p: IconProps) => (
+// Onglets (dessins des maquettes) : Aujourd'hui, Séance, Programmes, Progression.
+export const HomeIcon = (p: IconProps) => (
   <Icon {...p}>
-    <circle cx="12" cy="12" r="4" />
-    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    <path d="M3 11l9-7 9 7" />
+    <path d="M5 10v10h14V10" />
   </Icon>
 );
 
-export const WeekIcon = (p: IconProps) => (
+export const DumbbellIcon = (p: IconProps) => (
   <Icon {...p}>
-    <rect x="3" y="5" width="18" height="16" rx="2" />
-    <path d="M3 10h18M8 3v4M16 3v4" />
+    <path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12" />
   </Icon>
 );
 
-export const JournalIcon = (p: IconProps) => (
+export const ProgramIcon = (p: IconProps) => (
   <Icon {...p}>
-    <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" />
-    <path d="M9 9h6M9 13h6" />
+    <path d="M8 6h13M8 12h13M8 18h13M3 6h1M3 12h1M3 18h1" />
   </Icon>
 );
 
-export const TargetIcon = (p: IconProps) => (
+export const ChartIcon = (p: IconProps) => (
   <Icon {...p}>
-    <circle cx="12" cy="12" r="9" />
-    <circle cx="12" cy="12" r="5" />
-    <circle cx="12" cy="12" r="1" />
+    <path d="M4 20V14M10 20V9M16 20V12M22 20V4" />
   </Icon>
 );
 
+/** Roue crantée : réglages. */
 export const SettingsIcon = (p: IconProps) => (
   <Icon {...p}>
-    <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" />
-    <circle cx="16" cy="6" r="2" />
-    <circle cx="10" cy="12" r="2" />
-    <circle cx="18" cy="18" r="2" />
+    <circle cx="12" cy="12" r="6" />
+    <circle cx="12" cy="12" r="2.2" />
+    <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" strokeWidth="2.6" />
   </Icon>
 );
 
@@ -134,6 +131,12 @@ export const PlayIcon = (p: IconProps) => (
 export const ChevronDownIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M6 9l6 6 6-6" />
+  </Icon>
+);
+
+export const ChevronUpIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M6 15l6-6 6 6" />
   </Icon>
 );
 

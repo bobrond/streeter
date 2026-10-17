@@ -38,7 +38,7 @@ export function TemplatesScreen({ data }: { data: AppData }) {
   return (
     <Screen
       title="Modèles de séance"
-      onBack={() => goBack('/settings')}
+      onBack={() => goBack('/programs')}
       actions={
         <Button onClick={() => void createTemplate(data)}>
           <PlusIcon /> Nouveau modèle

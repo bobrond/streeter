@@ -10,8 +10,17 @@ import { newId } from '../../lib/id';
 import { navigate } from '../../lib/router';
 import { showToast } from '../../ui/toastStore';
 
-/** Commence une séance à partir d'un modèle et ouvre le mode séance. */
-export async function startTemplate(template: SessionTemplate, info: DayInfo, data: AppData, lookups: Lookups): Promise<void> {
+/**
+ * Commence une séance à partir d'un modèle et ouvre le mode séance. `replace` : la séance remplace l'écran
+ * courant dans l'historique (onglet Séance, qui rouvrirait sinon la séance en boucle au retour).
+ */
+export async function startTemplate(
+  template: SessionTemplate,
+  info: DayInfo,
+  data: AppData,
+  lookups: Lookups,
+  options: { replace?: boolean } = {},
+): Promise<void> {
   unlockAudio();
   const session = newSessionLog({
     id: newId(),
@@ -24,11 +33,11 @@ export async function startTemplate(template: SessionTemplate, info: DayInfo, da
   });
   try {
     await startSession(db, session);
-    navigate(`/session/${session.id}`);
+    navigate(`/session/${session.id}`, options);
   } catch (e) {
     if (e instanceof SessionInProgressError) {
       showToast('Une séance est déjà en cours : la voici.');
-      navigate(`/session/${e.session.id}`);
+      navigate(`/session/${e.session.id}`, options);
     } else {
       showToast(`Impossible de commencer : ${e instanceof Error ? e.message : String(e)}`, { tone: 'error' });
     }

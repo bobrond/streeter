@@ -1,20 +1,53 @@
 @import 'tailwindcss';
 
-/* Thème sombre à fort contraste, lisible en plein soleil. */
+/*
+ * Polices embarquées (hors ligne, licence OFL), sous-ensemble latin : Heebo pour le texte (variable,
+ * graisses 100 à 900), Bebas Neue pour les titres (capitales seulement).
+ */
+@font-face {
+  font-family: 'Heebo Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../node_modules/@fontsource-variable/heebo/files/heebo-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Bebas Neue';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('../node_modules/@fontsource/bebas-neue/files/bebas-neue-latin-400-normal.woff2') format('woff2');
+}
+
+/*
+ * Charte de l'interface V2 (maquettes de l'utilisateur), ajustée pour le plein soleil : texte à 18:1 sur le fond,
+ * gris secondaires au-dessus de 5:1, orange en aplat (sélection, repères) et lisible à 5,5:1 sur les cartes,
+ * bleu pour l'action principale.
+ */
 @theme {
-  --color-page: #000000;
-  --color-card: #111214;
-  --color-card-2: #1c1e23;
-  --color-line: #2e3138;
-  --color-ink: #ffffff;
-  --color-ink-2: #cfd3da;
-  --color-ink-3: #9aa0aa;
-  --color-accent: #d4ff3a;
-  --color-accent-ink: #0b0b0b;
+  --color-page: #0c0c0c;
+  --color-card: #26222a;
+  --color-card-2: #332e37;
+  --color-line: #4d4754;
+  --color-ink: #f9f5f0;
+  --color-ink-2: #d6cfc7;
+  --color-ink-3: #a8a0ae;
+  --color-accent: #ff6a36;
+  --color-accent-ink: #140c0a;
+  --color-action: #2babe8;
+  --color-action-ink: #0b1117;
   --color-ok: #4ade80;
   --color-warn: #fbbf24;
   --color-danger: #ff7a7a;
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --color-bar: #181719;
+  --font-sans: 'Heebo Variable', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Bebas Neue', 'Arial Narrow', system-ui, sans-serif;
+  /* Angles plus nets que les valeurs de Tailwind, comme les maquettes. */
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.625rem;
 }
 
 :root {
@@ -29,6 +62,9 @@ body {
 
 body {
   margin: 0;
+  /* Dégradé discret en haut de l'écran, comme les maquettes ; le contenu reste sur un fond presque noir. */
+  background-image: linear-gradient(180deg, #1d1a20 0, var(--color-page) 22rem);
+  background-repeat: no-repeat;
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;

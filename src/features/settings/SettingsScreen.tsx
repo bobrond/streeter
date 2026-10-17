@@ -1,9 +1,8 @@
 import type { AppData } from '../../db/hooks';
-import { useLookups } from '../../db/lookups';
 import { localISODate } from '../../domain/cycle';
 import { formatDateShort } from '../../domain/labels';
 import type { ImportReport } from '../../io/xlsx/importWorkbook';
-import { navigate } from '../../lib/router';
+import { goBack, navigate } from '../../lib/router';
 import { ListGroup, ListRow } from '../../ui/form';
 import { Screen } from '../../ui/Screen';
 import { BandsScreen } from './BandsScreen';
@@ -14,7 +13,6 @@ import { ElementsScreen } from './ElementsScreen';
 import { ExerciseEditor } from './ExerciseEditor';
 import { ExercisesScreen } from './ExercisesScreen';
 import { ItemEditor } from './ItemEditor';
-import { ProgramChecks } from './ProgramChecks';
 import { SessionTypesScreen } from './SessionTypesScreen';
 import { TemplateEditor } from './TemplateEditor';
 import { TemplatesScreen } from './TemplatesScreen';
@@ -22,21 +20,17 @@ import { WeekPlanEditor } from './WeekPlanEditor';
 
 const WEEKDAY = new Intl.DateTimeFormat('fr-FR', { weekday: 'long' });
 
+/** Réglages, derrière la roue crantée de Programmes (semaine type, modèles et exercices sont dans Programmes). */
 function SettingsMenu({ data }: { data: AppData }) {
-  const lookups = useLookups(data);
   const { settings } = data;
   const lastBackup = settings.lastBackupAt;
   return (
-    <Screen title="Réglages">
-      <ProgramChecks program={lookups.program} settings={settings} lookups={lookups} compact />
+    <Screen title="Réglages" onBack={() => goBack('/programs')}>
       <ListGroup title="Programme">
-        <ListRow title="Semaine type" subtitle="Séance du matin et du soir, J1 à J7" onClick={() => navigate('/settings/week')} />
-        <ListRow title="Modèles de séance" subtitle="Lignes de prescription, exercices candidats" aside={<Count n={data.templates.length} />} onClick={() => navigate('/settings/templates')} />
         <ListRow title="Blocs" subtitle="Ordre des blocs, alternance, semaine allégée" aside={<Count n={data.blockTypes.length} />} onClick={() => navigate('/settings/blocks')} />
         <ListRow title="Types de séance" subtitle="Max, Combo, Technique…" aside={<Count n={data.sessionTypes.length} />} onClick={() => navigate('/settings/types')} />
       </ListGroup>
       <ListGroup title="Catalogue">
-        <ListRow title="Exercices" aside={<Count n={data.exercises.length} />} onClick={() => navigate('/settings/exercises')} />
         <ListRow title="Éléments" subtitle="Skills, composantes, autres" aside={<Count n={data.elements.length} />} onClick={() => navigate('/settings/elements')} />
         <ListRow title="Élastiques" subtitle={data.bands.map((b) => b.name).join(' → ')} onClick={() => navigate('/settings/bands')} />
       </ListGroup>

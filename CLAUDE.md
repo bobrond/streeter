@@ -30,6 +30,7 @@ Le dossier `vault/` est le second cerveau du projet (lisible dans Obsidian et VS
 - `vite-plugin-pwa` (Workbox) : manifest, précache, fonctionnement entièrement hors ligne.
 - SheetJS 0.20.3 installé depuis son CDN officiel (`cdn.sheetjs.com`), pas le paquet npm `xlsx` (figé en 0.18.5, failles connues). Chargé par `import()` dynamique.
 - Graphiques : uPlot. Tests : Vitest, avec `fake-indexeddb` pour Dexie.
+- Polices : `@fontsource-variable/heebo` et `@fontsource/bebas-neue`, dont `src/index.css` référence les seuls fichiers woff2 latins (précachés par Workbox).
 - Routage par hash (hébergement statique, hors ligne).
 - Commandes : `npm run dev` (http://localhost:5173/streeter/), `npm run build`, `npm test`, `npm run lint`, `npm run preview`.
 
@@ -87,11 +88,51 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 
 - 0 (livrée le 17/10/2026, v1.0.1) : « Envoyer une sauvegarde » corrigé ; l'utilisateur fait une vraie sauvegarde avant toute migration (faite le 17/10/2026).
 - A (livrée le 17/10/2026, v1.1.0) : fondations : repos et sons de la séance au niveau de l'appli ([src/features/session/SessionRuntime.tsx](src/features/session/SessionRuntime.tsx) ; ils continuent hors de l'écran Séance), schéma Dexie v2 (type de série), sauvegarde et export ; repos de l'alternance planche / FL et durée estimée. Le type de série n'a pas encore de saisie : elle viendra avec le tableau (phase C).
-- B : charte, polices, 4 onglets, barre de séance active, roue crantée, Historique avec le calendrier.
+- B (livrée le 17/10/2026, v1.2.0) : charte, polices, 4 onglets, barre de séance active, roue crantée, Historique avec le calendrier. Voir « Navigation et charte ».
 - C : séance en tableau, sans minuteur de hold.
 - D : Programmes : semaine J1-J7, éditeur de modèle, bibliothèque d'exercices.
 - E : Progression : Skills (objectifs, records par élastique), Volume.
 - F : Aujourd'hui refondu et séance express.
+
+## Navigation et charte (depuis la phase B)
+
+- **Onglets** ([src/ui/tabs.ts](src/ui/tabs.ts), [src/ui/TabBar.tsx](src/ui/TabBar.tsx)) :
+  - Aujourd'hui `/`.
+  - Séance `/session` : sans séance en cours, séance prévue, autre séance, dernière séance à revoir ou corriger. Avec une séance, `/session/:id` en plein écran, sans onglets ; le chevron « Réduire la séance » revient à l'écran précédent.
+  - Programmes `/programs` : semaine type J1-J7, modèles, exercices ; la roue crantée ouvre `/settings` (blocs, types de séance, éléments, élastiques, cycle, sauvegarde).
+  - Progression : Skills `/objectives`, Volume `/week`, Historique `/journal`. Ces chemins restent ceux des anciens onglets ; l'onglet rouvre la dernière vue (préférence de l'appareil).
+- **Barre de séance active** ([src/features/session/ActiveSessionBar.tsx](src/features/session/ActiveSessionBar.tsx)), au-dessus des onglets dès qu'une séance est en cours, hors de l'écran Séance : nom, chrono total, série à faire, repos (« Libre » pour un repos libre). Un toucher rouvre la séance. Aujourd'hui n'affiche alors ni carte « Séance en cours » ni bouton « Reprendre ».
+- **Lancer depuis l'onglet Séance** : la séance remplace l'écran dans l'historique, sinon « Réduire » ramènerait sur l'onglet, qui rouvrirait la séance en boucle.
+- **Calendrier** (Historique › Séances, [src/domain/calendar.ts](src/domain/calendar.ts)) :
+  - mois du lundi au dimanche, mois choisi dans l'adresse (`?mois=AAAA-MM`) ;
+  - une pastille par séance à la couleur de son type, un anneau pour une séance abandonnée ;
+  - toucher un jour ouvre sa séance, ou la liste s'il y en a plusieurs ;
+  - il suit les filtres du journal ; les séances en cours n'y figurent pas.
+- **Charte** ([src/index.css](src/index.css)) : maquettes de l'utilisateur ajustées au plein soleil.
+  - Couleurs (jetons Tailwind) :
+    - fond `page`, cartes `card` / `card-2`, bordures `line` ;
+    - texte `ink` / `ink-2` / `ink-3` ;
+    - `accent` orange pour les repères (onglet actif, étiquettes, badges, barre de séance) ;
+    - `action` bleu pour l'action principale.
+  - Puce sélectionnée en clair sur sombre (`bg-ink text-page`), neutre vis-à-vis des couleurs d'élastique.
+  - Contrastes minimum mesurés :
+
+    | Élément | Contraste |
+    |---|---|
+    | texte sur carte | 14:1 |
+    | `ink-2` | 8,5:1 |
+    | `ink-3` | 5,2:1 |
+    | orange | 4,6:1 |
+    | bouton bleu | 7,3:1 |
+
+  - Polices embarquées (licence OFL, sous-ensemble latin, mises en cache pour le hors ligne) : Heebo variable pour le texte, Bebas Neue (capitales) pour les titres d'écran (`font-display`).
+  - Angles plus nets (`rounded-2xl` = 10 px).
+- Choix sans l'utilisateur, à valider à l'usage :
+  - puces sélectionnées en clair ;
+  - calendrier en tête de Historique › Séances, et qui suit les filtres ;
+  - contenu de l'onglet Séance sans séance ;
+  - écran Programmes provisoire (refonte en phase D) ;
+  - barre d'état à la couleur du haut de l'écran.
 
 ## Règles métier
 

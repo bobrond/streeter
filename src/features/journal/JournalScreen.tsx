@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
+import { isMonth, monthOf } from '../../domain/calendar';
+import { localISODate } from '../../domain/cycle';
 import { isFilterActive, journalEntries, loggedExerciseIds, sessionDurationSec, type JournalEntry, type JournalFilter } from '../../domain/journal';
 import { MOMENT_LABEL, formatDateLong, formatDateShort, formatDuration, formatValueList, seqDayLabel } from '../../domain/labels';
 import { bestSessionPerformance } from '../../domain/objectives';
@@ -10,30 +12,42 @@ import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { ChipSelect } from '../../ui/form';
 import { CloseIcon } from '../../ui/icons';
+import { ProgressNav } from '../../ui/ProgressNav';
 import { Screen } from '../../ui/Screen';
+import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
-import { chipClass } from '../../ui/styles';
 import { ExportView } from '../settings/ExportView';
 import { ExerciseDetail } from './ExerciseDetail';
 import { SessionDetail } from './SessionDetail';
+import { TrainingCalendar } from './TrainingCalendar';
 
 const FILTER_KEYS = { exerciseId: 'exercice', elementId: 'element', blockTypeId: 'bloc', sessionTypeId: 'type' } as const;
 type FilterKey = keyof typeof FILTER_KEYS;
+type JournalView = 'sessions' | 'exercises';
 
-function readQuery(path: string): { view: 'sessions' | 'exercises'; filter: JournalFilter } {
+interface JournalQuery {
+  view: JournalView;
+  filter: JournalFilter;
+  /** Mois affiché par le calendrier (« AAAA-MM ») ; `null` : le mois en cours. */
+  month: string | null;
+}
+
+function readQuery(path: string): JournalQuery {
   const params = new URLSearchParams(path.split('?')[1] ?? '');
   const filter: JournalFilter = {};
   for (const [key, param] of Object.entries(FILTER_KEYS) as [FilterKey, string][]) filter[key] = params.get(param);
-  return { view: params.get('vue') === 'exercices' ? 'exercises' : 'sessions', filter };
+  const month = params.get('mois');
+  return { view: params.get('vue') === 'exercices' ? 'exercises' : 'sessions', filter, month: isMonth(month) ? month : null };
 }
 
-function writeQuery(view: 'sessions' | 'exercises', filter: JournalFilter): string {
+function writeQuery({ view, filter, month }: JournalQuery): string {
   const params = new URLSearchParams();
   if (view === 'exercises') params.set('vue', 'exercices');
   for (const [key, param] of Object.entries(FILTER_KEYS) as [FilterKey, string][]) {
     const value = filter[key];
     if (value) params.set(param, value);
   }
+  if (month) params.set('mois', month);
   const query = params.toString();
   return query ? `/journal?${query}` : '/journal';
 }
@@ -111,10 +125,13 @@ function ExercisesList({ data, lookups }: { data: AppData; lookups: Lookups }) {
 
 function JournalList({ data, path }: { data: AppData; path: string }) {
   const lookups = useLookups(data);
-  const { view, filter } = readQuery(path);
+  const query = readQuery(path);
+  const { view, filter } = query;
+  const today = localISODate(new Date());
   const [filterOpen, setFilterOpen] = useState(false);
   const entries = journalEntries(data.sessions, data.sets, filter);
-  const setFilter = (next: JournalFilter) => navigate(writeQuery(view, next), { replace: true });
+  const update = (patch: Partial<JournalQuery>) => navigate(writeQuery({ ...query, ...patch }), { replace: true });
+  const setFilter = (next: JournalFilter) => update({ filter: next });
   const exerciseOptions = loggedExerciseIds(data.sets)
     .map((id) => lookups.exercises.get(id))
     .filter((e) => e !== undefined)
@@ -136,19 +153,28 @@ function JournalList({ data, path }: { data: AppData; path: string }) {
   const totalSets = entries.reduce((sum, e) => sum + e.lines.reduce((n, l) => n + l.sets.length, 0), 0);
 
   return (
-    <Screen title="Journal">
-      <div className="grid grid-cols-2 gap-1.5" role="tablist">
-        {(['sessions', 'exercises'] as const).map((v) => (
-          <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => navigate(writeQuery(v, filter), { replace: true })} className={chipClass(view === v, '', 'text-base')}>
-            {v === 'sessions' ? 'Séances' : 'Exercices'}
-          </button>
-        ))}
-      </div>
+    <Screen title="Progression" nav={<ProgressNav current="history" />}>
+      <Segmented
+        label="Historique"
+        options={[
+          { value: 'sessions', label: 'Séances' },
+          { value: 'exercises', label: 'Exercices' },
+        ]}
+        value={view}
+        onChange={(v) => update({ view: v })}
+      />
 
       {view === 'exercises' ? (
         <ExercisesList data={data} lookups={lookups} />
       ) : (
         <>
+          <TrainingCalendar
+            month={query.month ?? monthOf(today)}
+            today={today}
+            sessions={entries.map((e) => e.session)}
+            lookups={lookups}
+            onMonth={(month) => update({ month: month === monthOf(today) ? null : month })}
+          />
           <div className="flex flex-wrap items-center gap-1.5">
             <button type="button" onClick={() => setFilterOpen(true)} className="min-h-11 rounded-full border border-accent/70 px-4 font-semibold text-accent active:bg-card-2">
               Filtrer

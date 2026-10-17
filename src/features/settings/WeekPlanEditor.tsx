@@ -33,7 +33,7 @@ export function WeekPlanEditor({ data }: { data: AppData }) {
   };
 
   return (
-    <Screen title="Semaine type" subtitle="J1…J7 sont des jours de séquence, pas des jours de la semaine." onBack={() => goBack('/settings')}>
+    <Screen title="Semaine type" subtitle="J1…J7 sont des jours de séquence, pas des jours de la semaine." onBack={() => goBack('/programs')}>
       <ProgramChecks program={lookups.program} settings={settings} lookups={lookups} />
 
       <section className="rounded-2xl border border-line bg-card p-3">

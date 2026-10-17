@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes, ChangeEvent, ReactNode } from 'react';
 type Variant = 'primary' | 'secondary' | 'danger';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-ink',
+  primary: 'bg-action text-action-ink font-bold',
   secondary: 'bg-card-2 text-ink border border-line',
   danger: 'bg-card-2 text-danger border border-danger/60',
 };

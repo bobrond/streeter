@@ -1,30 +1,51 @@
 import type { ComponentType } from 'react';
 import { navigate } from '../lib/router';
-import { JournalIcon, SettingsIcon, TargetIcon, TodayIcon, WeekIcon } from './icons';
-import { tabOf } from './tabs';
+import { readLocal } from '../lib/storage';
+import { ChartIcon, DumbbellIcon, HomeIcon, ProgramIcon } from './icons';
+import { PROGRESS_PATHS, tabOf, type ProgressView, type TabKey } from './tabs';
 
-const TABS: readonly { path: string; label: string; icon: ComponentType<{ className?: string }> }[] = [
-  { path: '/', label: 'Aujourd’hui', icon: TodayIcon },
-  { path: '/week', label: 'Semaine', icon: WeekIcon },
-  { path: '/journal', label: 'Journal', icon: JournalIcon },
-  { path: '/objectives', label: 'Objectifs', icon: TargetIcon },
-  { path: '/settings', label: 'Réglages', icon: SettingsIcon },
+/** Dernière vue de Progression ouverte (Skills, Volume, Historique), retrouvée en touchant l'onglet. */
+export const PROGRESS_VIEW_KEY = 'streeter.progressView';
+
+function progressPath(): string {
+  const view = readLocal(PROGRESS_VIEW_KEY);
+  return view && view in PROGRESS_PATHS ? PROGRESS_PATHS[view as ProgressView] : PROGRESS_PATHS.skills;
+}
+
+const TABS: readonly { key: TabKey; label: string; icon: ComponentType<{ className?: string }> }[] = [
+  { key: 'today', label: 'Aujourd’hui', icon: HomeIcon },
+  { key: 'session', label: 'Séance', icon: DumbbellIcon },
+  { key: 'programs', label: 'Programmes', icon: ProgramIcon },
+  { key: 'progress', label: 'Progression', icon: ChartIcon },
 ];
 
-export function TabBar({ path }: { path: string }) {
+/** Barre d'onglets ; l'onglet Séance rouvre la séance en cours s'il y en a une. */
+export function TabBar({ path, activeSessionId }: { path: string; activeSessionId: string | null }) {
   const active = tabOf(path);
+  const target = (key: TabKey): string => {
+    switch (key) {
+      case 'session':
+        return activeSessionId ? `/session/${activeSessionId}` : '/session';
+      case 'programs':
+        return '/programs';
+      case 'progress':
+        return progressPath();
+      default:
+        return '/';
+    }
+  };
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-page/95 pb-[env(safe-area-inset-bottom)] backdrop-blur" aria-label="Navigation">
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bar pb-[env(safe-area-inset-bottom)]" aria-label="Navigation">
       <ul className="mx-auto flex max-w-xl">
-        {TABS.map(({ path: tabPath, label, icon: Icon }) => {
-          const selected = active === tabPath;
+        {TABS.map(({ key, label, icon: Icon }) => {
+          const selected = active === key;
           return (
-            <li key={tabPath} className="flex-1">
+            <li key={key} className="flex-1">
               <button
                 type="button"
                 aria-current={selected ? 'page' : undefined}
-                onClick={() => navigate(tabPath)}
-                className={`flex h-16 w-full flex-col items-center justify-center gap-0.5 text-xs font-semibold ${selected ? 'text-accent' : 'text-ink-3'}`}
+                onClick={() => navigate(target(key))}
+                className={`flex h-16 w-full flex-col items-center justify-center gap-1 text-xs font-semibold ${selected ? 'text-accent' : 'text-ink-2'}`}
               >
                 <Icon className="size-6" />
                 {label}

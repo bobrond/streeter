@@ -9,6 +9,7 @@ import { Badge, type Tone } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { PlusIcon } from '../../ui/icons';
 import { LineChart, type ChartSeries } from '../../ui/LineChart';
+import { ProgressNav } from '../../ui/ProgressNav';
 import { Screen } from '../../ui/Screen';
 import { ObjectiveSheet, TestSheet } from './ObjectiveSheets';
 
@@ -61,14 +62,18 @@ function ObjectivesList({ data }: { data: AppData }) {
   const [creating, setCreating] = useState(false);
   return (
     <Screen
-      title="Objectifs"
-      subtitle="Statut sur le meilleur test. Tests en début de cycle, sur un jour Max."
+      title="Progression"
+      nav={<ProgressNav current="skills" />}
       actions={
         <Button variant="secondary" onClick={() => setCreating(true)}>
           <PlusIcon /> Nouvel objectif
         </Button>
       }
     >
+      <div>
+        <h2 className="font-display text-2xl leading-tight tracking-wide">Objectifs</h2>
+        <p className="text-ink-2">Statut sur le meilleur test. Tests en début de cycle, sur un jour Max.</p>
+      </div>
       {data.objectives.map((objective) => (
         <ObjectiveCard key={objective.id} objective={objective} data={data} lookups={lookups} />
       ))}
@@ -101,7 +106,7 @@ function ObjectiveDetail({ data, objective }: { data: AppData; objective: Object
       {
         id: 'tests',
         label: 'tests',
-        color: '#d4ff3a',
+        color: '#ff6a36',
         points: [...objective.tests].sort((a, b) => a.date.localeCompare(b.date)).map((t) => ({ date: t.date, value: t.value })),
       },
     ],

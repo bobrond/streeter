@@ -3,49 +3,24 @@ import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
 import { setCycleStartDate, shiftSequence } from '../../db/sessionStore';
-import { addDays, dayInfo, firstTestSeqDay, isObjectiveTestDay, localISODate, type DayInfo } from '../../domain/cycle';
-import { deloadTemplate, morningsHidden } from '../../domain/deload';
+import { addDays, dayInfo, firstTestSeqDay, isObjectiveTestDay, localISODate } from '../../domain/cycle';
 import { estimateDuration } from '../../domain/duration';
 import { MOMENT_LABEL, OBJECTIVE_STATUS_LABEL, formatDateLong, formatDuration, formatValue, seqDayLabel } from '../../domain/labels';
 import { objectiveState } from '../../domain/objectives';
-import type { Moment, SeqDay, SessionLog, SessionTemplate } from '../../domain/types';
+import type { SeqDay, SessionTemplate } from '../../domain/types';
 import { useNow } from '../../lib/device';
 import { navigate } from '../../lib/router';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { ChevronDownIcon, PlayIcon } from '../../ui/icons';
 import { Screen } from '../../ui/Screen';
-import { ConfirmSheet, Sheet } from '../../ui/Sheet';
+import { ConfirmSheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/toastStore';
 import { TemplateItems } from '../week/TemplateItems';
+import { ChooseSessionSheet } from './ChooseSessionSheet';
+import { pendingPlanned, plannedFor, type Planned } from './planned';
 import { BackupReminder, InstallCard } from './Reminders';
 import { startTemplate } from './startTemplate';
-
-interface Planned {
-  moment: Moment;
-  template: SessionTemplate;
-  /** Tel qu'il se pratique aujourd'hui (allégé en semaine allégée). */
-  practiced: SessionTemplate;
-  hidden: boolean;
-  done: SessionLog[];
-}
-
-function plannedFor(info: DayInfo, data: AppData, lookups: Lookups): Planned[] {
-  const slot = data.settings.weekPlan[info.seqDay];
-  const list: Planned[] = [];
-  for (const moment of ['morning', 'evening'] as const) {
-    const template = lookups.templates.get(slot[moment] ?? '');
-    if (!template) continue;
-    list.push({
-      moment,
-      template,
-      practiced: info.isDeload ? deloadTemplate(template, lookups.blocks, data.settings) : template,
-      hidden: moment === 'morning' && morningsHidden(info.isDeload, data.settings),
-      done: data.sessions.filter((s) => s.date === info.date && s.moment === moment && s.status !== 'in_progress'),
-    });
-  }
-  return list;
-}
 
 function nameOfDay(day: SeqDay, data: AppData, lookups: Lookups): string {
   const slot = data.settings.weekPlan[day];
@@ -140,8 +115,8 @@ export function TodayScreen({ data }: { data: AppData }) {
   const today = localISODate(new Date(now));
   const info = dayInfo(today, data.settings);
   const active = data.sessions.find((s) => s.status === 'in_progress');
-  const planned = info.beforeStart ? [] : plannedFor(info, data, lookups);
-  const pending = planned.find((p) => !p.hidden && p.done.length === 0);
+  const planned = plannedFor(info, data, lookups);
+  const pending = pendingPlanned(planned);
   const testDay = isObjectiveTestDay(info, firstTestSeqDay(data.settings.weekPlan, lookups.templates, lookups.sessionTypes));
   const [sheet, setSheet] = useState<'choose' | 'next' | 'postpone' | null>(null);
 
@@ -156,17 +131,13 @@ export function TodayScreen({ data }: { data: AppData }) {
   };
 
   const nextDay = (((info.seqDay % 7) + 1) as SeqDay);
-  const templatesByMoment = [...data.templates].sort((a, b) => (a.moment === b.moment ? a.name.localeCompare(b.name) : a.moment === 'evening' ? -1 : 1));
 
   return (
     <Screen
-      title={<span className="first-letter:uppercase">{formatDateLong(today)}</span>}
+      title={formatDateLong(today)}
       actions={
-        active ? (
-          <Button onClick={() => navigate(`/session/${active.id}`)}>
-            <PlayIcon className="size-5" /> Reprendre la séance
-          </Button>
-        ) : pending ? (
+        // Séance en cours : la barre au-dessus des onglets la rouvre.
+        !active && pending ? (
           <Button onClick={() => void start(pending.template)}>
             <PlayIcon className="size-5" /> Commencer · {pending.template.name}
           </Button>
@@ -183,17 +154,6 @@ export function TodayScreen({ data }: { data: AppData }) {
           </span>
           {info.isDeload && <Badge tone="accent">Semaine allégée</Badge>}
         </section>
-      )}
-
-      {active && (
-        <article className="rounded-2xl border border-accent bg-accent/10 p-4">
-          <div className="font-semibold text-accent">Séance en cours</div>
-          <div className="text-xl font-bold">{active.templateSnapshot?.name ?? active.sessionTypeName}</div>
-          <p className="text-ink-2">
-            Commencée le {formatDateLong(active.date)}
-            {active.startedAt ? ` à ${new Date(active.startedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : ''}.
-          </p>
-        </article>
       )}
 
       {testDay && <TestDayBanner data={data} />}
@@ -228,33 +188,7 @@ export function TodayScreen({ data }: { data: AppData }) {
         )}
       </section>
 
-      <Sheet open={sheet === 'choose'} onClose={() => setSheet(null)} title="Choisir une séance">
-        <p className="mb-3 text-ink-2">Pour aujourd’hui seulement : la séquence ne change pas.</p>
-        <ul className="flex flex-col gap-1">
-          {templatesByMoment.map((template) => {
-            const type = lookups.sessionTypes.get(template.sessionTypeId);
-            return (
-              <li key={template.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSheet(null);
-                    void start(template);
-                  }}
-                  className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-3 py-2 text-left active:bg-card-2"
-                >
-                  <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: type?.color }} aria-hidden />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">{template.name}</span>
-                    <span className="block text-ink-2">{MOMENT_LABEL[template.moment]}</span>
-                  </span>
-                  {template.optional && <Badge>optionnel</Badge>}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </Sheet>
+      <ChooseSessionSheet open={sheet === 'choose'} onClose={() => setSheet(null)} data={data} lookups={lookups} onChoose={(template) => void start(template)} />
       <ConfirmSheet
         open={sheet === 'next'}
         onClose={() => setSheet(null)}

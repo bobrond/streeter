@@ -25,8 +25,8 @@ export default defineConfig({
         lang: 'fr',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#000000',
-        theme_color: '#000000',
+        background_color: '#0c0c0c',
+        theme_color: '#1d1a20',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
@@ -34,8 +34,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Tout est mis en cache, import du tableur compris : l'appli marche entièrement hors ligne.
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        // Tout est mis en cache, import du tableur et polices compris : l'appli marche entièrement hors ligne.
+        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,woff2}'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
       },

@@ -11,6 +11,7 @@ import { useNow } from '../../lib/device';
 import { navigate } from '../../lib/router';
 import { Badge, type Tone } from '../../ui/Badge';
 import { BackIcon, NextIcon } from '../../ui/icons';
+import { ProgressNav } from '../../ui/ProgressNav';
 import { Screen } from '../../ui/Screen';
 import { Sheet } from '../../ui/Sheet';
 import { TemplateItems } from './TemplateItems';
@@ -178,11 +179,15 @@ export function WeekScreen({ data }: { data: AppData }) {
   const previewTemplate = preview && info.isDeload ? deloadTemplate(preview, lookups.blocks, data.settings) : preview;
 
   return (
-    <Screen
-      title={`Semaine ${week}`}
-      subtitle={`${formatDateShort(range.from)} → ${formatDateShort(range.to)} · cycle ${info.cycle} · S${info.cycleWeek}/${data.settings.cycleLengthWeeks}`}
-      aside={
-        <div className="flex gap-1">
+    <Screen title="Progression" nav={<ProgressNav current="volume" />}>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display text-2xl leading-tight tracking-wide">Semaine {week}</h2>
+          <p className="text-ink-2">
+            {formatDateShort(range.from)} → {formatDateShort(range.to)} · cycle {info.cycle} · S{info.cycleWeek}/{data.settings.cycleLengthWeeks}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-1">
           <button type="button" aria-label="Semaine précédente" disabled={week <= 1} onClick={() => setOffset(offset - 1)} className="flex size-12 items-center justify-center rounded-2xl border border-line active:bg-card-2 disabled:opacity-30">
             <BackIcon />
           </button>
@@ -190,8 +195,7 @@ export function WeekScreen({ data }: { data: AppData }) {
             <NextIcon />
           </button>
         </div>
-      }
-    >
+      </div>
       {(info.isDeload || offset !== 0) && (
         <div className="flex flex-wrap gap-2">
           {info.isDeload && <Badge tone="accent">Semaine allégée</Badge>}

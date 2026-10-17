@@ -6,9 +6,9 @@ import { abandonSession, deleteSet, finishSession, updateSet } from '../../db/se
 import { formatDuration, seqDayLabel } from '../../domain/labels';
 import type { SessionLog, SetLog } from '../../domain/types';
 import { setSoundPref, useNow, useSoundPref } from '../../lib/device';
-import { navigate } from '../../lib/router';
+import { goBack, navigate } from '../../lib/router';
 import { Button } from '../../ui/Button';
-import { BackIcon, CheckIcon, DotsIcon, ListIcon } from '../../ui/icons';
+import { CheckIcon, ChevronDownIcon, DotsIcon, ListIcon } from '../../ui/icons';
 import { Screen } from '../../ui/Screen';
 import { ConfirmSheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/toastStore';
@@ -58,7 +58,7 @@ function SessionView({ session, data, lookups }: { session: SessionLog; data: Ap
     setSheet(null);
     navigate('/', { replace: true });
     finishSession(db, session.id, { note, now: Date.now() })
-      .then(() => showToast(`Séance enregistrée : ${sessionSets.length} séries.`))
+      .then(() => showToast(`Séance enregistrée : ${sessionSets.length} série${sessionSets.length > 1 ? 's' : ''}.`))
       .catch((e: unknown) => showToast(`Enregistrement impossible : ${String(e)}`, { tone: 'error' }));
   };
 
@@ -74,8 +74,8 @@ function SessionView({ session, data, lookups }: { session: SessionLog; data: Ap
   return (
     <div className="mx-auto flex h-dvh max-w-xl flex-col bg-page">
       <header className="flex items-center gap-1 px-2 pt-[env(safe-area-inset-top)]">
-        <button type="button" aria-label="Accueil" onClick={() => navigate('/')} className="flex size-14 items-center justify-center rounded-2xl text-ink-2 active:bg-card-2">
-          <BackIcon />
+        <button type="button" aria-label="Réduire la séance" onClick={() => goBack('/')} className="flex size-14 items-center justify-center rounded-2xl text-ink-2 active:bg-card-2">
+          <ChevronDownIcon className="size-8" />
         </button>
         <div className="min-w-0 flex-1 px-1">
           <div className="truncate text-lg leading-tight font-bold">
