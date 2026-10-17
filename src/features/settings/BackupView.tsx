@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { AppData } from '../../db/hooks';
-import { backupSummary, daysSince, type Backup } from '../../io/json/backup';
+import { BACKUP_ACCEPT, backupSummary, daysSince, type Backup } from '../../io/json/backup';
 import { canShareFiles, useNow } from '../../lib/device';
 import { Button, FileButton } from '../../ui/Button';
 import { ConfirmSheet } from '../../ui/Sheet';
@@ -38,6 +38,7 @@ export function BackupView({ data }: { data: AppData }) {
         Tes données ne sont que sur ce téléphone. Une sauvegarde contient tout : programme, catalogue, objectifs, séances et séries. Garde-la ailleurs (Drive,
         e-mail) : c’est aussi elle qui permet de changer de téléphone.
       </p>
+      {canShare && <p className="text-ink-2">Envoyée, elle part en fichier .txt : c’est la même sauvegarde, elle se restaure comme le .json.</p>}
       <p className="text-ink-2">
         Dernière sauvegarde :{' '}
         <span className="text-ink">{last ? `${DATE_TIME.format(last)} (il y a ${daysSince(last, now)} j)` : 'jamais'}</span>
@@ -50,7 +51,7 @@ export function BackupView({ data }: { data: AppData }) {
       <Button variant={canShare ? 'secondary' : 'primary'} onClick={() => void run(downloadBackup)} disabled={busy}>
         Enregistrer une sauvegarde (.json)
       </Button>
-      <FileButton variant="secondary" accept=".json,application/json" onFile={(file) => void open(file)} disabled={busy}>
+      <FileButton variant="secondary" accept={BACKUP_ACCEPT} onFile={(file) => void open(file)} disabled={busy}>
         Restaurer une sauvegarde
       </FileButton>
 

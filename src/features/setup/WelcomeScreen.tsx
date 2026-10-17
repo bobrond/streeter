@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { backupSummary, type Backup } from '../../io/json/backup';
+import { BACKUP_ACCEPT, backupSummary, type Backup } from '../../io/json/backup';
 import type { ImportReport } from '../../io/xlsx/importWorkbook';
 import { navigate } from '../../lib/router';
 import { FileButton } from '../../ui/Button';
@@ -32,8 +32,8 @@ export function WelcomeScreen({ onImported }: { onImported: (report: ImportRepor
           <FileButton accept={XLSX_ACCEPT} onFile={run} disabled={importing}>
             {importing ? 'Import en cours…' : 'Importer mon tableur (.xlsx)'}
           </FileButton>
-          <FileButton variant="secondary" accept=".json,application/json" onFile={(file) => void open(file)} disabled={importing}>
-            Restaurer une sauvegarde (.json)
+          <FileButton variant="secondary" accept={BACKUP_ACCEPT} onFile={(file) => void open(file)} disabled={importing}>
+            Restaurer une sauvegarde
           </FileButton>
         </>
       }
@@ -50,7 +50,8 @@ export function WelcomeScreen({ onImported }: { onImported: (report: ImportRepor
           <li>les séances déjà notées dans le journal.</li>
         </ul>
         <p className="mt-3">
-          Tu changes de téléphone ? Restaure plutôt la dernière sauvegarde de l’appli (fichier <span className="text-ink">streeter-sauvegarde-….json</span>).
+          Tu changes de téléphone ? Restaure plutôt la dernière sauvegarde de l’appli (fichier <span className="text-ink">streeter-sauvegarde-…</span>, en
+          .json ou en .txt).
         </p>
         <p className="mt-3">Tes données restent sur ce téléphone, rien n’est envoyé sur Internet.</p>
       </div>

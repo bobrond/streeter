@@ -32,6 +32,17 @@ export function backupFileName(date: string): string {
   return `streeter-sauvegarde-${date}.json`;
 }
 
+/**
+ * Nom de la sauvegarde envoyée par le menu de partage. Chrome, Android compris, ne partage qu'une liste fermée
+ * de types de fichier, sans le JSON : la sauvegarde part en texte (.txt, text/plain), avec le même contenu.
+ */
+export function sharedBackupFileName(date: string): string {
+  return `streeter-sauvegarde-${date}.txt`;
+}
+
+/** Fichiers proposés à la restauration : sauvegarde enregistrée (.json) ou envoyée (.txt). */
+export const BACKUP_ACCEPT = '.json,.txt,application/json,text/plain';
+
 export function serializeBackup(backup: Backup): string {
   return JSON.stringify(backup);
 }

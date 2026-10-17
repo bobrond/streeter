@@ -4,7 +4,7 @@ import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { localISODate } from '../../domain/cycle';
 import { journalCsv, journalExportRows, journalXlsx } from '../../io/journal/exportJournal';
-import { backupFileName, parseBackup, serializeBackup, type Backup } from '../../io/json/backup';
+import { backupFileName, parseBackup, serializeBackup, sharedBackupFileName, type Backup } from '../../io/json/backup';
 import { downloadFile, shareFile } from '../../lib/device';
 import { showToast } from '../../ui/toastStore';
 
@@ -12,17 +12,17 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-async function backupBlob(): Promise<{ name: string; blob: Blob; at: number }> {
+async function backupText(): Promise<{ date: string; text: string; at: number }> {
   const at = Date.now();
   const backup = await readBackup(db, at);
-  return { name: backupFileName(localISODate(new Date(at))), blob: new Blob([serializeBackup(backup)], { type: 'application/json' }), at };
+  return { date: localISODate(new Date(at)), text: serializeBackup(backup), at };
 }
 
 /** Enregistre une sauvegarde complète dans les téléchargements. */
 export async function downloadBackup(): Promise<void> {
   try {
-    const { name, blob, at } = await backupBlob();
-    downloadFile(name, blob);
+    const { date, text, at } = await backupText();
+    downloadFile(backupFileName(date), new Blob([text], { type: 'application/json' }));
     await markBackupDone(db, at);
     showToast('Sauvegarde enregistrée dans les téléchargements.');
   } catch (e) {
@@ -30,16 +30,20 @@ export async function downloadBackup(): Promise<void> {
   }
 }
 
-/** Envoie la sauvegarde par le menu de partage (Drive, e-mail…). */
+/** Envoie la sauvegarde par le menu de partage (Drive, e-mail…), en .txt : Chrome refuse de partager du JSON. */
 export async function shareBackup(): Promise<void> {
   try {
-    const { name, blob, at } = await backupBlob();
-    if (await shareFile(name, blob, 'Sauvegarde Streeter')) {
+    const { date, text, at } = await backupText();
+    if (await shareFile(sharedBackupFileName(date), new Blob([text], { type: 'text/plain' }), 'Sauvegarde Streeter')) {
       await markBackupDone(db, at);
       showToast('Sauvegarde envoyée.');
     }
   } catch (e) {
-    showToast(`Sauvegarde impossible : ${errorText(e)}`, { tone: 'error' });
+    showToast(`Envoi impossible : ${errorText(e)}. Enregistre-la plutôt dans les téléchargements.`, {
+      tone: 'error',
+      sticky: true,
+      action: { label: 'Enregistrer', run: () => void downloadBackup() },
+    });
   }
 }
 

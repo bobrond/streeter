@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backupFileName, daysSince, isBackupDue } from './backup';
+import { BACKUP_ACCEPT, backupFileName, daysSince, isBackupDue, sharedBackupFileName } from './backup';
 
 const DAY = 86_400_000;
 
@@ -17,5 +17,10 @@ describe('rappel de sauvegarde', () => {
 
   it('nomme le fichier avec la date', () => {
     expect(backupFileName('2026-10-08')).toBe('streeter-sauvegarde-2026-10-08.json');
+  });
+
+  it('envoie la sauvegarde en .txt et restaure les deux formats', () => {
+    expect(sharedBackupFileName('2026-10-17')).toBe('streeter-sauvegarde-2026-10-17.txt');
+    expect(BACKUP_ACCEPT.split(',')).toEqual(expect.arrayContaining(['.json', '.txt', 'application/json', 'text/plain']));
   });
 });

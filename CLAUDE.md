@@ -8,7 +8,7 @@ PWA personnelle de programmation et de suivi d'entraînement street workout : un
 
 ## Méthode de travail
 
-- Phases livrables et testables sur téléphone : 0 socle, import, calculs testés, mise en ligne → 1 Aujourd'hui et mode séance, hors ligne, export JSON de secours → 2 édition complète dans Réglages → 3 Semaine, Journal, Objectifs → 4 sauvegarde complète, exports, finitions PWA.
+- Phases livrables et testables sur téléphone : 0 socle, import, calculs testés, mise en ligne → 1 Aujourd'hui et mode séance, hors ligne, export JSON de secours → 2 édition complète dans Réglages → 3 Semaine, Journal, Objectifs → 4 sauvegarde complète, exports, finitions PWA. Refonte de l'interface en cours : phases 0 et A à F, voir « Interface V2 ».
 - Fin de phase : tests verts, journal de bord du jour à jour, `git commit`, `git push` (déploiement automatique), puis court récapitulatif (ce qui marche, ce qui reste, quoi tester sur le téléphone).
 - Échanges en français, en tutoyant l'utilisateur. Son téléphone : Android (Chrome).
 
@@ -56,17 +56,56 @@ Le dossier `vault/` est le second cerveau du projet (lisible dans Obsidian et VS
 | Séance faite · Série faite · Propre / dégradée | `SessionLog` · `SetLog` · `'clean'` / `'degraded'` |
 | Objectif · Test d'objectif | `Objective` · `ObjectiveTest` |
 
+## Interface V2 (décidée le 17/10/2026, en cours)
+
+Refonte de l'interface d'après la spec et les maquettes de l'utilisateur (16/10/2026), copiées dans `vault/v2/` (privé, hors dépôt). Tant qu'une phase n'est pas livrée, les autres sections décrivent l'appli en ligne ; elles sont mises à jour phase par phase.
+
+Décidé avec l'utilisateur :
+
+- 4 onglets : Aujourd'hui, Séance, Programmes, Progression. Hors de l'écran Séance, une barre de séance active (nom, chrono total, repos) rouvre la séance d'un toucher : changer d'onglet ne perd jamais la séance.
+- Programme = la semaine J1-J7 actuelle (matin / soir, cycles, semaine allégée, jour de test, décalage de séquence). Un seul programme, pas de rotation A → B → C.
+- Séance en tableau : une ligne par série (numéro ou type, précédent, valeur, ✓) ; le ✓ valide la série et lance le repos ; « + Ajouter une série » copie la dernière ligne.
+- Alternance planche / FL : **pas de repos entre la série planche et la série FL d'une paire**, comme un superset ; le repos vient après la paire. Partout ailleurs, supersets du matin compris : repos après chaque série, comme aujourd'hui.
+- Types de série : normale, échauffement (hors volume hebdo), échec (aller chercher l'échec total). La qualité reste à part : dégradée = mouvement mal maîtrisé.
+- Plus de minuteur de hold : l'utilisateur ne s'en sert pas. Il filme ses séries avec le même téléphone et saisit la durée après coup.
+- Quitter l'appli pour filmer ne doit jamais couper la séance : reprise exacte au retour (déjà le cas, à préserver). Les sons quand l'appli n'est pas à l'écran ne sont pas nécessaires.
+- Pas de charge (kg) pour l'instant. Composantes : les 4 actuelles (poussée / tirage / gainage des maquettes étaient illustratifs).
+- Pas de règle de passage ni de badge « Prêt à passer » : l'utilisateur gère seul ses progressions.
+- Objectifs gardés. Records : un par élastique, en plus du record sans élastique.
+- Vue calendrier des jours d'entraînement.
+- Séance express (20, 30 ou 45 min) : elle remplace la séance du jour, matin ou soir ; la fatigue de la veille n'entre pas en compte.
+- Une série d'échauffement ne compte pas dans le volume ; une série assistée compte à part (totaux Skill et Skill assisté séparés, déjà le cas) ; un exercice nourrit une seule composante.
+
+Choix sans l'utilisateur, à valider :
+
+- Navigation : réglages derrière une roue crantée dans Programmes ; Progression en 3 vues : Skills (objectifs, records par élastique, courbes ; pas d'échelles de progression), Volume (jauges, totaux skills, semaines passées), Historique (calendrier du mois, liste des séances, export).
+- Alternance : vaut dans les deux blocs qui alternent (Skill et Skill assisté) ; repos après la paire = le plus long des deux (identiques dans le programme : 90 s-2 min en Skill, 90 s en Skill assisté) ; une ligne qui continue seule se repose après chaque série.
+- Une série à l'échec compte dans le volume ; les records excluent les séries dégradées et d'échauffement.
+- Tableau : lignes de 56 px ; toucher une valeur ouvre un pavé en bas (valeur, élastique, RPE, qualité, note) ; un bouton « Valider » reste en bas pour la série proposée ; autant de lignes que le min de séries, puis « + Ajouter une série » jusqu'au max ; décocher une ligne annule la série. L'exercice se change parmi les candidats de la ligne (règle 4 inchangée).
+- Express : lignes planche / FL reprises de la séance remplacée (donc son intensité) ; composantes choisies selon le retard (minimum − séries faites − séries du soir encore prévues dans la semaine), puis bonus jusqu'au maximum.
+- Charte des maquettes (orange `#FF5114`, bleu `#2BABE8`, Bebas Neue et Heebo embarquées) ajustée pour le plein soleil : orange en aplat plutôt qu'en petit texte, gris éclaircis.
+
+Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
+
+- 0 : « Envoyer une sauvegarde » corrigé ; l'utilisateur fait une vraie sauvegarde avant toute migration.
+- A : fondations : état de séance au niveau de l'appli (repos et sons qui survivent au changement d'onglet), schéma Dexie v2 (type de série), sauvegarde et export.
+- B : charte, polices, 4 onglets, barre de séance active, roue crantée, Historique avec le calendrier.
+- C : séance en tableau, sans minuteur de hold.
+- D : Programmes : semaine J1-J7, éditeur de modèle, bibliothèque d'exercices.
+- E : Progression : Skills (objectifs, records par élastique), Volume.
+- F : Aujourd'hui refondu et séance express.
+
 ## Règles métier
 
 ### Séance
 
 1. Les blocs suivent un ordre paramétrable, par défaut : Échauffement (connexion + élastique) → Skill → Skill assisté (élastique) → Renfo spé skill → Renfo composantes. Chaque ligne de prescription est une carte.
 2. Planche **et** touch FL sont travaillés à chaque séance du soir, jamais l'un sans l'autre. L'éditeur signale un modèle du soir auquel il manque l'un des deux.
-3. Dans les blocs Skill **et Skill assisté** (décidé ; réglage par bloc `alternateSkills`), les séries planche et FL **alternent**, appariées par ordre : 1re ligne planche avec 1re ligne FL, 2e avec 2e (J1 : planche hold ↔ touch FL hold, puis P/N ↔ FL PU). Quand une ligne a fini ses séries, l'autre continue seule. L'appli propose la série suivante, l'utilisateur peut dévier.
+3. Dans les blocs Skill **et Skill assisté** (décidé ; réglage par bloc `alternateSkills`), les séries planche et FL **alternent**, appariées par ordre : 1re ligne planche avec 1re ligne FL, 2e avec 2e (J1 : planche hold ↔ touch FL hold, puis P/N ↔ FL PU). Quand une ligne a fini ses séries, l'autre continue seule. L'appli propose la série suivante, l'utilisateur peut dévier. V2 : pas de repos entre les deux séries d'une paire (voir « Interface V2 »).
 4. L'exercice se choisit **le jour même** parmi les candidats de la ligne (puces). Par défaut : l'exercice fait la dernière fois sur cette ligne ; si un candidat a déjà été fait plus tôt dans la séance (cas « même combo qu'au bloc skill »), celui-là. L'exercice est enregistré par série, on peut en changer entre deux séries.
 5. Une série de skill s'arrête dès que la protraction (grand dentelé) ou le verrouillage du coude lâche. Chaque série peut être marquée **propre** ou **dégradée**.
 6. Progression : une seule variable à la fois (+1 s de hold, +1 rep, ou élastique plus fin). Chaque carte affiche la dernière performance sur l'exercice (valeurs, élastique, date) pour viser juste au-dessus.
-7. Minuteur de hold : décompte de 3 s, puis comptage avec un bip à chaque seconde et un bip distinct quand la cible est atteinte (on ne regarde pas l'écran en planche), plus vibration. Arrêt en touchant n'importe où ; la valeur est reportée dans la série et reste ajustable au +/−.
+7. Minuteur de hold (**retiré en V2**, phase C : l'utilisateur ne s'en sert pas) : décompte de 3 s, puis comptage avec un bip à chaque seconde et un bip distinct quand la cible est atteinte (on ne regarde pas l'écran en planche), plus vibration. Arrêt en touchant n'importe où ; la valeur est reportée dans la série et reste ajustable au +/−.
 8. Minuteur de repos : démarre à la validation d'une série avec le repos prescrit. Pour une fourchette (« 90 s-2 min »), un premier signal au minimum et la fin au maximum. « Libre » : simple chronomètre.
 9. L'écran reste allumé pendant la séance (Wake Lock, ré-acquis au retour au premier plan).
 
@@ -224,7 +263,7 @@ Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en do
 ## Sauvegarde et exports
 
 - Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate`. La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
-- Rappel de sauvegarde sur Aujourd'hui : dernière sauvegarde de plus de 7 jours, ou aucune alors qu'au moins une séance a été faite dans l'appli. Sur Android, « Envoyer une sauvegarde » ouvre le menu de partage (Drive, e-mail).
+- Rappel de sauvegarde sur Aujourd'hui : dernière sauvegarde de plus de 7 jours, ou aucune alors qu'au moins une séance a été faite dans l'appli. Sur Android, « Envoyer une sauvegarde » ouvre le menu de partage (Drive, e-mail). Le fichier envoyé est en `.txt` (`text/plain`) : Chrome ne partage qu'une liste fermée de types, sans le JSON, et `navigator.canShare` ne vérifie pas le type. La restauration accepte `.json` et `.txt`. Une annulation ne dit rien ; un refus s'affiche avec « Enregistrer » (téléchargement) à la place.
 - Export du journal ([src/io/journal/exportJournal.ts](src/io/journal/exportJournal.ts)) : .xlsx (onglet « Journal », vraies dates Excel) et .csv pour Excel en français (« ; », CRLF, marque UTF-8). Les notes de ligne reprennent la note de séance (1re ligne), les notes de série, « Séance abandonnée » et les numéros des séries dégradées.
 - Version affichée dans Réglages → Sauvegarde et données → Appli : `version` du package.json et date du build.
 - `vite-plugin-pwa` reste en 1.3 (la 2.0, sortie le 03/10/2026, était trop récente). Mise à jour proposée par un message, jamais imposée.
@@ -232,7 +271,7 @@ Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en do
 ## Hors périmètre de la v1
 
 - Synchronisation cloud, comptes, applications natives, coaching automatique ou IA, multi-utilisateur.
-- **Idée v2, à ne pas implémenter** : avertir si une composante « pousser » (grand dentelé, deltoïde antérieur) est programmée dans les 24 h avant une séance Max.
+- **Idée pour plus tard, à ne pas implémenter** : avertir si une composante « pousser » (grand dentelé, deltoïde antérieur) est programmée dans les 24 h avant une séance Max.
 
 ## Déploiement
 

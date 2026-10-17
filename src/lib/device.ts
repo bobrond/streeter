@@ -76,21 +76,32 @@ export function downloadFile(fileName: string, blob: Blob): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-/** Partage de fichier possible (Android : Drive, e-mail, messagerie…). */
+/**
+ * Partage de fichier possible (Android : Drive, e-mail, messagerie…). `canShare` ne vérifie pas le type du fichier :
+ * Chrome ne partage qu'une liste fermée de types (texte, CSV, PDF, images…), sans le JSON.
+ */
 export function canShareFiles(): boolean {
   try {
-    return typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File([''], 'test.json', { type: 'application/json' })] });
+    return typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File([''], 'test.txt', { type: 'text/plain' })] });
   } catch {
     return false;
   }
 }
 
-/** Ouvre le menu de partage du téléphone avec le fichier ; `false` si l'utilisateur annule. */
+function isAbort(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && 'name' in e && e.name === 'AbortError';
+}
+
+/**
+ * Ouvre le menu de partage du téléphone avec le fichier : `true` s'il est parti, `false` si l'utilisateur a annulé.
+ * Un refus (type de fichier non accepté…) remonte en erreur, pour être affiché.
+ */
 export async function shareFile(fileName: string, blob: Blob, title: string): Promise<boolean> {
   try {
     await navigator.share({ files: [new File([blob], fileName, { type: blob.type })], title });
     return true;
-  } catch {
-    return false;
+  } catch (e) {
+    if (isAbort(e)) return false;
+    throw e;
   }
 }
