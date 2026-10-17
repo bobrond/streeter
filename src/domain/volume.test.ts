@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { block, element, exercise, item, settings, template, weekPlan } from '../test/builders';
+import { block, element, exercise, item, sessionLog, setLog, settings, template, weekPlan } from '../test/builders';
 import type { SessionLog, SessionTemplate, SetLog } from './types';
 import {
   editorIssues,
   plannedComponentVolume,
   realizedSkillSets,
   programIssues,
+  rangeStatus,
   realizedComponentVolume,
+  remainingEveningSets,
   skillTotals,
   volumeStatus,
   type Program,
 } from './volume';
+import { weekProgress } from './week';
 
 const planche = element('Planche', 'skill', 0);
 const fl = element('Touch FL', 'skill', 1);
@@ -201,5 +204,71 @@ describe('realizedSkillSets', () => {
       { sessionId: 'w1', blockTypeId: skill.id, elementId: planche.id, kind: 'failure' },
     ] as SetLog[];
     expect([...realizedSkillSets(sets, sessions, elements, 1)]).toEqual([[`${skill.id}|${planche.id}`, 1]]);
+  });
+});
+
+describe('rangeStatus (jauges de la vue Volume)', () => {
+  it('sous le minimum, dans la fourchette, au-delà', () => {
+    expect(rangeStatus(3, 4, 6)).toBe('below');
+    expect(rangeStatus(4, 4, 6)).toBe('within');
+    expect(rangeStatus(6, 4, 6)).toBe('within');
+    expect(rangeStatus(7, 4, 6)).toBe('above');
+  });
+});
+
+describe('remainingEveningSets', () => {
+  // J1 Max (obligatoire), J3 Technique léger (optionnel), J4 matin A, J5 Max.
+  const dent = (setsMin: number, extra = {}) => item({ blockTypeId: renfo.id, elementId: dentele.id, setsMin, setsMax: setsMin + 1, ...extra });
+  const max = template('Max', 'evening', [...skills(4, 5), dent(2), dent(1, { optional: true })]);
+  const light = template('Technique léger', 'evening', [dent(2)], { optional: true });
+  const morning = template('Matin A', 'morning', [dent(2)], { optional: true });
+  const templates = new Map([max, light, morning].map((t) => [t.id, t]));
+  const plan = settings({
+    cycleStartDate: '2026-10-05',
+    weekPlan: weekPlan({ 1: { evening: max.id }, 3: { evening: light.id }, 4: { morning: morning.id }, 5: { evening: max.id } }),
+  });
+  const keyOf = (blockId: string, elementId: string) => `${blockId}|${elementId}`;
+
+  it('compte les séries min des soirs obligatoires à venir, sans matins ni lignes optionnelles', () => {
+    const days = weekProgress(1, '2026-10-05', plan, templates, []);
+    const remaining = remainingEveningSets(days, [], blocks, plan, false);
+    expect(remaining.byElement.get(dentele.id)).toBe(4);
+    expect(remaining.byElement.get(planche.id)).toBe(8);
+    expect(remaining.byBlockElement.get(keyOf(skill.id, fl.id))).toBe(8);
+  });
+
+  it('ne compte plus une séance faite ou manquée', () => {
+    const done = sessionLog('2026-10-05', { status: 'done' });
+    const days = weekProgress(1, '2026-10-07', plan, templates, [done]);
+    expect(remainingEveningSets(days, [], blocks, plan, false).byElement.get(dentele.id)).toBe(2);
+    const later = weekProgress(1, '2026-10-10', plan, templates, []);
+    expect(remainingEveningSets(later, [], blocks, plan, false).byElement.size).toBe(0);
+  });
+
+  it('retire les séries déjà faites de la séance du soir en cours', () => {
+    const snapshot = structuredClone(max);
+    const running = sessionLog('2026-10-05', { status: 'in_progress', templateSnapshot: snapshot });
+    const dentItem = snapshot.items[2];
+    const sets = [
+      setLog({ sessionId: running.id, exerciseId: 'x', itemId: dentItem.id }),
+      setLog({ sessionId: running.id, exerciseId: 'x', itemId: dentItem.id, kind: 'warmup' }),
+      setLog({ sessionId: running.id, exerciseId: 'x', itemId: snapshot.items[0].id }),
+      setLog({ sessionId: running.id, exerciseId: 'x', itemId: snapshot.items[0].id }),
+      setLog({ sessionId: running.id, exerciseId: 'x', itemId: snapshot.items[0].id }),
+      setLog({ sessionId: running.id, exerciseId: 'x', itemId: snapshot.items[0].id }),
+      setLog({ sessionId: running.id, exerciseId: 'x', itemId: snapshot.items[0].id }),
+    ];
+    const days = weekProgress(1, '2026-10-05', plan, templates, [running]);
+    const remaining = remainingEveningSets(days, sets, blocks, plan, false);
+    expect(remaining.byElement.get(dentele.id)).toBe(1 + 2);
+    expect(remaining.byElement.get(planche.id)).toBe(0 + 4);
+  });
+
+  it('applique la semaine allégée aux séances à venir', () => {
+    const days = weekProgress(4, '2026-10-26', plan, templates, []);
+    const remaining = remainingEveningSets(days, [], blocks, plan, true);
+    // 4 séries → 2 ; 2 séries → 1.
+    expect(remaining.byElement.get(planche.id)).toBe(4);
+    expect(remaining.byElement.get(dentele.id)).toBe(2);
   });
 });

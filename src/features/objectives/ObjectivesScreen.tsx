@@ -1,97 +1,18 @@
 import { useMemo, useState } from 'react';
 import type { AppData } from '../../db/hooks';
-import { useLookups, type Lookups } from '../../db/lookups';
-import { OBJECTIVE_STATUS_LABEL, UNIT_SHORT, formatDateShort, formatValue } from '../../domain/labels';
-import { bestSessionPerformance, objectiveState, type ObjectiveStatus } from '../../domain/objectives';
+import { useLookups } from '../../db/lookups';
+import { UNIT_SHORT, formatDateShort, formatValue } from '../../domain/labels';
+import { bandRecords, objectiveState } from '../../domain/objectives';
 import type { Objective, ObjectiveTest } from '../../domain/types';
-import { goBack, navigate } from '../../lib/router';
-import { Badge, type Tone } from '../../ui/Badge';
+import { goBack, matchRoute, navigate } from '../../lib/router';
 import { Button } from '../../ui/Button';
-import { PlusIcon } from '../../ui/icons';
 import { LineChart, type ChartSeries } from '../../ui/LineChart';
-import { ProgressNav } from '../../ui/ProgressNav';
 import { Screen } from '../../ui/Screen';
+import { BandLadder } from './BandLadder';
+import { Meter, ObjectiveStatusBadge } from './ObjectiveCard';
 import { ObjectiveSheet, TestSheet } from './ObjectiveSheets';
-
-const STATUS_TONE: Record<ObjectiveStatus, Tone> = { to_test: 'neutral', in_progress: 'warn', achieved: 'ok' };
-
-/** Jauge du meilleur test vers la cible. */
-function Meter({ value, target }: { value: number; target: number }) {
-  const ratio = Math.max(0, Math.min(1, value / target));
-  return (
-    <div className="h-2 overflow-hidden rounded-full bg-line" role="meter" aria-valuemin={0} aria-valuemax={target} aria-valuenow={value}>
-      <div className={`h-full rounded-full ${ratio >= 1 ? 'bg-ok' : 'bg-accent'}`} style={{ width: `${ratio * 100}%` }} />
-    </div>
-  );
-}
-
-function ObjectiveCard({ objective, data, lookups }: { objective: Objective; data: AppData; lookups: Lookups }) {
-  const state = objectiveState(objective);
-  const perf = objective.exerciseId ? bestSessionPerformance(objective.exerciseId, data.sets, lookups.sessions) : null;
-  return (
-    <button type="button" onClick={() => navigate(`/objectives/${objective.id}`)} className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-4 text-left active:scale-[0.99]">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-xl font-bold">{objective.name}</span>
-        <Badge tone={STATUS_TONE[state.status]}>{OBJECTIVE_STATUS_LABEL[state.status]}</Badge>
-      </div>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-ink-2">
-          {state.best ? (
-            <>
-              Meilleur test <b className="text-ink">{formatValue(state.best.value, objective.unit)}</b>
-              {state.gap !== null && state.gap > 0 ? ` · encore ${formatValue(state.gap, objective.unit)}` : ''}
-            </>
-          ) : (
-            'Pas encore testé'
-          )}
-        </span>
-        <span className="shrink-0 font-semibold">cible {formatValue(objective.target, objective.unit)}</span>
-      </div>
-      {state.best && <Meter value={state.best.value} target={objective.target} />}
-      {perf && (
-        <span className="text-sm text-ink-3">
-          En séance : {formatValue(perf.value, objective.unit)} le {formatDateShort(perf.date)} (sans élastique, propre)
-        </span>
-      )}
-    </button>
-  );
-}
-
-function ObjectivesList({ data }: { data: AppData }) {
-  const lookups = useLookups(data);
-  const [creating, setCreating] = useState(false);
-  return (
-    <Screen
-      title="Progression"
-      nav={<ProgressNav current="skills" />}
-      actions={
-        <Button variant="secondary" onClick={() => setCreating(true)}>
-          <PlusIcon /> Nouvel objectif
-        </Button>
-      }
-    >
-      <div>
-        <h2 className="font-display text-2xl leading-tight tracking-wide">Objectifs</h2>
-        <p className="text-ink-2">Statut sur le meilleur test. Tests en début de cycle, sur un jour Max.</p>
-      </div>
-      {data.objectives.map((objective) => (
-        <ObjectiveCard key={objective.id} objective={objective} data={data} lookups={lookups} />
-      ))}
-      {data.objectives.length === 0 && <p className="text-ink-2">Aucun objectif.</p>}
-      <ObjectiveSheet
-        data={data}
-        objective={null}
-        open={creating}
-        onClose={() => setCreating(false)}
-        onSaved={(id) => {
-          setCreating(false);
-          navigate(`/objectives/${id}`);
-        }}
-        onDeleted={() => setCreating(false)}
-      />
-    </Screen>
-  );
-}
+import { SkillDetail } from './SkillDetail';
+import { SkillsView } from './SkillsView';
 
 function ObjectiveDetail({ data, objective }: { data: AppData; objective: Objective }) {
   const lookups = useLookups(data);
@@ -99,7 +20,8 @@ function ObjectiveDetail({ data, objective }: { data: AppData; objective: Object
   const [editing, setEditing] = useState(false);
   const state = objectiveState(objective);
   const exercise = objective.exerciseId ? lookups.exercises.get(objective.exerciseId) : undefined;
-  const perf = exercise ? bestSessionPerformance(exercise.id, data.sets, lookups.sessions) : null;
+  const records = useMemo(() => (exercise ? bandRecords(exercise.id, data.sets, lookups.sessions) : null), [exercise, data.sets, lookups.sessions]);
+  const perf = records?.get(null) ?? null;
   const tests = [...objective.tests].sort((a, b) => b.date.localeCompare(a.date));
   const series = useMemo(
     (): ChartSeries[] => [
@@ -133,14 +55,21 @@ function ObjectiveDetail({ data, objective }: { data: AppData; objective: Object
           <div className="text-sm text-ink-2">Cible</div>
           <div className="text-3xl font-bold">{formatValue(objective.target, objective.unit)}</div>
           <div className="mt-1">
-            <Badge tone={STATUS_TONE[state.status]}>{OBJECTIVE_STATUS_LABEL[state.status]}</Badge>
+            <ObjectiveStatusBadge status={state.status} />
           </div>
         </div>
         <div className="rounded-2xl bg-card p-3">
           <div className="text-sm text-ink-2">Meilleur test</div>
           <div className="text-3xl font-bold">{state.best ? formatValue(state.best.value, objective.unit) : '—'}</div>
           <div className="text-sm text-ink-3">
-            {state.best ? `le ${formatDateShort(state.best.date)}${state.gap !== null && state.gap > 0 ? ` · écart ${formatValue(state.gap, objective.unit)}` : ''}` : 'pas encore testé'}
+            {state.best ? (
+              <>
+                le {formatDateShort(state.best.date)}
+                {state.gap !== null && state.gap > 0 && <span className="whitespace-nowrap"> · écart {formatValue(state.gap, objective.unit)}</span>}
+              </>
+            ) : (
+              'pas encore testé'
+            )}
           </div>
         </div>
       </div>
@@ -153,6 +82,11 @@ function ObjectiveDetail({ data, objective }: { data: AppData; objective: Object
             {perf ? `${formatValue(perf.value, objective.unit)} le ${formatDateShort(perf.date)}` : 'pas encore de série sans élastique'}
           </div>
           <div className="text-sm text-ink-3">Meilleure série sans élastique et non dégradée · voir la fiche</div>
+          {records && [...records.keys()].some((id) => id !== null) && (
+            <div className="mt-3">
+              <BandLadder records={records} bands={data.bands} unit={objective.unit} dates />
+            </div>
+          )}
         </button>
       )}
 
@@ -201,8 +135,20 @@ function ObjectiveDetail({ data, objective }: { data: AppData; objective: Object
   );
 }
 
-/** Objectifs : #/objectives et #/objectives/:id. */
+/** Progression › Skills : #/objectives, #/objectives/skill/:id (fiche d'un skill) et #/objectives/:id (objectif). */
 export function ObjectivesScreen({ data, path }: { data: AppData; path: string }) {
+  const skillRoute = matchRoute('/objectives/skill/:id', path);
+  if (skillRoute) {
+    const skill = data.elements.find((e) => e.id === skillRoute.id && e.kind === 'skill');
+    if (!skill) {
+      return (
+        <Screen title="Skill introuvable" onBack={() => goBack('/objectives')}>
+          <p className="text-ink-2">Ce skill n’existe plus.</p>
+        </Screen>
+      );
+    }
+    return <SkillDetail key={skill.id} data={data} skill={skill} path={path} />;
+  }
   const id = path.split('?')[0].split('/').filter(Boolean)[1];
   const objective = id ? data.objectives.find((o) => o.id === id) : undefined;
   if (id && !objective) {
@@ -212,5 +158,5 @@ export function ObjectivesScreen({ data, path }: { data: AppData; path: string }
       </Screen>
     );
   }
-  return objective ? <ObjectiveDetail key={objective.id} data={data} objective={objective} /> : <ObjectivesList data={data} />;
+  return objective ? <ObjectiveDetail key={objective.id} data={data} objective={objective} /> : <SkillsView data={data} />;
 }

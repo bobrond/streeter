@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestSessionPerformance, bestTest, objectiveState } from './objectives';
+import { bandRecords, bestSessionPerformance, bestTest, objectiveState } from './objectives';
 import type { SessionLog, SetLog } from './types';
 
 const test = (date: string, value: number) => ({ id: `${date}-${value}`, date, value, note: '' });
@@ -61,5 +61,45 @@ describe('bestSessionPerformance', () => {
 
   it('renvoie null sans série valable', () => {
     expect(bestSessionPerformance('planche-hold', [set('2', 'a', 14, { bandId: 'jaune' })], sessions)).toBeNull();
+  });
+});
+
+describe('bandRecords', () => {
+  const sessions = new Map(
+    [
+      { id: 'a', date: '2026-10-07' },
+      { id: 'b', date: '2026-10-12' },
+    ].map((x) => [x.id, x as SessionLog]),
+  );
+  const set = (id: string, sessionId: string, value: number | null, extra: Partial<SetLog> = {}) =>
+    ({ id, sessionId, exerciseId: 'planche-hold', value, bandId: null, quality: null, kind: 'normal', ...extra }) as SetLog;
+
+  it('garde un record par élastique, plus le record sans élastique', () => {
+    const sets = [
+      set('1', 'a', 6),
+      set('2', 'a', 12, { bandId: 'vert' }),
+      set('3', 'b', 15, { bandId: 'vert' }),
+      set('4', 'b', 9, { bandId: 'bleue' }),
+      set('5', 'b', 5),
+    ];
+    const records = bandRecords('planche-hold', sets, sessions);
+    expect(records.get(null)).toEqual({ value: 6, date: '2026-10-07', setId: '1' });
+    expect(records.get('vert')).toEqual({ value: 15, date: '2026-10-12', setId: '3' });
+    expect(records.get('bleue')?.value).toBe(9);
+    expect(records.has('jaune')).toBe(false);
+  });
+
+  it('exclut les séries dégradées et d’échauffement, quel que soit l’élastique', () => {
+    const sets = [
+      set('1', 'a', 20, { bandId: 'vert', quality: 'degraded' }),
+      set('2', 'a', 18, { bandId: 'vert', kind: 'warmup' }),
+      set('3', 'b', 10, { bandId: 'vert', kind: 'failure' }),
+    ];
+    expect([...bandRecords('planche-hold', sets, sessions)]).toEqual([['vert', { value: 10, date: '2026-10-12', setId: '3' }]]);
+  });
+
+  it('retient la première fois en cas d’égalité', () => {
+    const sets = [set('1', 'b', 12, { bandId: 'vert' }), set('2', 'a', 12, { bandId: 'vert' })];
+    expect(bandRecords('planche-hold', sets, sessions).get('vert')?.date).toBe('2026-10-07');
   });
 });

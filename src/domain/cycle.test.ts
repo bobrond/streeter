@@ -8,6 +8,7 @@ import {
   isObjectiveTestDay,
   isObjectiveTestWeek,
   localISODate,
+  nextObjectiveTestDate,
   shiftedStartDate,
   weekdayOf,
 } from './cycle';
@@ -94,5 +95,29 @@ describe('test des objectifs', () => {
 
   it('revient à chaque nouveau cycle (semaine 9)', () => {
     expect(isObjectiveTestDay(dayInfo('2026-11-30', s), 1)).toBe(true);
+  });
+});
+
+describe('nextObjectiveTestDate', () => {
+  it('donne le jour de test du prochain cycle (J1 de la semaine 5)', () => {
+    expect(nextObjectiveTestDate('2026-10-17', s, 1)).toEqual({ date: '2026-11-02', week: 5 });
+  });
+
+  it('compte le jour même', () => {
+    expect(nextObjectiveTestDate('2026-11-02', s, 1)).toEqual({ date: '2026-11-02', week: 5 });
+  });
+
+  it('passe au cycle suivant une fois le jour de test passé', () => {
+    expect(nextObjectiveTestDate('2026-11-03', s, 1)).toEqual({ date: '2026-11-30', week: 9 });
+    expect(nextObjectiveTestDate('2026-11-10', s, 1)).toEqual({ date: '2026-11-30', week: 9 });
+  });
+
+  it('suit le jour Max de la semaine type et les dates avant le début', () => {
+    expect(nextObjectiveTestDate('2026-11-03', s, 5)).toEqual({ date: '2026-11-06', week: 5 });
+    expect(nextObjectiveTestDate('2026-09-01', s, 1)).toEqual({ date: '2026-11-02', week: 5 });
+  });
+
+  it('ne donne rien sans jour de test', () => {
+    expect(nextObjectiveTestDate('2026-10-17', s, null)).toBeNull();
   });
 });

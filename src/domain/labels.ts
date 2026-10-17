@@ -114,6 +114,11 @@ export function formatDateShort(iso: string): string {
   return SHORT_DATE_FORMAT.format(new Date(`${iso}T12:00:00`));
 }
 
+/** Date calendaire YYYY-MM-DD → « 07/10 », quand l'année va de soi. */
+export function formatDayMonth(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
 /** Chronomètre : « 1:30 », « 0:05 », « 12:00 ». */
 export function formatClock(totalSec: number): string {
   const s = Math.max(0, Math.floor(totalSec));

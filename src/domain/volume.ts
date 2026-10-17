@@ -1,5 +1,5 @@
 // Volume hebdomadaire : composantes de renfo (prévu / réalisé / statut) et totaux par skill.
-import { deloadSets } from './deload';
+import { deloadSets, deloadTemplate } from './deload';
 import { estimateDuration } from './duration';
 import type {
   BlockType,
@@ -15,6 +15,7 @@ import type {
   WeekPlan,
 } from './types';
 import { MOMENTS, SEQ_DAYS } from './types';
+import type { DayProgress } from './week';
 
 export interface Program {
   weekPlan: WeekPlan;
@@ -271,4 +272,63 @@ export function realizedSkillSets(
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
+}
+
+/** Position dans une fourchette : jauges de la vue Volume (spec de l'utilisateur). */
+export type RangeStatus = 'below' | 'within' | 'above';
+
+/** Sous le minimum : à compléter ; de min à max : dans la cible ; au-delà du maximum. */
+export function rangeStatus(value: number, min: number, max: number): RangeStatus {
+  if (value < min) return 'below';
+  if (value > max) return 'above';
+  return 'within';
+}
+
+export interface RemainingPlanned {
+  /** Par élément, tous blocs confondus. */
+  byElement: Map<ID, number>;
+  /** Par (bloc, élément) : clé « blocId|elementId », comme `realizedSkillSets`. */
+  byBlockElement: Map<string, number>;
+}
+
+/**
+ * Séries du soir encore prévues dans la semaine : séances du soir obligatoires d'aujourd'hui et des jours
+ * suivants pas encore commencées (séries min des lignes obligatoires, allégées en semaine allégée), plus ce qu'il
+ * reste des lignes de la séance du soir en cours. Le matin (bonus) et les séances optionnelles ne comptent pas :
+ * c'est le soir qui garantit le minimum.
+ */
+export function remainingEveningSets(
+  days: readonly DayProgress[],
+  sets: readonly SetLog[],
+  blocks: ReadonlyMap<ID, BlockType>,
+  settings: Pick<Settings, 'deloadReductionPct'>,
+  isDeload: boolean,
+): RemainingPlanned {
+  const byElement = new Map<ID, number>();
+  const byBlockElement = new Map<string, number>();
+  const add = (blockTypeId: ID, elementId: ID, count: number) => {
+    if (count <= 0) return;
+    byElement.set(elementId, (byElement.get(elementId) ?? 0) + count);
+    const key = `${blockTypeId}|${elementId}`;
+    byBlockElement.set(key, (byBlockElement.get(key) ?? 0) + count);
+  };
+  for (const day of days) {
+    const slot = day.slots.evening;
+    if (slot.status === 'today' || slot.status === 'upcoming') {
+      const planned = slot.planned;
+      if (!planned || planned.optional) continue;
+      const practiced = isDeload ? deloadTemplate(planned, blocks, settings) : planned;
+      for (const item of practiced.items) if (!item.optional) add(item.blockTypeId, item.elementId, item.setsMin);
+    } else if (slot.status === 'in_progress') {
+      const session = slot.sessions.find((s) => s.status === 'in_progress');
+      const snapshot = session?.templateSnapshot;
+      if (!session || !snapshot || snapshot.optional) continue;
+      for (const item of snapshot.items) {
+        if (item.optional) continue;
+        const done = sets.filter((s) => s.sessionId === session.id && s.itemId === item.id && countsInVolume(s)).length;
+        add(item.blockTypeId, item.elementId, item.setsMin - done);
+      }
+    }
+  }
+  return { byElement, byBlockElement };
 }

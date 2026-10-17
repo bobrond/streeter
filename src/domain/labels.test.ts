@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatClock, formatDuration, formatDurationRange, formatRange, formatRest, restParts, formatSetValue, formatTarget, formatValue, formatValueList } from './labels';
+import { formatClock, formatDayMonth, formatDuration, formatDurationRange, formatRange, formatRest, restParts, formatSetValue, formatTarget, formatValue, formatValueList } from './labels';
 
 describe('formats', () => {
   it('accorde les unités', () => {
@@ -9,6 +9,10 @@ describe('formats', () => {
     expect(formatTarget({ unit: 'combos', min: 1, max: 3 })).toBe('1-3 combos');
     expect(formatValue(1, 'reps')).toBe('1 rep');
     expect(formatValue(10, 'seconds')).toBe('10 s');
+  });
+
+  it('abrège une date en jour et mois', () => {
+    expect(formatDayMonth('2026-10-07')).toBe('07/10');
   });
 
   it('formate repos et durées', () => {

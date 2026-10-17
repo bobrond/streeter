@@ -92,7 +92,7 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 - B (livrée le 17/10/2026, v1.2.0) : charte, polices, 4 onglets, barre de séance active, roue crantée, Historique avec le calendrier. Voir « Navigation et charte ».
 - C (livrée le 17/10/2026, v1.3.0) : séance en tableau, sans minuteur de hold, avec le type de série. Voir « Choix d'interface du mode séance ».
 - D (livrée le 17/10/2026, v1.4.0) : Programmes : semaine J1-J7, éditeur de modèle, bibliothèque d'exercices ; schéma Dexie v3 (modèle archivé, temps par série d'un exercice). Voir « Programmes (depuis la phase D) ».
-- E : Progression : Skills (objectifs, records par élastique), Volume.
+- E (livrée le 17/10/2026, v1.5.0) : Progression : Skills (objectifs, records par élastique, courbes), Volume (jauges, totaux skills, semaines). Pas de changement de schéma. Voir « Progression (depuis la phase E) ».
 - F : Aujourd'hui refondu et séance express.
 
 ## Navigation et charte (depuis la phase B)
@@ -101,7 +101,7 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
   - Aujourd'hui `/`.
   - Séance `/session` : sans séance en cours, séance prévue, autre séance, dernière séance à revoir ou corriger. Avec une séance, `/session/:id` en plein écran, sans onglets ; le chevron « Réduire la séance » revient à l'écran précédent.
   - Programmes : vues Programmes `/programs` et Exercices `/programs?vue=exercices` (l'onglet rouvre la dernière vue) ; la roue crantée ouvre `/settings` (blocs, types de séance, éléments, élastiques, cycle, sauvegarde). Détail : « Programmes (depuis la phase D) ».
-  - Progression : Skills `/objectives`, Volume `/week`, Historique `/journal`. Ces chemins restent ceux des anciens onglets ; l'onglet rouvre la dernière vue (préférence de l'appareil).
+  - Progression : Skills `/objectives` (fiche d'un skill `/objectives/skill/:id`), Volume `/week` (`?semaine=N`), Historique `/journal`. Ces chemins restent ceux des anciens onglets ; l'onglet rouvre la dernière vue (préférence de l'appareil). Détail : « Progression (depuis la phase E) ».
 - **Barre de séance active** ([src/features/session/ActiveSessionBar.tsx](src/features/session/ActiveSessionBar.tsx)), au-dessus des onglets dès qu'une séance est en cours, hors de l'écran Séance : nom, chrono total, série à faire, repos (« Libre » pour un repos libre). Un toucher rouvre la séance. Aujourd'hui n'affiche alors ni carte « Séance en cours » ni bouton « Reprendre ».
 - **Lancer depuis l'onglet Séance** : la séance remplace l'écran dans l'historique, sinon « Réduire » ramènerait sur l'onglet, qui rouvrirait la séance en boucle.
 - **Calendrier** (Historique › Séances, [src/domain/calendar.ts](src/domain/calendar.ts)) :
@@ -165,6 +165,32 @@ Onglet Programmes ([src/features/programs/](src/features/programs/)). Un seul pr
   - archiver retire de la semaine type, désarchiver ne l'y remet pas ;
   - la copie d'un modèle n'est pas placée dans la semaine type ;
   - les 14 créneaux et le volume prévu derrière ⋯ › Créneaux.
+
+## Progression (depuis la phase E)
+
+Onglet Progression : Skills ([src/features/objectives/](src/features/objectives/)), Volume ([src/features/week/VolumeScreen.tsx](src/features/week/VolumeScreen.tsx)), Historique. Pas d'échelle de progression ni de règle de passage (décidé).
+
+- **Skills** (`/objectives`) :
+  - prochain test des objectifs (`nextObjectiveTestDate`), ou « Jour de test » le jour même ;
+  - une carte par skill (éléments de nature `skill`) : ses objectifs (meilleur test en grand, cible, statut, meilleure série en séance, jauge), puis les records par élastique de ses 2 premiers exercices ; toucher la carte ouvre la fiche du skill ;
+  - « Autres objectifs » : ceux dont l'exercice lié n'est pas un skill, ou sans exercice ; « + Nouvel objectif » en bas.
+- **Rattachement** ([src/domain/skills.ts](src/domain/skills.ts)) : un objectif appartient au skill de son exercice lié (`objectivesBySkill`). Exercices d'un skill (`skillRecords`) : ceux de l'élément, mesurés, avec au moins un record ; ceux des objectifs d'abord, puis les plus récemment faits.
+- **Records par élastique** (`bandRecords`, [src/domain/objectives.ts](src/domain/objectives.ts)) : pour chaque élastique et sans élastique, la meilleure série non dégradée et hors échauffement (l'échec compte) ; à égalité, la première. Le record sans élastique reste celui des objectifs (`bestSessionPerformance`).
+  - Affichage en paliers (`BandLadder`) : élastiques du plus assistant au moins assistant, puis « sans » (blanc) ; un élastique sans record reste pâle ; un exercice jamais fait avec élastique n'a que sa ligne « sans élastique ».
+  - Visible sur la carte et la fiche du skill, la fiche d'un objectif (exercice lié) et la fiche exercice.
+- **Fiche d'un skill** (`/objectives/skill/:id`) : objectifs ; courbes d'un exercice choisi par puces (`?exercice=`), une courbe par élastique, avec la cible de l'objectif lié en pointillés ; records de tous les exercices (toucher : fiche exercice).
+- **Volume** (`/week`, `?semaine=N` pour une autre semaine) :
+  - **Composantes** : une jauge en cases par composante, de 1 au maximum (plus si dépassé), zone cible (4 à 6) plus claire. Séries faites en plein, **séries encore prévues le soir** en pointillés (`remainingEveningSets` : séries min des lignes obligatoires des soirs obligatoires d'aujourd'hui et des jours suivants pas encore commencés, allégées en semaine allégée, plus le reste de la séance du soir en cours ; ni matins ni séances optionnelles). Détail soir / matin / encore prévues.
+  - Couleur et libellé sur le **total** fait (spec de l'utilisateur, `rangeStatus`) : sous le min « à compléter » (gris), dans la fourchette « dans la cible » (orange), au-dessus « au-delà de la cible » (jaune). Semaine allégée : gris neutre, sans zone ni statut.
+  - **Skills** : par skill puis par bloc (Skill, Skill assisté, Renfo spé), séries faites sur Σ min-max de la semaine type (`skillTotals`), jauge continue, même code ; semaine allégée : sur le max allégé.
+  - **Séances de la semaine** : J1-J7, matin et soir, avec leur statut ; toucher : la séance faite, ou l'aperçu du modèle.
+  - **Semaines** : tableau des 6 dernières semaines (séries faites par composante, fond orange dans la cible) ; toucher une semaine l'affiche.
+- Choix sans l'utilisateur, à valider à l'usage :
+  - le statut du volume réalisé suit le total (spec) et non plus la formule du tableur (« Sous le min (soir) » si le soir seul est sous le minimum) ; le prévu garde la formule du tableur ;
+  - séries encore prévues = minimum des soirs obligatoires, en pointillés ;
+  - records en paliers d'élastiques ; 2 exercices sur la carte d'un skill ;
+  - la carte d'un skill s'ouvre en entier (pas de raccourci vers un objectif) ;
+  - cible de l'objectif tracée sur la courbe de son exercice lié.
 
 ## Règles métier
 
@@ -268,7 +294,7 @@ Saisis par l'utilisateur dans Réglages, absents du tableur : **ne plus réimpor
   - **Contrôle du maximum** = Σ séries **max** de toutes les lignes, soir + matin, optionnelles comprises.
   - Le tableur additionne la colonne Séries max et filtre sur le bloc « Renfo composantes » : même résultat avec le programme actuel.
 - Statut (formule du tableur) : minimum garanti < min → « Sous le min (soir) » ; sinon total > max → « Au-dessus du max » ; sinon « OK ». En semaine allégée, afficher « Semaine allégée » au lieu de ce statut.
-- Réalisé (semaine en cours) : nombre de `SetLog` de la semaine sur la composante, hors séries d'échauffement, soir / matin / total, avec le même statut. Même règle pour les séries de skill réalisées.
+- Réalisé (semaine en cours) : nombre de `SetLog` de la semaine sur la composante, hors séries d'échauffement, soir / matin / total. Même règle pour les séries de skill réalisées. Depuis la phase E, la jauge du réalisé se colore sur le total (sous le min, dans la fourchette, au-dessus ; spec de l'utilisateur, à valider) ; la formule du tableur ne sert plus qu'au prévu.
 - Contrôle à l'édition : toute modification du programme recalcule le volume et signale aussitôt une composante hors bornes.
 - Totaux par skill (Planche, Touch FL) et par bloc (Skill, Skill assisté, Renfo spé skill) : Σ séries min, Σ séries max, nombre de séances (jours de séquence distincts, matin et soir confondus, lignes optionnelles comprises), max en semaine allégée.
 
@@ -282,7 +308,7 @@ Saisis par l'utilisateur dans Réglages, absents du tableur : **ne plus réimpor
 
 - Nom, critère de qualité, cible, unité, exercice lié (optionnel), historique de tests {date, valeur, note}.
 - Statut sur le **meilleur** test (décidé ; le tableur utilise le dernier) : aucun test → « À tester » ; meilleur test ≥ cible → « Atteint » ; sinon « En cours ». Écart = cible − meilleur test.
-- L'exercice lié sert à afficher la meilleure performance en séance : séries **sans élastique**, **non dégradées** (décidé) et hors échauffement (décidé le 17/10/2026). Les séries importées du tableur, sans qualité notée, comptent.
+- L'exercice lié sert à afficher la meilleure performance en séance : séries **sans élastique**, **non dégradées** (décidé) et hors échauffement (décidé le 17/10/2026). Les séries importées du tableur, sans qualité notée, comptent. Les records avec élastique de l'exercice lié s'affichent à côté (phase E).
 
 | Objectif | Critère de qualité | Cible | Exercice lié |
 |---|---|---|---|
@@ -299,7 +325,7 @@ Saisis par l'utilisateur dans Réglages, absents du tableur : **ne plus réimpor
 ### Journal
 
 - Une `SetLog` par série. Le nombre de séries faites **se déduit** des `SetLog` et n'est jamais saisi (le tableur contient « 3 séries » avec 4 valeurs, ce qui doit être impossible dans l'appli).
-- Fiche exercice : courbe de la meilleure valeur par séance, une courbe par élastique (« sans élastique » en blanc), séries dégradées et d'échauffement exclues ; record = meilleure série sans élastique, non dégradée et hors échauffement (comme pour les objectifs). Choix d'affichage de la phase 3.
+- Fiche exercice : courbe de la meilleure valeur par séance, une courbe par élastique (« sans élastique » en blanc), séries dégradées et d'échauffement exclues ; record = meilleure série sans élastique, non dégradée et hors échauffement (comme pour les objectifs), plus un record par élastique (phase E). Choix d'affichage de la phase 3.
 - Export .xlsx et .csv avec exactement les colonnes de l'onglet Journal : Date, Semaine, Jour, Moment, Type séance, Bloc, Exercice, Séries faites, Reps / durée (« v1 ; v2 ; … »), Élastique, RPE, Ressenti / notes. Une ligne par (séance, bloc, exercice). Jour au format « J3 ». RPE : une valeur si toutes les séries ont la même, sinon « 6 ; 7 ; 8 ». Les séries dégradées, d'échauffement et à l'échec sont signalées dans les notes par leur numéro ; elles restent dans « Séries faites » et « Reps / durée » (choix sans l'utilisateur pour l'échauffement et l'échec).
 
 ## Modèle de données (Dexie)

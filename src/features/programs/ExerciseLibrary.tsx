@@ -92,7 +92,7 @@ export function ExerciseLibrary({ data, path }: { data: AppData; path: string })
       <TextInput value={query} onChange={setQuery} placeholder="Rechercher un exercice" />
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Nature de l’élément">
         {(Object.keys(KIND_LABELS) as KindFilter[]).map((k) => (
-          <button key={k} type="button" aria-pressed={k === kind} onClick={() => update(k, null)} className={chipClass(k === kind, 'min-h-11', 'text-base')}>
+          <button key={k} type="button" aria-pressed={k === kind} onClick={() => update(k, null)} className={chipClass(k === kind, '', 'text-base', 'min-h-11')}>
             {KIND_LABELS[k]}
           </button>
         ))}
@@ -105,7 +105,7 @@ export function ExerciseLibrary({ data, path }: { data: AppData; path: string })
               type="button"
               aria-pressed={element.id === elementId}
               onClick={() => update(kind, element.id === elementId ? null : element.id)}
-              className={chipClass(element.id === elementId, 'min-h-11', 'text-sm')}
+              className={chipClass(element.id === elementId, '', 'text-sm', 'min-h-11')}
             >
               {element.name}
             </button>

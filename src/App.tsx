@@ -16,7 +16,7 @@ import { ToastHost } from './ui/Toast';
 import { PROGRESS_PATHS, tabOf, type ProgressView } from './ui/tabs';
 
 // Onglets chargés à la demande : l'accueil et la séance démarrent plus vite.
-const WeekScreen = lazy(() => import('./features/week/WeekScreen').then((m) => ({ default: m.WeekScreen })));
+const VolumeScreen = lazy(() => import('./features/week/VolumeScreen').then((m) => ({ default: m.VolumeScreen })));
 const JournalScreen = lazy(() => import('./features/journal/JournalScreen').then((m) => ({ default: m.JournalScreen })));
 const ObjectivesScreen = lazy(() => import('./features/objectives/ObjectivesScreen').then((m) => ({ default: m.ObjectivesScreen })));
 const ProgramsScreen = lazy(() => import('./features/programs/ProgramsScreen').then((m) => ({ default: m.ProgramsScreen })));
@@ -82,7 +82,7 @@ function AppShell({ data, path, onReport }: { data: NonNullable<ReturnType<typeo
       screen = first === 'settings' ? <SettingsScreen data={data} path={path} onImported={onReport} onShowReport={onReport} /> : <ProgramsScreen data={data} path={path} />;
       break;
     case 'progress':
-      screen = first === 'week' ? <WeekScreen data={data} /> : first === 'journal' ? <JournalScreen data={data} path={path} /> : first === 'objectives' ? <ObjectivesScreen data={data} path={path} /> : null;
+      screen = first === 'week' ? <VolumeScreen data={data} path={path} /> : first === 'journal' ? <JournalScreen data={data} path={path} /> : first === 'objectives' ? <ObjectivesScreen data={data} path={path} /> : null;
       break;
     default:
       screen = <TodayScreen data={data} />;

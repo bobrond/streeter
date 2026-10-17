@@ -1,20 +1,18 @@
 import { useMemo } from 'react';
 import type { AppData } from '../../db/hooks';
 import { useLookups } from '../../db/lookups';
-import { progressPoints, sessionLines } from '../../domain/journal';
+import { sessionLines } from '../../domain/journal';
 import { exerciseUses } from '../../domain/editing';
 import { MEASURE_LABEL, UNIT_SHORT, formatDateShort, formatSets, formatTarget, formatValueList } from '../../domain/labels';
-import { bestSessionPerformance } from '../../domain/objectives';
-import type { ID } from '../../domain/types';
+import { bandRecords } from '../../domain/objectives';
 import { goBack, navigate } from '../../lib/router';
 import { Button } from '../../ui/Button';
 import { NextIcon } from '../../ui/icons';
 import { BandSwatch } from '../../ui/inputs';
-import { LineChart, type ChartSeries } from '../../ui/LineChart';
+import { LineChart } from '../../ui/LineChart';
 import { Screen } from '../../ui/Screen';
-
-/** Couleur de la série « sans élastique » : l'encre neutre (pas d'élastique = pas de couleur). */
-const NO_BAND_COLOR = '#ffffff';
+import { BandLadder } from '../objectives/BandLadder';
+import { bandSeries } from '../objectives/bandSeries';
 
 /** Fiche d'un exercice (Historique et bibliothèque de Programmes) ; `backTo` : écran de retour si on y arrive directement. */
 export function ExerciseDetail({ data, exerciseId, backTo = '/journal?vue=exercices' }: { data: AppData; exerciseId: string; backTo?: string }) {
@@ -23,27 +21,8 @@ export function ExerciseDetail({ data, exerciseId, backTo = '/journal?vue=exerci
   const sets = useMemo(() => data.sets.filter((s) => s.exerciseId === exerciseId), [data.sets, exerciseId]);
 
   const { bands, sessions } = lookups;
-  const series = useMemo((): ChartSeries[] => {
-    const byBand = new Map<ID | null, Map<string, number>>();
-    for (const point of progressPoints(exerciseId, data.sets, sessions)) {
-      const dates = byBand.get(point.bandId) ?? new Map<string, number>();
-      dates.set(point.date, Math.max(dates.get(point.date) ?? 0, point.best));
-      byBand.set(point.bandId, dates);
-    }
-    const order = (id: ID | null) => (id === null ? -1 : (bands.get(id)?.order ?? 99));
-    return [...byBand.entries()]
-      .sort((a, b) => order(a[0]) - order(b[0]))
-      .map(([bandId, dates]) => {
-        const band = bandId ? bands.get(bandId) : null;
-        return {
-          id: bandId ?? 'none',
-          label: band ? `élastique ${band.name}` : 'sans élastique',
-          shortLabel: band ? band.name : 'sans',
-          color: band?.color ?? NO_BAND_COLOR,
-          points: [...dates].map(([date, value]) => ({ date, value })),
-        };
-      });
-  }, [data.sets, exerciseId, bands, sessions]);
+  const series = useMemo(() => bandSeries(exerciseId, data.sets, sessions, bands), [data.sets, exerciseId, bands, sessions]);
+  const records = useMemo(() => bandRecords(exerciseId, data.sets, sessions), [data.sets, exerciseId, sessions]);
 
   if (!exercise) {
     return (
@@ -55,7 +34,7 @@ export function ExerciseDetail({ data, exerciseId, backTo = '/journal?vue=exerci
 
   const element = exercise.elementId ? lookups.elements.get(exercise.elementId) : undefined;
   const measured = exercise.measure !== 'none';
-  const record = measured ? bestSessionPerformance(exercise.id, data.sets, lookups.sessions) : null;
+  const record = measured ? (records.get(null) ?? null) : null;
   const sessionIds = [...new Set(sets.map((s) => s.sessionId))]
     .map((id) => lookups.sessions.get(id))
     .filter((s) => s !== undefined)
@@ -92,10 +71,17 @@ export function ExerciseDetail({ data, exerciseId, backTo = '/journal?vue=exerci
         </div>
       </div>
 
+      {measured && [...records.keys()].some((id) => id !== null) && (
+        <section className="rounded-2xl border border-line bg-card p-3">
+          <h2 className="mb-2 text-lg font-semibold">Records par élastique</h2>
+          <BandLadder records={records} bands={data.bands} unit={exercise.measure as 'reps' | 'seconds' | 'combos'} dates />
+        </section>
+      )}
+
       {measured && series.length > 0 && (
         <section className="rounded-2xl border border-line bg-card p-3">
           <h2 className="text-lg font-semibold">Meilleure série par séance</h2>
-          <p className="mb-2 text-sm text-ink-2">Une courbe par élastique ; les séries dégradées ne comptent pas.</p>
+          <p className="mb-2 text-sm text-ink-2">Une courbe par élastique ; séries dégradées et d’échauffement exclues.</p>
           <LineChart series={series} unit={UNIT_SHORT[exercise.measure as 'reps' | 'seconds' | 'combos']} ariaLabel={`Progression sur ${exercise.name}`} />
         </section>
       )}

@@ -108,3 +108,17 @@ export function isObjectiveTestWeek(info: DayInfo): boolean {
 export function isObjectiveTestDay(info: DayInfo, testSeqDay: SeqDay | null): boolean {
   return testSeqDay !== null && isObjectiveTestWeek(info) && info.seqDay === testSeqDay;
 }
+
+/**
+ * Prochain jour de test des objectifs, aujourd'hui compris : le jour `testSeqDay` de la première semaine
+ * du prochain cycle (semaines 5, 9… avec des cycles de 4 semaines). `null` sans jour de test dans la semaine type.
+ */
+export function nextObjectiveTestDate(today: string, s: CycleSettings, testSeqDay: SeqDay | null): { date: string; week: number } | null {
+  if (testSeqDay === null) return null;
+  const length = Math.max(1, s.cycleLengthWeeks);
+  // Première semaine d'un cycle à partir du 2e : semaines absolues 1 + k × durée, k ≥ 1.
+  let week = Math.max(dayInfo(today, s).week, length + 1);
+  week += mod(1 - week, length);
+  if (dateOf(week, testSeqDay, s) < today) week += length;
+  return { date: dateOf(week, testSeqDay, s), week };
+}

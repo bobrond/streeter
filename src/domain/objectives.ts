@@ -36,23 +36,41 @@ export interface SessionPerformance {
 }
 
 /**
- * Meilleure performance enregistrée en séance sur un exercice : séries sans élastique, non dégradées,
- * hors échauffement. Les séries sans qualité notée (import du tableur) comptent.
+ * Une série compte pour un record si elle a une valeur et n'est ni dégradée ni d'échauffement.
+ * Les séries sans qualité notée (import du tableur) comptent ; l'échec aussi.
  */
+export function countsForRecord(set: Pick<SetLog, 'value' | 'quality' | 'kind'>): boolean {
+  return set.value !== null && set.quality !== 'degraded' && set.kind !== 'warmup';
+}
+
+/**
+ * Records d'un exercice, un par élastique (`null` : sans élastique) : meilleure série qui compte pour
+ * un record ; à égalité, la plus ancienne (la première fois).
+ */
+export function bandRecords(
+  exerciseId: ID,
+  sets: readonly SetLog[],
+  sessions: ReadonlyMap<ID, Pick<SessionLog, 'date'>>,
+): Map<ID | null, SessionPerformance> {
+  const records = new Map<ID | null, SessionPerformance>();
+  for (const set of sets) {
+    if (set.exerciseId !== exerciseId || !countsForRecord(set)) continue;
+    const date = sessions.get(set.sessionId)?.date;
+    if (!date) continue;
+    const value = set.value as number;
+    const best = records.get(set.bandId);
+    if (!best || value > best.value || (value === best.value && date < best.date)) {
+      records.set(set.bandId, { value, date, setId: set.id });
+    }
+  }
+  return records;
+}
+
+/** Meilleure performance enregistrée en séance sur un exercice : le record sans élastique. */
 export function bestSessionPerformance(
   exerciseId: ID,
   sets: readonly SetLog[],
-  sessions: ReadonlyMap<ID, SessionLog>,
+  sessions: ReadonlyMap<ID, Pick<SessionLog, 'date'>>,
 ): SessionPerformance | null {
-  let best: SessionPerformance | null = null;
-  for (const set of sets) {
-    if (set.exerciseId !== exerciseId || set.value === null || set.bandId !== null) continue;
-    if (set.quality === 'degraded' || set.kind === 'warmup') continue;
-    const date = sessions.get(set.sessionId)?.date;
-    if (!date) continue;
-    if (!best || set.value > best.value || (set.value === best.value && date < best.date)) {
-      best = { value: set.value, date, setId: set.id };
-    }
-  }
-  return best;
+  return bandRecords(exerciseId, sets, sessions).get(null) ?? null;
 }
