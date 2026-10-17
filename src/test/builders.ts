@@ -52,7 +52,7 @@ export function item(base: Pick<PrescriptionItem, 'blockTypeId' | 'elementId'> &
 }
 
 export function template(name: string, moment: Moment, items: PrescriptionItem[], options: Partial<SessionTemplate> = {}): SessionTemplate {
-  return { id: testId('tpl'), name, sessionTypeId: 'type', moment, optional: false, notes: '', items, ...options };
+  return { id: testId('tpl'), name, sessionTypeId: 'type', moment, optional: false, notes: '', items, archived: false, ...options };
 }
 
 export function weekPlan(slots: Partial<Record<SeqDay, Partial<WeekSlot>>>): WeekPlan {
@@ -77,6 +77,7 @@ export function exercise(name: string, elementId: string | null, options: Partia
     notes: '',
     aliases: [],
     order: 0,
+    workSecPerSet: null,
     ...options,
   };
 }

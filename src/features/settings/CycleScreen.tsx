@@ -122,8 +122,8 @@ export function CycleScreen({ data }: { data: AppData }) {
         <div className="flex flex-col gap-4 p-4">
           <NumberSetting label="Durée maximum" unit="min" value={settings.morningMaxMinutes} min={5} max={120} step={5} onChange={(v) => save({ morningMaxMinutes: v })} />
           <NumberSetting
-            label="Temps de travail moyen par série"
-            hint="Sert à estimer la durée : séries × (travail + repos prescrit)."
+            label="Temps de travail par série (général)"
+            hint="Pour les exercices sans temps propre (fiche exercice › Plus d’options). Durée estimée : séries × (travail + repos prescrit)."
             unit="s"
             value={settings.avgWorkSecPerSet}
             min={5}

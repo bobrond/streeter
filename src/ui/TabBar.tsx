@@ -7,6 +7,12 @@ import { PROGRESS_PATHS, tabOf, type ProgressView, type TabKey } from './tabs';
 /** Dernière vue de Progression ouverte (Skills, Volume, Historique), retrouvée en touchant l'onglet. */
 export const PROGRESS_VIEW_KEY = 'streeter.progressView';
 
+/** Dernière vue de Programmes ouverte (Programmes, Exercices). */
+export const PROGRAMS_VIEW_KEY = 'streeter.programsView';
+
+/** Adresse de la vue Exercices de Programmes. */
+export const PROGRAMS_EXERCISES_PATH = '/programs?vue=exercices';
+
 function progressPath(): string {
   const view = readLocal(PROGRESS_VIEW_KEY);
   return view && view in PROGRESS_PATHS ? PROGRESS_PATHS[view as ProgressView] : PROGRESS_PATHS.skills;
@@ -27,7 +33,7 @@ export function TabBar({ path, activeSessionId }: { path: string; activeSessionI
       case 'session':
         return activeSessionId ? `/session/${activeSessionId}` : '/session';
       case 'programs':
-        return '/programs';
+        return readLocal(PROGRAMS_VIEW_KEY) === 'exercises' ? PROGRAMS_EXERCISES_PATH : '/programs';
       case 'progress':
         return progressPath();
       default:

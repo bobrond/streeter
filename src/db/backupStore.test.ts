@@ -30,7 +30,7 @@ describe('sauvegarde JSON', () => {
     expect(backupSummary(backup)).toMatchObject({ exportedAt: 123, sessions: 2, sets: 8, objectives: 1 });
 
     const target = freshDb();
-    await target.exercises.put({ id: 'à-effacer', name: 'x', category: '', elementId: null, measure: 'reps', quick: false, active: true, notes: '', aliases: [], order: 0 });
+    await target.exercises.put({ id: 'à-effacer', name: 'x', category: '', elementId: null, measure: 'reps', quick: false, active: true, notes: '', aliases: [], order: 0, workSecPerSet: null });
     await restoreBackup(target, backup);
     expect(await dump(target)).toEqual(await dump(source));
   });
@@ -60,7 +60,7 @@ describe('sauvegarde JSON', () => {
       tables: { settings: [{ id: 'settings', weekPlan: {} }], sets: [oldSet, { ...oldSet, id: 's2', kind: 'warmup' }] },
     });
     const backup = parseBackup(text, 2);
-    expect(backup.formatVersion).toBe(2);
+    expect(backup.formatVersion).toBe(3);
     expect(backup.tables.sets).toEqual([
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', kind: 'warmup' },
@@ -69,5 +69,44 @@ describe('sauvegarde JSON', () => {
     const target = freshDb();
     await restoreBackup(target, backup);
     expect(await target.sets.get('s1')).toMatchObject({ kind: 'normal', value: 12 });
+  });
+
+  it('convertit une sauvegarde du format 2 : modèles non archivés, exercices sans temps par série propre', async () => {
+    const oldTemplate = { id: 'tpl', name: 'Max', sessionTypeId: 'max', moment: 'evening', optional: false, notes: '', items: [] };
+    const oldExercise = { id: 'hold', name: 'Planche Hold', category: '', elementId: null, measure: 'seconds', quick: false, active: true, notes: '', aliases: [], order: 0 };
+    const text = JSON.stringify({
+      app: 'streeter',
+      formatVersion: 2,
+      dbVersion: 2,
+      exportedAt: 0,
+      tables: {
+        settings: [{ id: 'settings', weekPlan: {} }],
+        templates: [oldTemplate, { ...oldTemplate, id: 'old', archived: true }],
+        exercises: [oldExercise, { ...oldExercise, id: 'slow', workSecPerSet: 60 }],
+        sessions: [
+          { id: 'ses', date: '2026-10-16', templateSnapshot: oldTemplate },
+          { id: 'xlsx', date: '2026-10-07', templateSnapshot: null },
+        ],
+      },
+    });
+    const backup = parseBackup(text, 3);
+    expect(backup.formatVersion).toBe(3);
+    expect(backup.tables.templates).toEqual([
+      { ...oldTemplate, archived: false },
+      { ...oldTemplate, id: 'old', archived: true },
+    ]);
+    expect(backup.tables.exercises).toEqual([
+      { ...oldExercise, workSecPerSet: null },
+      { ...oldExercise, id: 'slow', workSecPerSet: 60 },
+    ]);
+    expect(backup.tables.sessions).toEqual([
+      { id: 'ses', date: '2026-10-16', templateSnapshot: { ...oldTemplate, archived: false } },
+      { id: 'xlsx', date: '2026-10-07', templateSnapshot: null },
+    ]);
+
+    const target = freshDb();
+    await restoreBackup(target, backup);
+    expect(await target.templates.get('tpl')).toMatchObject({ archived: false });
+    expect(await target.exercises.get('slow')).toMatchObject({ workSecPerSet: 60 });
   });
 });

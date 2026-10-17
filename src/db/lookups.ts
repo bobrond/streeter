@@ -23,16 +23,17 @@ function byId<T extends { id: ID }>(list: readonly T[]): Map<ID, T> {
 export function buildLookups(data: AppData): Lookups {
   const blocks = byId(data.blockTypes);
   const templates = byId(data.templates);
+  const exercises = byId(data.exercises);
   return {
     elements: byId(data.elements),
     blocks,
-    exercises: byId(data.exercises),
+    exercises,
     bands: byId(data.bands),
     templates,
     sessionTypes: byId(data.sessionTypes),
     sessions: byId(data.sessions),
     objectives: byId(data.objectives),
-    program: { weekPlan: data.settings.weekPlan, templates, elements: data.elements, blocks },
+    program: { weekPlan: data.settings.weekPlan, templates, elements: data.elements, blocks, exercises },
   };
 }
 

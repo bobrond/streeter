@@ -2,7 +2,7 @@
 // lignes de prescription saisies en texte (mêmes règles de lecture qu'à l'import).
 import { parseIntensity, parseRest, parseTargets } from './parse';
 import { nameKey } from './text';
-import type { BlockType, Exercise, ID, Objective, PrescriptionItem, SessionTemplate, SetLog, WeekPlan } from './types';
+import type { BlockType, Exercise, ID, Moment, Objective, PrescriptionItem, SeqDay, SessionTemplate, SetLog, WeekPlan } from './types';
 import { SEQ_DAYS } from './types';
 
 export interface Usage {
@@ -219,6 +219,45 @@ export function moveItem(items: readonly PrescriptionItem[], id: ID, delta: -1 |
   const copy = [...items];
   [copy[index], copy[j]] = [copy[j], copy[index]];
   return copy;
+}
+
+/**
+ * Place une ligne au rang `toIndex` (0 = en tête) parmi les lignes de son bloc, dans l'ordre affiché `shown`
+ * (glisser-déposer, monter, descendre) ; les lignes du bloc sont ensuite enregistrées dans cet ordre, les autres
+ * blocs ne bougent pas. L'ordre affiché compte : dans un bloc à alternance, les paires planche / FL sont montrées
+ * ensemble, et elles se reforment d'après le nouvel ordre (règle 3 : appariées par ordre).
+ */
+export function reorderItem(items: readonly PrescriptionItem[], shown: readonly ID[], id: ID, toIndex: number): PrescriptionItem[] {
+  const moved = items.find((i) => i.id === id);
+  if (!moved) return [...items];
+  const block = items.filter((i) => i.blockTypeId === moved.blockTypeId);
+  const inBlock = new Set(block.map((i) => i.id));
+  const visible = shown.filter((x) => inBlock.has(x));
+  // Lignes du bloc absentes de l'ordre affiché : gardées à la fin, dans leur ordre.
+  const order = [...visible, ...block.map((i) => i.id).filter((x) => !visible.includes(x))].filter((x) => x !== id);
+  order.splice(Math.max(0, Math.min(order.length, toIndex)), 0, id);
+  const byId = new Map(block.map((i) => [i.id, i]));
+  let next = 0;
+  return items.map((item) => (item.blockTypeId === moved.blockTypeId ? byId.get(order[next++])! : item));
+}
+
+/** Copie d'une ligne, placée juste après elle. */
+export function duplicateItem(items: readonly PrescriptionItem[], id: ID, newId: () => ID): PrescriptionItem[] {
+  const index = items.findIndex((i) => i.id === id);
+  if (index < 0) return [...items];
+  return [...items.slice(0, index + 1), { ...structuredClone(items[index]), id: newId() }, ...items.slice(index + 1)];
+}
+
+/** Échange les séances d'un moment entre deux jours de la semaine type (glisser un créneau sur un autre jour). */
+export function swapWeekSlots(weekPlan: WeekPlan, moment: Moment, from: SeqDay, to: SeqDay): WeekPlan {
+  const plan = structuredClone(weekPlan);
+  [plan[from][moment], plan[to][moment]] = [weekPlan[to][moment], weekPlan[from][moment]];
+  return plan;
+}
+
+/** Lignes où un exercice est candidat, modèle par modèle. */
+export function exerciseUses(id: ID, templates: readonly SessionTemplate[]): { template: SessionTemplate; item: PrescriptionItem }[] {
+  return templates.flatMap((template) => template.items.filter((item) => item.candidateExerciseIds.includes(id)).map((item) => ({ template, item })));
 }
 
 /** Copie d'un modèle avec de nouveaux identifiants. */

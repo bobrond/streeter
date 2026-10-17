@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { block, element, item, settings, template, weekPlan } from '../test/builders';
+import { block, element, exercise, item, settings, template, weekPlan } from '../test/builders';
 import type { SessionLog, SessionTemplate, SetLog } from './types';
 import {
+  editorIssues,
   plannedComponentVolume,
   realizedSkillSets,
   programIssues,
@@ -25,7 +26,7 @@ const blocks = new Map([warmUp, skill, renfo].map((b) => [b.id, b]));
 const s = settings({ volumeMin: 4, volumeMax: 6, deloadReductionPct: 40 });
 
 function program(templates: SessionTemplate[], plan: Program['weekPlan']): Program {
-  return { weekPlan: plan, templates: new Map(templates.map((t) => [t.id, t])), elements, blocks };
+  return { weekPlan: plan, templates: new Map(templates.map((t) => [t.id, t])), elements, blocks, exercises: new Map() };
 }
 
 const skills = (min = 4, max = 5) => [
@@ -156,6 +157,25 @@ describe('programIssues', () => {
     expect(issues).toContainEqual({ kind: 'evening_missing_skill', templateId: onlyPlanche.id, elementId: fl.id });
     expect(issues).toContainEqual({ kind: 'component_volume', elementId: dentele.id, status: 'under_min' });
     expect(issues).toContainEqual({ kind: 'morning_too_long', templateId: longMorning.id, maxSec: 2100 });
+  });
+
+  it('compte le temps par série des exercices dans la durée d’un matin', () => {
+    const slow = exercise('Rotation externe', planche.id, { workSecPerSet: 120 });
+    const morning = template('Matin B', 'morning', [
+      item({ blockTypeId: renfo.id, elementId: planche.id, candidateExerciseIds: [slow.id], setsMin: 10, setsMax: 10, restMinSec: 120, restMaxSec: 120 }),
+    ]);
+    const p = program([morning], weekPlan({ 6: { morning: morning.id } }));
+    expect(programIssues(p, s).filter((i) => i.kind === 'morning_too_long')).toEqual([]);
+    expect(programIssues({ ...p, exercises: new Map([[slow.id, slow]]) }, s)).toContainEqual({ kind: 'morning_too_long', templateId: morning.id, maxSec: 10 * 240 });
+  });
+
+  it('dans l’éditeur, contrôle aussi un modèle hors de la semaine type', () => {
+    const planned = template('Combo', 'evening', skills());
+    const draft = template('Essai', 'evening', [item({ blockTypeId: skill.id, elementId: planche.id })]);
+    const p = program([planned, draft], weekPlan({ 2: { evening: planned.id } }));
+    expect(programIssues(p, s)).not.toContainEqual(expect.objectContaining({ templateId: draft.id }));
+    expect(editorIssues(p, s, draft)).toContainEqual({ kind: 'evening_missing_skill', templateId: draft.id, elementId: fl.id });
+    expect(editorIssues(p, s, planned)).toEqual(programIssues(p, s));
   });
 });
 

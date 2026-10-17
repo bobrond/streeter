@@ -77,6 +77,7 @@ Décidé avec l'utilisateur :
 - Vue calendrier des jours d'entraînement, dans Progression › Historique (calendrier du mois, liste des séances, export).
 - Séance express (20, 30 ou 45 min) : elle remplace la séance du jour, matin ou soir ; la fatigue de la veille n'entre pas en compte. Elle reprend les lignes planche / FL de la séance remplacée (donc son intensité), puis les composantes selon leur retard (minimum − séries faites − séries du soir encore prévues dans la semaine), puis le bonus jusqu'au maximum.
 - Une série d'échauffement ne compte pas dans le volume ; une série assistée compte à part (totaux Skill et Skill assisté séparés, déjà le cas) ; un exercice nourrit une seule composante.
+- Temps de travail par série propre à chaque exercice (décidé le 17/10/2026, phase D) : facultatif, le réglage général (30 s) sinon ; la durée estimée d'une ligne prend le plus court de ses exercices candidats pour la borne basse, le plus long pour la borne haute.
 
 Choix sans l'utilisateur, à valider :
 
@@ -90,7 +91,7 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 - A (livrée le 17/10/2026, v1.1.0) : fondations : repos et sons de la séance au niveau de l'appli ([src/features/session/SessionRuntime.tsx](src/features/session/SessionRuntime.tsx) ; ils continuent hors de l'écran Séance), schéma Dexie v2 (type de série), sauvegarde et export ; repos de l'alternance planche / FL et durée estimée. Le type de série n'a pas encore de saisie : elle viendra avec le tableau (phase C).
 - B (livrée le 17/10/2026, v1.2.0) : charte, polices, 4 onglets, barre de séance active, roue crantée, Historique avec le calendrier. Voir « Navigation et charte ».
 - C (livrée le 17/10/2026, v1.3.0) : séance en tableau, sans minuteur de hold, avec le type de série. Voir « Choix d'interface du mode séance ».
-- D : Programmes : semaine J1-J7, éditeur de modèle, bibliothèque d'exercices.
+- D (livrée le 17/10/2026, v1.4.0) : Programmes : semaine J1-J7, éditeur de modèle, bibliothèque d'exercices ; schéma Dexie v3 (modèle archivé, temps par série d'un exercice). Voir « Programmes (depuis la phase D) ».
 - E : Progression : Skills (objectifs, records par élastique), Volume.
 - F : Aujourd'hui refondu et séance express.
 
@@ -99,7 +100,7 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 - **Onglets** ([src/ui/tabs.ts](src/ui/tabs.ts), [src/ui/TabBar.tsx](src/ui/TabBar.tsx)) :
   - Aujourd'hui `/`.
   - Séance `/session` : sans séance en cours, séance prévue, autre séance, dernière séance à revoir ou corriger. Avec une séance, `/session/:id` en plein écran, sans onglets ; le chevron « Réduire la séance » revient à l'écran précédent.
-  - Programmes `/programs` : semaine type J1-J7, modèles, exercices ; la roue crantée ouvre `/settings` (blocs, types de séance, éléments, élastiques, cycle, sauvegarde).
+  - Programmes : vues Programmes `/programs` et Exercices `/programs?vue=exercices` (l'onglet rouvre la dernière vue) ; la roue crantée ouvre `/settings` (blocs, types de séance, éléments, élastiques, cycle, sauvegarde). Détail : « Programmes (depuis la phase D) ».
   - Progression : Skills `/objectives`, Volume `/week`, Historique `/journal`. Ces chemins restent ceux des anciens onglets ; l'onglet rouvre la dernière vue (préférence de l'appareil).
 - **Barre de séance active** ([src/features/session/ActiveSessionBar.tsx](src/features/session/ActiveSessionBar.tsx)), au-dessus des onglets dès qu'une séance est en cours, hors de l'écran Séance : nom, chrono total, série à faire, repos (« Libre » pour un repos libre). Un toucher rouvre la séance. Aujourd'hui n'affiche alors ni carte « Séance en cours » ni bouton « Reprendre ».
 - **Lancer depuis l'onglet Séance** : la séance remplace l'écran dans l'historique, sinon « Réduire » ramènerait sur l'onglet, qui rouvrirait la séance en boucle.
@@ -131,15 +132,46 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
   - puces sélectionnées en clair ;
   - calendrier en tête de Historique › Séances, et qui suit les filtres ;
   - contenu de l'onglet Séance sans séance ;
-  - écran Programmes provisoire (refonte en phase D) ;
   - barre d'état à la couleur du haut de l'écran.
+
+## Programmes (depuis la phase D)
+
+Onglet Programmes ([src/features/programs/](src/features/programs/)). Un seul programme : la semaine type J1-J7 (pas de rotation, décidé).
+
+- **Adresses** :
+  - `/programs` : programme actif ; `/programs?vue=exercices` : bibliothèque (`&nature=skills|composantes|autres`, `&element=…`) ;
+  - `/programs/template/:id` : éditeur de modèle ; `/programs/week` : les 14 créneaux et le volume prévu ;
+  - `/programs/exercise/:id` : fiche (celle de l'Historique, [src/features/journal/ExerciseDetail.tsx](src/features/journal/ExerciseDetail.tsx)) ; `/programs/exercise/:id/edit` et `/programs/exercise/new` : éditeur ;
+  - les anciennes adresses `/settings/templates…`, `/settings/exercises…` et `/settings/week` redirigent.
+- **Programme actif** : J1 à J7 en cartes ; aujourd'hui en orange (bordure, case du jour pleine, « auj. »).
+  - Chaque séance : nom, moment, nombre de lignes, durée estimée, « ✓ faite » cette semaine.
+  - Son ⋯ : modifier, changer la séance du créneau, renommer, type / moment / notes, dupliquer, archiver, supprimer.
+  - Le ⋯ du programme mène aux créneaux et au cycle.
+  - Puis « Nouveau modèle », « Autres modèles » (hors semaine type) et « Archivés ».
+- **Glisser-déposer** ([src/ui/gestures.ts](src/ui/gestures.ts), `useVerticalDrag`) par la poignée ⠿, avec défilement près des bords ; toujours un équivalent dans un menu ⋯.
+  - Une séance glissée sur un autre jour échange les séances de ce moment entre les deux jours (« Annuler » dans le message).
+  - Une ligne glissée dans l'éditeur change de rang dans son bloc, d'après l'ordre affiché ; dans un bloc à alternance, les paires se reforment d'après le nouvel ordre (règle 3). Monter / Descendre dans le ⋯ de la ligne.
+- **Éditeur de modèle** : blocs, paires et supersets comme le tableau de la séance (trait orange). Une carte par ligne de prescription : élément, exercices candidats (toucher : choisir), cellules Séries, Cible, RPE (ou « En réserve »), Repos, note.
+  - Toucher une cellule ouvre ce seul champ dans une feuille (`ItemSheet`), avec « Toute la ligne » ; « Enregistrer » valide, fermer abandonne.
+  - ⋯ ou appui long sur l'en-tête d'une ligne : modifier toute la ligne, dupliquer, monter, descendre, supprimer (« Annuler » dans le message).
+  - « + Ligne en <bloc> » sous chaque bloc, « Ajouter une ligne » en bas.
+  - Contrôles du programme dans un bandeau collé en haut de l'écran, détail au toucher. Ils couvrent aussi le modèle édité quand il est hors de la semaine type (`editorIssues`).
+- **Archiver** un modèle le retire de la semaine type (avec confirmation s'il y est) ; il n'est plus proposé (créneaux, « Choisir une séance ») mais reste modifiable. Il se désarchive sans revenir dans la semaine type. Les séances faites gardent leur copie.
+- **Bibliothèque** ([src/domain/library.ts](src/domain/library.ts)) : recherche (nom, autres noms, élément), puces Tous / Skills / Composantes / Autres, puis un élément ; exercices groupés par élément, désactivés à part.
+- **Création d'un exercice en 2 niveaux** : nom, type de mesure, élément ; « Plus d'options » replié : temps par série, catégorie, rapide, actif, notes techniques, autres noms.
+- Choix sans l'utilisateur, à valider à l'usage :
+  - glisser une séance sur un autre jour = échange des deux jours ;
+  - cellules à toucher plutôt qu'édition dans la carte ; repos d'une fourchette sur deux lignes (« 90 s / à 2 min ») ;
+  - archiver retire de la semaine type, désarchiver ne l'y remet pas ;
+  - la copie d'un modèle n'est pas placée dans la semaine type ;
+  - les 14 créneaux et le volume prévu derrière ⋯ › Créneaux.
 
 ## Règles métier
 
 ### Séance
 
 1. Les blocs suivent un ordre paramétrable, par défaut : Échauffement (connexion + élastique) → Skill → Skill assisté (élastique) → Renfo spé skill → Renfo composantes. Chaque ligne de prescription est une carte du tableau de la séance, avec une ligne par série.
-2. Planche **et** touch FL sont travaillés à chaque séance du soir, jamais l'un sans l'autre. L'éditeur signale un modèle du soir auquel il manque l'un des deux.
+2. Planche **et** touch FL sont travaillés à chaque séance du soir, jamais l'un sans l'autre. L'éditeur signale un modèle du soir auquel il manque l'un des deux, même hors de la semaine type.
 3. Dans les blocs Skill **et Skill assisté** (décidé ; réglage par bloc `alternateSkills`), les séries planche et FL **alternent**, appariées par ordre : 1re ligne planche avec 1re ligne FL, 2e avec 2e (J1 : planche hold ↔ touch FL hold, puis P/N ↔ FL PU). Quand une ligne a fini ses séries, l'autre continue seule. L'appli propose la série suivante, l'utilisateur peut dévier. **Pas de repos entre les deux séries d'une paire**, comme un superset (décidé le 17/10/2026) : le repos vient à la fin du tour, le plus long des repos des lignes du tour. Une ligne qui continue seule se repose après chaque série ; refaire la même ligne avant l'autre (écart) donne aussi un repos (choix sans l'utilisateur).
 4. L'exercice se choisit **le jour même** parmi les candidats de la ligne (puces). Par défaut : l'exercice fait la dernière fois sur cette ligne ; si un candidat a déjà été fait plus tôt dans la séance (cas « même combo qu'au bloc skill »), celui-là. L'exercice est enregistré par série, on peut en changer entre deux séries.
 5. Une série de skill s'arrête dès que la protraction (grand dentelé) ou le verrouillage du coude lâche. Chaque série peut être marquée **propre** ou **dégradée**.
@@ -242,7 +274,7 @@ Saisis par l'utilisateur dans Réglages, absents du tableur : **ne plus réimpor
 
 ### Matins
 
-- Durée maximum 30 min (paramètre). Durée estimée = Σ séries × (temps de travail moyen par série + repos prescrit), sauf dans une alternance planche / FL : un seul repos par tour, le plus long des lignes du tour. Affichée en fourchette (séries et repos min → séries et repos max), avec 30 s de travail par série et 30 s pour un repos « Libre » par défaut. Alerte si la borne haute d'un modèle du matin dépasse la durée maximum. Matin A et Matin B : 17 à 25 min.
+- Durée maximum 30 min (paramètre). Durée estimée = Σ séries × (temps de travail par série + repos prescrit), sauf dans une alternance planche / FL : un seul repos par tour, le plus long des lignes du tour. Temps de travail d'une série : celui de l'exercice (`Exercise.workSecPerSet`), sinon le réglage général (30 s par défaut) ; parmi les candidats actifs d'une ligne, le plus court pour la borne basse, le plus long pour la borne haute (décidé). Affichée en fourchette (séries, repos et temps min → max), avec 30 s pour un repos « Libre » par défaut. Alerte si la borne haute d'un modèle du matin dépasse la durée maximum. Matin A et Matin B : 17 à 25 min.
 - Exercices « rapides » (sans barre, peu d'installation) mis en avant le matin (badge, en tête de liste) mais pas filtrés : les candidats renfo spé des matins ne sont pas marqués rapides dans le catalogue.
 - Composantes du matin en superset (deux composantes alternées), 60-90 s de repos entre deux séries.
 
@@ -279,9 +311,9 @@ Element          { id, name, kind: 'skill' | 'component' | 'other', order }
 BlockType        { id, name, order, alternateSkills, reducedInDeload }
 SessionType      { id, name, moment, description, color, isTestDay }
 Exercise         { id, name, category, elementId, measure: 'reps' | 'seconds' | 'combos' | 'none',
-                   quick, active, notes, aliases, order }
+                   quick, active, notes, aliases, order, workSecPerSet /* null : réglage général */ }
 Band             { id, name, color, order /* 0 = le plus assistant */, active }
-SessionTemplate  { id, name, sessionTypeId, moment, optional, notes, items: PrescriptionItem[] }
+SessionTemplate  { id, name, sessionTypeId, moment, optional, notes, items: PrescriptionItem[], archived }
 PrescriptionItem { id, blockTypeId, elementId, candidateExerciseIds, candidatesText, setsMin, setsMax,
                    targetText, targets: { unit, min, max }[], intensityText, intensity: { kind: 'rpe' | 'rir', min, max },
                    restText, restMinSec, restMaxSec, superset, optional, notes }
@@ -296,7 +328,7 @@ SetLog           { id, sessionId, itemId, blockTypeId, elementId, exerciseId, se
 Objective        { id, name, criterion, target, unit, exerciseId, order, tests: { id, date, value, note }[] }
 ```
 
-- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal`.
+- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`).
 - Dans `weekPlan`, `null` signifie « rien » : Repos le soir, pas de séance le matin.
 - `SessionLog.resume` contient l'état d'interface de la séance en cours :
   - ligne où l'on vient d'agir, exercice choisi par ligne, lignes terminées ;
@@ -325,7 +357,7 @@ Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en do
 
 ## Sauvegarde et exports
 
-- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
+- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
 - Rappel de sauvegarde sur Aujourd'hui : dernière sauvegarde de plus de 7 jours, ou aucune alors qu'au moins une séance a été faite dans l'appli. Sur Android, « Envoyer une sauvegarde » ouvre le menu de partage (Drive, e-mail). Le fichier envoyé est en `.txt` (`text/plain`) : Chrome ne partage qu'une liste fermée de types, sans le JSON, et `navigator.canShare` ne vérifie pas le type. La restauration accepte `.json` et `.txt`. Une annulation ne dit rien ; un refus s'affiche avec « Enregistrer » (téléchargement) à la place.
 - Export du journal ([src/io/journal/exportJournal.ts](src/io/journal/exportJournal.ts)) : .xlsx (onglet « Journal », vraies dates Excel) et .csv pour Excel en français (« ; », CRLF, marque UTF-8). Les notes de ligne reprennent la note de séance (1re ligne), les notes de série, « Séance abandonnée » et les numéros des séries dégradées.
 - Version affichée dans Réglages → Sauvegarde et données → Appli : `version` du package.json et date du build.

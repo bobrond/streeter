@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { block, element, exercise, item, setLog, template, weekPlan } from '../test/builders';
 import {
   blockUsage,
+  duplicateItem,
   duplicateTemplate,
   elementUsage,
   emptyItemForm,
   exerciseUsage,
+  exerciseUses,
   formErrors,
   formToItem,
   insertItem,
@@ -16,6 +18,8 @@ import {
   moveItem,
   nameError,
   removeFromWeekPlan,
+  reorderItem,
+  swapWeekSlots,
   templateDays,
   uniqueName,
   withoutExercise,
@@ -176,5 +180,65 @@ describe('uniqueName et itemsByBlock', () => {
       [warmUp.id, [b.id]],
       [renfo.id, [a.id, c.id]],
     ]);
+  });
+});
+
+describe('glisser-déposer et duplication', () => {
+  const a = item({ blockTypeId: skill.id, elementId: planche.id });
+  const warm = item({ blockTypeId: warmUp.id, elementId: 'connexion' });
+  const b = item({ blockTypeId: skill.id, elementId: 'fl' });
+  const c = item({ blockTypeId: skill.id, elementId: planche.id });
+  const r = item({ blockTypeId: renfo.id, elementId: dentele.id });
+  const items = [a, warm, b, c, r];
+  const ids = (list: { id: string }[]) => list.map((i) => i.id);
+
+  it('place une ligne au rang voulu dans son bloc, sans toucher aux autres blocs', () => {
+    const shown = [a.id, b.id, c.id];
+    expect(ids(reorderItem(items, shown, c.id, 0))).toEqual([c.id, warm.id, a.id, b.id, r.id]);
+    expect(ids(reorderItem(items, shown, a.id, 2))).toEqual([b.id, warm.id, c.id, a.id, r.id]);
+    expect(ids(reorderItem(items, shown, a.id, 99))).toEqual([b.id, warm.id, c.id, a.id, r.id]);
+    expect(ids(reorderItem(items, shown, b.id, 1))).toEqual(ids(items));
+    expect(ids(reorderItem(items, shown, 'inconnue', 0))).toEqual(ids(items));
+  });
+
+  it('part de l’ordre affiché : dans un bloc à alternance, les paires sont montrées ensemble', () => {
+    // Enregistrées planche, planche, FL, FL ; affichées en paires : P1, F1, P2, F2.
+    const p1 = item({ blockTypeId: skill.id, elementId: planche.id });
+    const p2 = item({ blockTypeId: skill.id, elementId: planche.id });
+    const f1 = item({ blockTypeId: skill.id, elementId: 'fl' });
+    const f2 = item({ blockTypeId: skill.id, elementId: 'fl' });
+    const stored = [p1, p2, f1, f2];
+    const shown = [p1.id, f1.id, p2.id, f2.id];
+    // Descendre F1 sous F2 : les deux lignes FL échangent leur rang, donc leur paire.
+    expect(ids(reorderItem(stored, shown, f1.id, 3))).toEqual([p1.id, p2.id, f2.id, f1.id]);
+    // Monter P2 en tête.
+    expect(ids(reorderItem(stored, shown, p2.id, 0))).toEqual([p2.id, p1.id, f1.id, f2.id]);
+    // Une ligne absente de l'ordre affiché reste à la fin du bloc.
+    expect(ids(reorderItem(stored, [p1.id, f1.id], f1.id, 0))).toEqual([f1.id, p1.id, p2.id, f2.id]);
+  });
+
+  it('duplique une ligne juste après elle, avec un nouvel identifiant', () => {
+    const copy = duplicateItem(items, b.id, () => 'copie');
+    expect(ids(copy)).toEqual([a.id, warm.id, b.id, 'copie', c.id, r.id]);
+    expect(copy[3]).toEqual({ ...b, id: 'copie' });
+    expect(copy[3].targets).not.toBe(b.targets);
+  });
+
+  it('échange les séances d’un moment entre deux jours', () => {
+    const plan = weekPlan({ 1: { evening: 'max' }, 4: { morning: 'a' }, 6: { morning: 'b', evening: 'combo' } });
+    const swapped = swapWeekSlots(plan, 'evening', 1, 4);
+    expect(swapped[1].evening).toBeNull();
+    expect(swapped[4]).toEqual({ morning: 'a', evening: 'max' });
+    expect(swapWeekSlots(plan, 'morning', 4, 6)[4].morning).toBe('b');
+    expect(swapWeekSlots(plan, 'morning', 4, 6)[6]).toEqual({ morning: 'a', evening: 'combo' });
+    expect(plan[1].evening).toBe('max');
+  });
+
+  it('liste les lignes où un exercice est candidat', () => {
+    const line = item({ blockTypeId: skill.id, elementId: planche.id, candidateExerciseIds: [hold.id, wallSlide.id] });
+    const max = template('Max', 'evening', [line, item({ blockTypeId: renfo.id, elementId: dentele.id })]);
+    const combo = template('Combo', 'evening', [item({ blockTypeId: renfo.id, elementId: dentele.id, candidateExerciseIds: [wallSlide.id] })]);
+    expect(exerciseUses(hold.id, [max, combo])).toEqual([{ template: max, item: line }]);
+    expect(exerciseUses(wallSlide.id, [max, combo]).map((u) => u.template.name)).toEqual(['Max', 'Combo']);
   });
 });

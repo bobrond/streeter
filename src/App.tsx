@@ -79,7 +79,7 @@ function AppShell({ data, path, onReport }: { data: NonNullable<ReturnType<typeo
       screen = <SessionLauncher data={data} />;
       break;
     case 'programs':
-      screen = first === 'settings' ? <SettingsScreen data={data} path={path} onImported={onReport} onShowReport={onReport} /> : <ProgramsScreen data={data} />;
+      screen = first === 'settings' ? <SettingsScreen data={data} path={path} onImported={onReport} onShowReport={onReport} /> : <ProgramsScreen data={data} path={path} />;
       break;
     case 'progress':
       screen = first === 'week' ? <WeekScreen data={data} /> : first === 'journal' ? <JournalScreen data={data} path={path} /> : first === 'objectives' ? <ObjectivesScreen data={data} path={path} /> : null;

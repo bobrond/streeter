@@ -337,6 +337,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
         notes: '',
         aliases: [],
         order: firstNewExerciseOrder + index,
+        workSecPerSet: null,
       }),
       (e) => ({ ...e, category, quick: row.quick, elementId: e.elementId ?? element.id }),
     );
@@ -361,6 +362,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
       notes: 'Exercice générique créé à l’import pour « Au choix ».',
       aliases: [],
       order: nextOrder(exerciseReg.all()),
+      workSecPerSet: null,
     }));
     if (created) {
       matcher.add(entity);
@@ -459,6 +461,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
         optional: (preset?.optional ?? false) || group.moment === 'morning' || rows.every((r) => r.optional),
         notes: '',
         items,
+        archived: false,
       };
       templateBySignature.set(signature, template);
       templates.push(template);
@@ -654,6 +657,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
           notes: 'Créé à l’import du journal : absent du catalogue.',
           aliases: [],
           order: nextOrder(exerciseReg.all()),
+          workSecPerSet: null,
         })).entity;
         matcher.add(exercise);
         newExercises++;
@@ -704,7 +708,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
   const volumeCheck = data.volume
     ? compareVolume(
         data.volume,
-        { weekPlan: settings.weekPlan, templates: templatesById, elements, blocks: new Map(blockTypes.map((b) => [b.id, b])) },
+        { weekPlan: settings.weekPlan, templates: templatesById, elements, blocks: new Map(blockTypes.map((b) => [b.id, b])), exercises: new Map(exerciseReg.all().map((e) => [e.id, e])) },
         settings,
       )
     : null;

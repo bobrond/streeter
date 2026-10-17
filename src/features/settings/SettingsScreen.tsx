@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { AppData } from '../../db/hooks';
 import { localISODate } from '../../domain/cycle';
 import { formatDateShort } from '../../domain/labels';
@@ -10,13 +11,7 @@ import { BlocksScreen } from './BlocksScreen';
 import { CycleScreen } from './CycleScreen';
 import { DataScreen } from './DataScreen';
 import { ElementsScreen } from './ElementsScreen';
-import { ExerciseEditor } from './ExerciseEditor';
-import { ExercisesScreen } from './ExercisesScreen';
-import { ItemEditor } from './ItemEditor';
 import { SessionTypesScreen } from './SessionTypesScreen';
-import { TemplateEditor } from './TemplateEditor';
-import { TemplatesScreen } from './TemplatesScreen';
-import { WeekPlanEditor } from './WeekPlanEditor';
 
 const WEEKDAY = new Intl.DateTimeFormat('fr-FR', { weekday: 'long' });
 
@@ -52,6 +47,12 @@ function SettingsMenu({ data }: { data: AppData }) {
   );
 }
 
+/** Anciennes adresses (avant la phase D, le programme et les exercices étaient dans les Réglages). */
+function Redirect({ to }: { to: string }) {
+  useEffect(() => navigate(to, { replace: true }), [to]);
+  return null;
+}
+
 function Count({ n }: { n: number }) {
   return <span className="text-lg text-ink-2 tabular-nums">{n}</span>;
 }
@@ -71,14 +72,11 @@ export function SettingsScreen({
   const parts = path.split('?')[0].split('/').filter(Boolean).slice(1);
   switch (parts[0]) {
     case 'week':
-      return <WeekPlanEditor data={data} />;
+      return <Redirect to="/programs/week" />;
     case 'templates':
-      if (parts[1] && parts[2] === 'items' && parts[3]) return <ItemEditor key={`${parts[1]}-${parts[3]}`} data={data} templateId={parts[1]} itemId={parts[3]} path={path} />;
-      if (parts[1]) return <TemplateEditor key={parts[1]} data={data} templateId={parts[1]} />;
-      return <TemplatesScreen data={data} />;
+      return <Redirect to={parts[1] ? `/programs/template/${parts[1]}` : '/programs'} />;
     case 'exercises':
-      if (parts[1]) return <ExerciseEditor key={parts[1]} data={data} exerciseId={parts[1]} path={path} />;
-      return <ExercisesScreen data={data} />;
+      return <Redirect to={parts[1] === 'new' ? '/programs/exercise/new' : parts[1] ? `/programs/exercise/${parts[1]}/edit` : '/programs?vue=exercices'} />;
     case 'elements':
       return <ElementsScreen data={data} />;
     case 'blocks':

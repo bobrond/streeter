@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { block, element, exercise, item, setLog, settings, template, weekPlan } from '../test/builders';
 import { StreeterDB } from './db';
-import { InUseError, deleteBand, deleteElement, deleteExercise, deleteTemplate, saveOrder, setWeekSlot } from './programStore';
+import { InUseError, deleteBand, deleteElement, deleteExercise, deleteTemplate, saveOrder, setTemplateArchived, setWeekSlot, swapWeekSlotsOf } from './programStore';
 
 const databases: StreeterDB[] = [];
 function freshDb(): StreeterDB {
@@ -82,5 +82,25 @@ describe('programStore', () => {
       { id: uppercut.id, order: 0 },
     ]);
     expect((await db.exercises.get(uppercut.id))?.order).toBe(0);
+  });
+
+  it('archive un modèle : il quitte la semaine type ; le désarchiver ne l’y remet pas', async () => {
+    const db = freshDb();
+    const tpl = await seed(db);
+    await setTemplateArchived(db, tpl.id, true);
+    expect(await db.templates.get(tpl.id)).toMatchObject({ archived: true, items: tpl.items });
+    const plan = (await db.settings.get('settings'))!.weekPlan;
+    expect([plan[2].evening, plan[6].evening]).toEqual([null, null]);
+    await setTemplateArchived(db, tpl.id, false);
+    expect((await db.templates.get(tpl.id))?.archived).toBe(false);
+    expect((await db.settings.get('settings'))!.weekPlan[2].evening).toBeNull();
+  });
+
+  it('échange les séances du soir de deux jours', async () => {
+    const db = freshDb();
+    const tpl = await seed(db);
+    await swapWeekSlotsOf(db, 'evening', 2, 4);
+    const plan = (await db.settings.get('settings'))!.weekPlan;
+    expect([plan[2].evening, plan[4].evening, plan[6].evening]).toEqual([null, tpl.id, tpl.id]);
   });
 });

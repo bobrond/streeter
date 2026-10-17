@@ -19,7 +19,7 @@ export function ChooseSessionSheet({
   lookups: Lookups;
   onChoose: (template: SessionTemplate) => void;
 }) {
-  const templates = [...data.templates].sort((a, b) => (a.moment === b.moment ? a.name.localeCompare(b.name) : a.moment === 'evening' ? -1 : 1));
+  const templates = data.templates.filter((t) => !t.archived).sort((a, b) => (a.moment === b.moment ? a.name.localeCompare(b.name) : a.moment === 'evening' ? -1 : 1));
   return (
     <Sheet open={open} onClose={onClose} title="Choisir une séance">
       <p className="mb-3 text-ink-2">Pour aujourd’hui seulement : la séquence ne change pas.</p>

@@ -1,39 +1,30 @@
+// Tous les créneaux de la semaine type (matin et soir de J1 à J7) et le volume prévu des composantes.
 import { useState } from 'react';
-import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { useLookups } from '../../db/lookups';
-import { setWeekSlot } from '../../db/programStore';
 import { dateOf, dayInfo, localISODate } from '../../domain/cycle';
 import { MOMENT_LABEL, VOLUME_STATUS_LABEL, seqDayLabel } from '../../domain/labels';
-import { SEQ_DAYS, type ID, type Moment, type SeqDay } from '../../domain/types';
+import { SEQ_DAYS } from '../../domain/types';
 import { plannedComponentVolume } from '../../domain/volume';
 import { useNow } from '../../lib/device';
-import { goBack, navigate } from '../../lib/router';
+import { goBack } from '../../lib/router';
 import { Badge } from '../../ui/Badge';
-import { CheckIcon } from '../../ui/icons';
 import { Screen } from '../../ui/Screen';
-import { Sheet } from '../../ui/Sheet';
 import { ProgramChecks } from './ProgramChecks';
+import { SlotPickerSheet, type Slot } from './SlotPickerSheet';
 
 const SHORT_WEEKDAY = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' });
 
 export function WeekPlanEditor({ data }: { data: AppData }) {
   const lookups = useLookups(data);
   const { settings } = data;
-  const [editing, setEditing] = useState<{ day: SeqDay; moment: Moment } | null>(null);
+  const [editing, setEditing] = useState<Slot | null>(null);
   const today = localISODate(new Date(useNow(60_000)));
   const info = dayInfo(today, settings);
   const volume = plannedComponentVolume(lookups.program, settings);
-  const choices = editing ? data.templates.filter((t) => t.moment === editing.moment).sort((a, b) => a.name.localeCompare(b.name)) : [];
-  const current = editing ? settings.weekPlan[editing.day][editing.moment] : null;
-
-  const choose = (templateId: ID | null) => {
-    if (editing) void setWeekSlot(db, editing.day, editing.moment, templateId);
-    setEditing(null);
-  };
 
   return (
-    <Screen title="Semaine type" subtitle="J1…J7 sont des jours de séquence, pas des jours de la semaine." onBack={() => goBack('/programs')}>
+    <Screen title="Créneaux" subtitle="Matin et soir de J1 à J7 (jours de séquence, pas jours de la semaine)." onBack={() => goBack('/programs')}>
       <ProgramChecks program={lookups.program} settings={settings} lookups={lookups} />
 
       <section className="rounded-2xl border border-line bg-card p-3">
@@ -96,39 +87,7 @@ export function WeekPlanEditor({ data }: { data: AppData }) {
         })}
       </div>
 
-      <Sheet
-        open={editing !== null}
-        onClose={() => setEditing(null)}
-        title={editing ? `${seqDayLabel(editing.day)} · ${MOMENT_LABEL[editing.moment].toLowerCase()}` : ''}
-        footer={
-          <button
-            type="button"
-            className="min-h-14 rounded-2xl border border-line bg-card-2 px-5 text-lg font-semibold"
-            onClick={() => navigate('/settings/templates')}
-          >
-            Gérer les modèles de séance
-          </button>
-        }
-      >
-        <ul className="flex flex-col gap-1">
-          {[{ id: null as ID | null, name: editing?.moment === 'evening' ? 'Repos' : 'Pas de séance', color: undefined as string | undefined }, ...choices.map((t) => ({ id: t.id as ID | null, name: t.name, color: lookups.sessionTypes.get(t.sessionTypeId)?.color }))].map(
-            (choice) => (
-              <li key={choice.id ?? 'none'}>
-                <button
-                  type="button"
-                  onClick={() => choose(choice.id)}
-                  className={`flex min-h-14 w-full items-center gap-3 rounded-2xl px-3 text-left active:bg-card-2 ${choice.id === current ? 'bg-card-2' : ''}`}
-                >
-                  <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: choice.color ?? 'transparent' }} aria-hidden />
-                  <span className={`flex-1 text-lg ${choice.id ? 'font-semibold' : 'text-ink-2'}`}>{choice.name}</span>
-                  {choice.id === current && <CheckIcon className="size-6 text-accent" />}
-                </button>
-              </li>
-            ),
-          )}
-        </ul>
-        {choices.length === 0 && <p className="mt-3 text-ink-2">Aucun modèle de séance du {editing?.moment === 'morning' ? 'matin' : 'soir'}.</p>}
-      </Sheet>
+      <SlotPickerSheet slot={editing} onClose={() => setEditing(null)} data={data} lookups={lookups} />
     </Screen>
   );
 }

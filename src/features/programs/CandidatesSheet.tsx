@@ -38,7 +38,10 @@ function ExerciseToggle({ exercise, index, onToggle }: { exercise: Exercise; ind
   );
 }
 
-/** Choix des exercices candidats d'une ligne : ceux de l'élément d'abord, recherche, création rapide. */
+/**
+ * Choix des exercices candidats d'une ligne : ceux de l'élément d'abord, recherche, création rapide.
+ * `onValidate` : bouton « Valider » (sinon il ferme seulement la feuille).
+ */
 export function CandidatesSheet({
   open,
   onClose,
@@ -46,6 +49,7 @@ export function CandidatesSheet({
   elementId,
   selected,
   onChange,
+  onValidate,
 }: {
   open: boolean;
   onClose: () => void;
@@ -53,6 +57,7 @@ export function CandidatesSheet({
   elementId: ID;
   selected: readonly ID[];
   onChange: (ids: ID[]) => void;
+  onValidate?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [newName, setNewName] = useState('');
@@ -78,6 +83,7 @@ export function CandidatesSheet({
       notes: '',
       aliases: [],
       order: nextOrder(data.exercises),
+      workSecPerSet: null,
     };
     await saveExercise(db, exercise);
     onChange([...selected, exercise.id]);
@@ -89,7 +95,7 @@ export function CandidatesSheet({
       open={open}
       onClose={onClose}
       title="Exercices au choix"
-      footer={<Button onClick={onClose}>Valider ({selected.length})</Button>}
+      footer={<Button onClick={onValidate ?? onClose}>Valider ({selected.length})</Button>}
     >
       <div className="flex flex-col gap-3">
         <TextInput value={query} onChange={setQuery} placeholder="Rechercher un exercice" />

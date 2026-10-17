@@ -58,6 +58,8 @@ export interface Exercise {
   aliases: string[];
   /** Ordre d'affichage dans le catalogue. */
   order: number;
+  /** Temps de travail moyen d'une série (installation comprise), en secondes ; `null` : le réglage général. */
+  workSecPerSet: number | null;
 }
 
 export interface Band {
@@ -113,6 +115,8 @@ export interface SessionTemplate {
   optional: boolean;
   notes: string;
   items: PrescriptionItem[];
+  /** Archivé : hors de la semaine type, plus proposé ; gardé pour plus tard. */
+  archived: boolean;
 }
 
 export interface WeekSlot {

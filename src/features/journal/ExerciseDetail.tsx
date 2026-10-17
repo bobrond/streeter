@@ -2,11 +2,13 @@ import { useMemo } from 'react';
 import type { AppData } from '../../db/hooks';
 import { useLookups } from '../../db/lookups';
 import { progressPoints, sessionLines } from '../../domain/journal';
-import { MEASURE_LABEL, UNIT_SHORT, formatDateShort, formatValueList } from '../../domain/labels';
+import { exerciseUses } from '../../domain/editing';
+import { MEASURE_LABEL, UNIT_SHORT, formatDateShort, formatSets, formatTarget, formatValueList } from '../../domain/labels';
 import { bestSessionPerformance } from '../../domain/objectives';
 import type { ID } from '../../domain/types';
 import { goBack, navigate } from '../../lib/router';
 import { Button } from '../../ui/Button';
+import { NextIcon } from '../../ui/icons';
 import { BandSwatch } from '../../ui/inputs';
 import { LineChart, type ChartSeries } from '../../ui/LineChart';
 import { Screen } from '../../ui/Screen';
@@ -14,7 +16,8 @@ import { Screen } from '../../ui/Screen';
 /** Couleur de la série « sans élastique » : l'encre neutre (pas d'élastique = pas de couleur). */
 const NO_BAND_COLOR = '#ffffff';
 
-export function ExerciseDetail({ data, exerciseId }: { data: AppData; exerciseId: string }) {
+/** Fiche d'un exercice (Historique et bibliothèque de Programmes) ; `backTo` : écran de retour si on y arrive directement. */
+export function ExerciseDetail({ data, exerciseId, backTo = '/journal?vue=exercices' }: { data: AppData; exerciseId: string; backTo?: string }) {
   const lookups = useLookups(data);
   const exercise = lookups.exercises.get(exerciseId);
   const sets = useMemo(() => data.sets.filter((s) => s.exerciseId === exerciseId), [data.sets, exerciseId]);
@@ -44,7 +47,7 @@ export function ExerciseDetail({ data, exerciseId }: { data: AppData; exerciseId
 
   if (!exercise) {
     return (
-      <Screen title="Exercice introuvable" onBack={() => goBack('/journal')}>
+      <Screen title="Exercice introuvable" onBack={() => goBack(backTo)}>
         <p className="text-ink-2">Cet exercice n’existe plus.</p>
       </Screen>
     );
@@ -59,9 +62,14 @@ export function ExerciseDetail({ data, exerciseId }: { data: AppData; exerciseId
     .sort((a, b) => b.date.localeCompare(a.date));
   const last = sessionIds[0];
   const lastSets = last ? sets.filter((s) => s.sessionId === last.id) : [];
+  const uses = exerciseUses(exercise.id, data.templates);
 
   return (
-    <Screen title={exercise.name} subtitle={[element?.name, MEASURE_LABEL[exercise.measure]].filter(Boolean).join(' · ')} onBack={() => goBack('/journal?vue=exercices')}>
+    <Screen
+      title={exercise.name}
+      subtitle={[element?.name, MEASURE_LABEL[exercise.measure], exercise.quick ? '⚡ rapide' : null, exercise.active ? null : 'désactivé'].filter(Boolean).join(' · ')}
+      onBack={() => goBack(backTo)}
+    >
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-2xl bg-card p-3">
           <div className="text-sm text-ink-2">Record sans élastique</div>
@@ -128,7 +136,42 @@ export function ExerciseDetail({ data, exerciseId }: { data: AppData; exerciseId
         </div>
       </section>
 
-      <Button variant="secondary" onClick={() => navigate(`/settings/exercises/${exercise.id}`)}>
+      <section className="flex flex-col gap-1.5">
+        <h2 className="px-1 text-sm font-bold tracking-wide text-ink-3 uppercase">Dans le programme</h2>
+        <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-card">
+          {uses.map(({ template, item }) => (
+            <button key={item.id} type="button" onClick={() => navigate(`/programs/template/${template.id}`)} className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left active:bg-card-2">
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold">{template.name}</span>
+                <span className="block text-sm text-ink-2">
+                  {[
+                    lookups.blocks.get(item.blockTypeId)?.name,
+                    `${formatSets(item.setsMin, item.setsMax)} séries`,
+                    item.targets.map(formatTarget).join(' ou ') || item.targetText,
+                    template.archived ? 'archivé' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </span>
+              <NextIcon className="size-5 text-ink-3" />
+            </button>
+          ))}
+          {uses.length === 0 && <p className="p-4 text-ink-2">Candidat dans aucune ligne de prescription.</p>}
+        </div>
+        <p className="px-1 text-sm text-ink-3">
+          Temps par série : {exercise.workSecPerSet !== null ? `${exercise.workSecPerSet} s` : `${data.settings.avgWorkSecPerSet} s (réglage général)`}
+        </p>
+      </section>
+
+      {exercise.notes && (
+        <section className="rounded-2xl border border-line bg-card p-4">
+          <h2 className="text-sm font-bold tracking-wide text-ink-3 uppercase">Notes techniques</h2>
+          <p className="mt-1 whitespace-pre-line text-ink-2">{exercise.notes}</p>
+        </section>
+      )}
+
+      <Button variant="secondary" onClick={() => navigate(`/programs/exercise/${exercise.id}/edit`)}>
         Modifier l’exercice
       </Button>
     </Screen>

@@ -7,6 +7,7 @@ import {
   isUnused,
   removeFromWeekPlan,
   sessionTypeUsage,
+  swapWeekSlots,
   withoutExercise,
 } from '../domain/editing';
 import type { Band, BlockType, Element, Exercise, ID, Moment, SeqDay, SessionTemplate, SessionType, Settings } from '../domain/types';
@@ -116,6 +117,28 @@ export async function deleteTemplate(db: StreeterDB, id: ID): Promise<void> {
     const settings = await db.settings.get('settings');
     if (settings) await db.settings.update('settings', { weekPlan: removeFromWeekPlan(settings.weekPlan, id) });
     await db.templates.delete(id);
+  });
+}
+
+/**
+ * Archive un modèle : il quitte la semaine type et n'est plus proposé, mais reste modifiable et peut être désarchivé
+ * (sans revenir dans la semaine type). Les séances déjà faites gardent leur copie.
+ */
+export async function setTemplateArchived(db: StreeterDB, id: ID, archived: boolean): Promise<void> {
+  await db.transaction('rw', [db.templates, db.settings], async () => {
+    if (archived) {
+      const settings = await db.settings.get('settings');
+      if (settings) await db.settings.update('settings', { weekPlan: removeFromWeekPlan(settings.weekPlan, id) });
+    }
+    await db.templates.update(id, { archived });
+  });
+}
+
+/** Échange les séances d'un moment entre deux jours de la semaine type. */
+export async function swapWeekSlotsOf(db: StreeterDB, moment: Moment, from: SeqDay, to: SeqDay): Promise<void> {
+  await db.transaction('rw', db.settings, async () => {
+    const settings = await db.settings.get('settings');
+    if (settings) await db.settings.update('settings', { weekPlan: swapWeekSlots(settings.weekPlan, moment, from, to) });
   });
 }
 

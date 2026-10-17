@@ -3,8 +3,9 @@ export const BACKUP_APP = 'streeter';
 /**
  * À incrémenter à chaque changement du format, avec une conversion à l'import.
  * 2 (17/10/2026) : type de série (`kind`) sur chaque série.
+ * 3 (17/10/2026) : modèle archivé (`archived`, copies figées des séances comprises), temps par série d'un exercice.
  */
-export const BACKUP_FORMAT_VERSION = 2;
+export const BACKUP_FORMAT_VERSION = 3;
 
 export const BACKUP_TABLES = [
   'settings',
@@ -64,6 +65,17 @@ function migrate(backup: Backup): Backup {
     // Format 1 → 2 : les séries d'avant le type de série sont des séries normales.
     const sets = current.tables.sets.map((set) => ({ kind: 'normal', ...(set as Record<string, unknown>) }));
     current = { ...current, formatVersion: 2, tables: { ...current.tables, sets } };
+  }
+  if (current.formatVersion < 3) {
+    // Format 2 → 3 : aucun modèle archivé, aucun exercice avec un temps par série propre.
+    const unarchived = (template: unknown) => ({ archived: false, ...(template as Record<string, unknown>) });
+    const templates = current.tables.templates.map(unarchived);
+    const exercises = current.tables.exercises.map((exercise) => ({ workSecPerSet: null, ...(exercise as Record<string, unknown>) }));
+    const sessions = current.tables.sessions.map((record) => {
+      const session = record as Record<string, unknown>;
+      return isObject(session.templateSnapshot) ? { ...session, templateSnapshot: unarchived(session.templateSnapshot) } : session;
+    });
+    current = { ...current, formatVersion: 3, tables: { ...current.tables, templates, exercises, sessions } };
   }
   return current;
 }

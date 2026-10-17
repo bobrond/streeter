@@ -39,7 +39,8 @@ export function seqDayLabel(day: SeqDay | number): string {
   return `J${day}`;
 }
 
-function range(min: number | null, max: number | null): string {
+/** « 8-9 », « ≤ 6 », « 4 » ; vide sans bornes. */
+export function formatRange(min: number | null, max: number | null): string {
   if (min === null && max === null) return '';
   if (min === null) return `≤ ${max}`;
   if (max === null || max === min) return `${min}`;
@@ -49,12 +50,12 @@ function range(min: number | null, max: number | null): string {
 export function formatTarget(target: Target): string {
   const single = (target.max ?? target.min ?? 0) <= 1;
   const unit = single && target.unit !== 'seconds' ? UNIT_SHORT[target.unit].replace(/s$/, '') : UNIT_SHORT[target.unit];
-  return `${range(target.min, target.max)} ${unit}`;
+  return `${formatRange(target.min, target.max)} ${unit}`;
 }
 
 export function formatIntensity(intensity: Intensity): string {
-  if (intensity.kind === 'rpe') return `RPE ${range(intensity.min, intensity.max)}`;
-  const value = range(intensity.min, intensity.max);
+  if (intensity.kind === 'rpe') return `RPE ${formatRange(intensity.min, intensity.max)}`;
+  const value = formatRange(intensity.min, intensity.max);
   return `${value} rep${intensity.max !== null && intensity.max > 1 ? 's' : ''} en réserve`;
 }
 
@@ -71,6 +72,15 @@ export function formatRest(minSec: number | null, maxSec: number | null): string
   return `${formatSeconds(minSec)} – ${formatSeconds(maxSec)}`;
 }
 
+/** Bornes d'un repos en peu de place : [« 90 s », « 2 min »], [« 60-90 s »], [« 2 min »], [« Libre »]. */
+export function restParts(minSec: number | null, maxSec: number | null): string[] {
+  if (minSec === null || maxSec === null) return ['Libre'];
+  const bound = (sec: number) => (sec < 120 ? `${sec} s` : sec % 60 === 0 ? `${sec / 60} min` : formatSeconds(sec));
+  if (minSec === maxSec) return [bound(minSec)];
+  if (maxSec < 120) return [`${minSec}-${maxSec} s`];
+  return [bound(minSec), bound(maxSec)];
+}
+
 export function formatSets(min: number, max: number): string {
   return min === max ? `${min}` : `${min}-${max}`;
 }
@@ -80,6 +90,15 @@ export function formatDuration(sec: number): string {
   const minutes = Math.round(sec / 60);
   if (minutes < 60) return `${minutes} min`;
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/** « 17 à 25 min », « 46 min à 1 h 06 », « 25 min » si les deux bornes sont égales. */
+export function formatDurationRange(minSec: number, maxSec: number): string {
+  const min = formatDuration(minSec);
+  const max = formatDuration(maxSec);
+  if (min === max) return min;
+  if (min.endsWith(' min') && max.endsWith(' min')) return `${min.slice(0, -4)} à ${max}`;
+  return `${min} à ${max}`;
 }
 
 const DATE_FORMAT = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });

@@ -61,6 +61,30 @@ export class StreeterDB extends Dexie {
             set.kind ??= 'normal';
           }),
       );
+    // 3 (17/10/2026) : modèle archivé (`SessionTemplate.archived`, copies figées des séances comprises) et temps de
+    // travail par série d'un exercice (`Exercise.workSecPerSet`, vide = réglage général), sans nouvel index.
+    this.version(3)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx
+          .table('templates')
+          .toCollection()
+          .modify((template: Partial<SessionTemplate>) => {
+            template.archived ??= false;
+          });
+        await tx
+          .table('exercises')
+          .toCollection()
+          .modify((exercise: Partial<Exercise>) => {
+            exercise.workSecPerSet ??= null;
+          });
+        await tx
+          .table('sessions')
+          .toCollection()
+          .modify((session: Partial<SessionLog>) => {
+            if (session.templateSnapshot) session.templateSnapshot.archived ??= false;
+          });
+      });
   }
 }
 

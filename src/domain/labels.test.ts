@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatClock, formatDuration, formatRest, formatSetValue, formatTarget, formatValue, formatValueList } from './labels';
+import { formatClock, formatDuration, formatDurationRange, formatRange, formatRest, restParts, formatSetValue, formatTarget, formatValue, formatValueList } from './labels';
 
 describe('formats', () => {
   it('accorde les unités', () => {
@@ -34,5 +34,20 @@ describe('formats', () => {
     expect(formatValueList([1, 1], 'reps')).toBe('1 ; 1 rep');
     expect(formatValueList([7, null, 4], 'seconds')).toBe('7 ; – ; 4 s');
     expect(formatValueList([null, null], 'none')).toBe('2 séries');
+  });
+
+  it('donne une fourchette de durée et de valeurs', () => {
+    expect(formatDurationRange(17 * 60, 25 * 60)).toBe('17 à 25 min');
+    expect(formatDurationRange(46 * 60, 66 * 60)).toBe('46 min à 1 h 06');
+    expect(formatDurationRange(25 * 60, 25 * 60)).toBe('25 min');
+    expect(formatRange(8, 9)).toBe('8-9');
+    expect(formatRange(null, 6)).toBe('≤ 6');
+    expect(formatRange(4, 4)).toBe('4');
+    expect(formatRange(null, null)).toBe('');
+    expect(restParts(120, 120)).toEqual(['2 min']);
+    expect(restParts(150, 180)).toEqual(['2 min 30', '3 min']);
+    expect(restParts(null, null)).toEqual(['Libre']);
+    expect(restParts(90, 120)).toEqual(['90 s', '2 min']);
+    expect(restParts(60, 90)).toEqual(['60-90 s']);
   });
 });

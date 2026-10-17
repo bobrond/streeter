@@ -4,6 +4,7 @@ import { estimateDuration } from './duration';
 import type {
   BlockType,
   Element,
+  Exercise,
   ID,
   Moment,
   SeqDay,
@@ -20,6 +21,8 @@ export interface Program {
   templates: ReadonlyMap<ID, SessionTemplate>;
   elements: readonly Element[];
   blocks: ReadonlyMap<ID, BlockType>;
+  /** Catalogue : temps par série des exercices, pour la durée des matins. */
+  exercises: ReadonlyMap<ID, Exercise>;
 }
 
 export type VolumeSettings = Pick<
@@ -207,37 +210,50 @@ export type ProgramIssue =
   | { kind: 'evening_missing_skill'; templateId: ID; elementId: ID }
   | { kind: 'morning_too_long'; templateId: ID; maxSec: number };
 
-/** Contrôles à afficher dès qu'on modifie le programme. */
-export function programIssues(
-  program: Program,
-  settings: VolumeSettings & Pick<Settings, 'morningMaxMinutes' | 'avgWorkSecPerSet' | 'freeRestSec'>,
-): ProgramIssue[] {
+type CheckSettings = VolumeSettings & Pick<Settings, 'morningMaxMinutes' | 'avgWorkSecPerSet' | 'freeRestSec'>;
+
+/**
+ * Contrôles d'un modèle seul, qu'il soit ou non dans la semaine type : planche et FL à chaque soir (règle 2),
+ * durée maximum d'un matin.
+ */
+export function templateIssues(template: SessionTemplate, program: Program, settings: CheckSettings): ProgramIssue[] {
+  const issues: ProgramIssue[] = [];
+  if (template.moment === 'evening') {
+    for (const skill of program.elements.filter((e) => e.kind === 'skill')) {
+      if (!template.items.some((item) => item.elementId === skill.id)) {
+        issues.push({ kind: 'evening_missing_skill', templateId: template.id, elementId: skill.id });
+      }
+    }
+  } else {
+    const structure = { blocks: program.blocks, elements: new Map(program.elements.map((e) => [e.id, e])), exercises: program.exercises };
+    const { maxSec } = estimateDuration(template, settings, structure);
+    if (maxSec > settings.morningMaxMinutes * 60) issues.push({ kind: 'morning_too_long', templateId: template.id, maxSec });
+  }
+  return issues;
+}
+
+/** Contrôles à afficher dès qu'on modifie le programme : volume des composantes, puis chaque modèle de la semaine type. */
+export function programIssues(program: Program, settings: CheckSettings): ProgramIssue[] {
   const issues: ProgramIssue[] = [];
   for (const row of plannedComponentVolume(program, settings)) {
     if (row.status === 'under_min' || row.status === 'over_max') {
       issues.push({ kind: 'component_volume', elementId: row.elementId, status: row.status });
     }
   }
-  const skills = program.elements.filter((e) => e.kind === 'skill');
-  const structure = { blocks: program.blocks, elements: new Map(program.elements.map((e) => [e.id, e])) };
   const seen = new Set<ID>();
-  for (const { moment, template } of plannedSlots(program.weekPlan, program.templates)) {
+  for (const { template } of plannedSlots(program.weekPlan, program.templates)) {
     if (seen.has(template.id)) continue;
     seen.add(template.id);
-    if (moment === 'evening') {
-      for (const skill of skills) {
-        if (!template.items.some((item) => item.elementId === skill.id)) {
-          issues.push({ kind: 'evening_missing_skill', templateId: template.id, elementId: skill.id });
-        }
-      }
-    } else {
-      const { maxSec } = estimateDuration(template, settings, structure);
-      if (maxSec > settings.morningMaxMinutes * 60) {
-        issues.push({ kind: 'morning_too_long', templateId: template.id, maxSec });
-      }
-    }
+    issues.push(...templateIssues(template, program, settings));
   }
   return issues;
+}
+
+/** Contrôles affichés dans l'éditeur d'un modèle : ceux du programme, plus ceux du modèle s'il n'est pas dans la semaine type. */
+export function editorIssues(program: Program, settings: CheckSettings, template: SessionTemplate): ProgramIssue[] {
+  const issues = programIssues(program, settings);
+  const inWeek = plannedSlots(program.weekPlan, program.templates).some((slot) => slot.template.id === template.id);
+  return inWeek ? issues : [...issues, ...templateIssues(template, program, settings)];
 }
 
 /** Séries de skill réellement faites dans la semaine `week`, hors échauffement, par (bloc, skill) : clé « blocId|elementId ». */

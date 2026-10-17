@@ -44,7 +44,7 @@ const CATALOGUE: [string, string][] = [
 ];
 
 function exercise(category: string, name: string, order = 0): Exercise {
-  return { id: nameKey(name), name, category, elementId: null, measure: 'reps', quick: false, active: true, notes: '', aliases: [], order };
+  return { id: nameKey(name), name, category, elementId: null, measure: 'reps', quick: false, active: true, notes: '', aliases: [], order, workSecPerSet: null };
 }
 
 const exercises = CATALOGUE.map(([category, name], i) => exercise(category, name, i));
