@@ -4,8 +4,9 @@ export const BACKUP_APP = 'streeter';
  * À incrémenter à chaque changement du format, avec une conversion à l'import.
  * 2 (17/10/2026) : type de série (`kind`) sur chaque série.
  * 3 (17/10/2026) : modèle archivé (`archived`, copies figées des séances comprises), temps par série d'un exercice.
+ * 4 (17/10/2026) : séance express (`expressMinutes`) sur chaque séance.
  */
-export const BACKUP_FORMAT_VERSION = 3;
+export const BACKUP_FORMAT_VERSION = 4;
 
 export const BACKUP_TABLES = [
   'settings',
@@ -76,6 +77,11 @@ function migrate(backup: Backup): Backup {
       return isObject(session.templateSnapshot) ? { ...session, templateSnapshot: unarchived(session.templateSnapshot) } : session;
     });
     current = { ...current, formatVersion: 3, tables: { ...current.tables, templates, exercises, sessions } };
+  }
+  if (current.formatVersion < 4) {
+    // Format 3 → 4 : aucune séance express avant ce format.
+    const sessions = current.tables.sessions.map((session) => ({ expressMinutes: null, ...(session as Record<string, unknown>) }));
+    current = { ...current, formatVersion: 4, tables: { ...current.tables, sessions } };
   }
   return current;
 }

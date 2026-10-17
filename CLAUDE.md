@@ -8,7 +8,7 @@ PWA personnelle de programmation et de suivi d'entraînement street workout : un
 
 ## Méthode de travail
 
-- Phases livrables et testables sur téléphone : 0 socle, import, calculs testés, mise en ligne → 1 Aujourd'hui et mode séance, hors ligne, export JSON de secours → 2 édition complète dans Réglages → 3 Semaine, Journal, Objectifs → 4 sauvegarde complète, exports, finitions PWA. Refonte de l'interface en cours : phases 0 et A à F, voir « Interface V2 ».
+- Phases livrables et testables sur téléphone : 0 socle, import, calculs testés, mise en ligne → 1 Aujourd'hui et mode séance, hors ligne, export JSON de secours → 2 édition complète dans Réglages → 3 Semaine, Journal, Objectifs → 4 sauvegarde complète, exports, finitions PWA. Refonte de l'interface (V2) : phases 0 et A à F, toutes livrées le 17/10/2026, voir « Interface V2 ».
 - Fin de phase : tests verts, journal de bord du jour à jour, `git commit`, `git push` (déploiement automatique), puis court récapitulatif (ce qui marche, ce qui reste, quoi tester sur le téléphone).
 - Échanges en français, en tutoyant l'utilisateur. Son téléphone : Android (Chrome).
 
@@ -58,9 +58,9 @@ Le dossier `vault/` est le second cerveau du projet (lisible dans Obsidian et VS
 | Type de série : normale · échauffement · échec | `SetLog.kind` : `'normal'` · `'warmup'` · `'failure'` |
 | Objectif · Test d'objectif | `Objective` · `ObjectiveTest` |
 
-## Interface V2 (décidée le 17/10/2026, en cours)
+## Interface V2 (décidée et livrée le 17/10/2026)
 
-Refonte de l'interface d'après la spec et les maquettes de l'utilisateur (16/10/2026), copiées dans `vault/v2/` (privé, hors dépôt). Tant qu'une phase n'est pas livrée, les autres sections décrivent l'appli en ligne ; elles sont mises à jour phase par phase.
+Refonte de l'interface d'après la spec et les maquettes de l'utilisateur (16/10/2026), copiées dans `vault/v2/` (privé, hors dépôt). Les autres sections décrivent l'appli en ligne ; elles ont été mises à jour phase par phase.
 
 Décidé avec l'utilisateur :
 
@@ -75,7 +75,7 @@ Décidé avec l'utilisateur :
 - Pas de règle de passage ni de badge « Prêt à passer » : l'utilisateur gère seul ses progressions. **Pas d'échelles de progression** : la vue Skills montre les objectifs, les records par élastique et les courbes ; l'exercice se change parmi les candidats de la ligne (règle 4 inchangée).
 - Objectifs gardés. Records : un par élastique, en plus du record sans élastique.
 - Vue calendrier des jours d'entraînement, dans Progression › Historique (calendrier du mois, liste des séances, export).
-- Séance express (20, 30 ou 45 min) : elle remplace la séance du jour, matin ou soir ; la fatigue de la veille n'entre pas en compte. Elle reprend les lignes planche / FL de la séance remplacée (donc son intensité), puis les composantes selon leur retard (minimum − séries faites − séries du soir encore prévues dans la semaine), puis le bonus jusqu'au maximum.
+- Séance express (20, 30 ou 45 min) : elle remplace la séance du jour, matin ou soir ; la fatigue de la veille n'entre pas en compte. Elle reprend les lignes planche / FL de la séance remplacée (donc son intensité), puis les composantes selon leur retard (minimum − séries faites − séries du soir encore prévues dans la semaine), puis le bonus jusqu'au maximum. Le reste, tranché en phase F (échauffement gardé, jamais de Skill assisté, ordre des retraits, semaine allégée, repos compté) : voir « Aujourd'hui et séance express ».
 - Une série d'échauffement ne compte pas dans le volume ; une série assistée compte à part (totaux Skill et Skill assisté séparés, déjà le cas) ; un exercice nourrit une seule composante.
 - Temps de travail par série propre à chaque exercice (décidé le 17/10/2026, phase D) : facultatif, le réglage général (30 s) sinon ; la durée estimée d'une ligne prend le plus court de ses exercices candidats pour la borne basse, le plus long pour la borne haute.
 
@@ -93,12 +93,12 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 - C (livrée le 17/10/2026, v1.3.0) : séance en tableau, sans minuteur de hold, avec le type de série. Voir « Choix d'interface du mode séance ».
 - D (livrée le 17/10/2026, v1.4.0) : Programmes : semaine J1-J7, éditeur de modèle, bibliothèque d'exercices ; schéma Dexie v3 (modèle archivé, temps par série d'un exercice). Voir « Programmes (depuis la phase D) ».
 - E (livrée le 17/10/2026, v1.5.0) : Progression : Skills (objectifs, records par élastique, courbes), Volume (jauges, totaux skills, semaines). Pas de changement de schéma. Voir « Progression (depuis la phase E) ».
-- F : Aujourd'hui refondu et séance express.
+- F (livrée le 17/10/2026, v1.6.0) : Aujourd'hui refondu et séance express ; schéma Dexie v4 (séance express). Voir « Aujourd'hui et séance express (depuis la phase F) ».
 
 ## Navigation et charte (depuis la phase B)
 
 - **Onglets** ([src/ui/tabs.ts](src/ui/tabs.ts), [src/ui/TabBar.tsx](src/ui/TabBar.tsx)) :
-  - Aujourd'hui `/`.
+  - Aujourd'hui `/` : détail dans « Aujourd'hui et séance express (depuis la phase F) ».
   - Séance `/session` : sans séance en cours, séance prévue, autre séance, dernière séance à revoir ou corriger. Avec une séance, `/session/:id` en plein écran, sans onglets ; le chevron « Réduire la séance » revient à l'écran précédent.
   - Programmes : vues Programmes `/programs` et Exercices `/programs?vue=exercices` (l'onglet rouvre la dernière vue) ; la roue crantée ouvre `/settings` (blocs, types de séance, éléments, élastiques, cycle, sauvegarde). Détail : « Programmes (depuis la phase D) ».
   - Progression : Skills `/objectives` (fiche d'un skill `/objectives/skill/:id`), Volume `/week` (`?semaine=N`), Historique `/journal`. Ces chemins restent ceux des anciens onglets ; l'onglet rouvre la dernière vue (préférence de l'appareil). Détail : « Progression (depuis la phase E) ».
@@ -191,6 +191,44 @@ Onglet Progression : Skills ([src/features/objectives/](src/features/objectives/
   - records en paliers d'élastiques ; 2 exercices sur la carte d'un skill ;
   - la carte d'un skill s'ouvre en entier (pas de raccourci vers un objectif) ;
   - cible de l'objectif tracée sur la courbe de son exercice lié.
+
+## Aujourd'hui et séance express (depuis la phase F)
+
+Écran Aujourd'hui ([src/features/today/](src/features/today/)), d'après la maquette de l'utilisateur, de haut en bas :
+
+- date, titre, jour de séquence, semaine et cycle (badge « Semaine allégée ») ; bandeau du jour de test.
+- **Séance prévue** : la prochaine séance du jour à faire (`pendingPlanned`, le matin d'abord), durée estimée, exercices proposés par défaut (3 puces et « +N » ; toucher : contenu de la séance), « Démarrer ».
+  - Faite : « ✓ faite » et « Revoir la séance ». Séance en cours : badge « en cours », pas de bouton (la barre la rouvre).
+  - L'autre séance du jour en une ligne (« Aussi aujourd'hui ») : « Démarrer », « en cours », « ✓ faite » ou « masquée ».
+  - Soir de repos : carte « Repos » et la prochaine séance (`nextPlanned`).
+- **Séance express** : 20 / 30 / 45 min (durée gardée sur l'appareil) et « Générer » ; absente pendant une séance ; « Rien à remplacer » sans séance du jour à faire.
+- **Volume de la semaine** : une jauge en cases par composante (`CellGauge`, séries encore prévues le soir en pointillés) et « 4/6 » (le total seul en semaine allégée) ; toucher : Progression › Volume.
+- **Dernière séance** en une ligne : jour (« hier », « mercredi »), nom, durée, records battus (`recordsBeaten` : par exercice et par élastique, mieux que les séances d'avant) ; toucher : la séance.
+- Rappels (sauvegarde, installation), puis « Autres options » (autre séance, passer au jour suivant, reporter à demain).
+
+**Séance express** ([src/domain/express.ts](src/domain/express.ts), `componentNeeds` et `buildExpress`). Décidé avec l'utilisateur le 17/10/2026, sauf mention contraire :
+
+- Elle remplace une séance du jour ni faite ni abandonnée, matin ou soir (au choix s'il y en a deux) ; sans séance à remplacer, pas de séance express. La fatigue de la veille ne compte pas.
+- Rôle des blocs d'après leurs réglages, pas leur nom (choix sans l'utilisateur) : échauffement = bloc non réduit en semaine allégée ; Skill = premier bloc à alternance ; Skill assisté = blocs à alternance suivants ; Renfo spé = lignes planche / FL des autres blocs.
+- Contenu, dans l'ordre :
+  1. l'échauffement de la séance remplacée, au minimum de séries ;
+  2. ses paires du Skill, dans l'ordre, au minimum de séries ;
+  3. son Renfo spé, en entier, s'il rentre ;
+  4. jamais le Skill assisté, même s'il reste du temps ;
+  5. les composantes en retard (minimum − séries faites − séries du soir encore prévues, sans la séance remplacée), la plus en retard d'abord, série par série ; puis le bonus jusqu'au maximum.
+- Quand ça ne tient pas : le Renfo spé est retiré d'abord, puis les dernières paires du Skill. La dernière paire qui rentre peut perdre des séries, au moins 2 ; la première paire est toujours là, à 2 séries s'il le faut (ces deux bornes : choix sans l'utilisateur).
+- Semaine allégée : lignes reprises allégées ; minimum des composantes = séries min allégées des soirs obligatoires de la semaine type (`deloadEveningGuaranteed`, 2 par composante aujourd'hui) ; pas de bonus.
+- Durée : la borne haute de l'estimation (repos maximum, exercice le plus long) tient dans la durée choisie, comme pour le contrôle des matins.
+- Lignes : prescription de la séance remplacée (exercices, cible, intensité, repos), séries fixes (min = max). Une composante reprend la ligne de la séance remplacée, sinon celle d'un soir de la semaine type, sinon celle d'un matin, sans superset ni option (choix sans l'utilisateur).
+- Aperçu avant de démarrer (feuille `ExpressSheet`) : séries par ligne (0 = retirée), durée estimée en direct (orange au-delà de la durée choisie), autre durée ou autre séance remplacée (régénère), ce qui n'est pas repris et pourquoi.
+- Enregistrement : `SessionLog.expressMinutes` = la durée, `templateId` = la séance remplacée, `templateSnapshot` = la séance générée, nommée « Express 30 min · Combo » (type de la séance remplacée). Elle prend le type, la couleur et le créneau de la séance remplacée : le créneau compte comme fait. L'export du journal la signale (« Séance express (30 min) »).
+- Choix sans l'utilisateur, à valider à l'usage :
+  - « Démarrer » dans la carte, comme la maquette, et non plus en bas d'écran ;
+  - séance remplacée par défaut : la séance prévue (le matin tant qu'il n'est pas fait) ;
+  - au moins 2 séries pour une paire raccourcie, première paire toujours là ;
+  - Technique léger : ses lignes planche / FL sont en Skill assisté, donc sa séance express n'a que l'échauffement et des composantes (règle 2 à confirmer pour ce cas) ;
+  - les lignes « autres » hors échauffement (coiffe dynamique du J3 et du Matin B) ne sont pas reprises ;
+  - une première fois sur un exercice ou un élastique n'est pas un record battu.
 
 ## Règles métier
 
@@ -348,13 +386,13 @@ Settings         { cycleStartDate, cycleLengthWeeks, deloadWeek, deloadReduction
                    weekPlan: { 1…7: { morning: templateId | null, evening: templateId | null } } }
 SessionLog       { id, date, week, cycleWeek, seqDay, moment, templateId, templateSnapshot, sessionTypeId,
                    sessionTypeName, deload, status: 'in_progress' | 'done' | 'abandoned', startedAt, endedAt,
-                   note, source: 'app' | 'xlsx', resume }
+                   note, source: 'app' | 'xlsx', resume, expressMinutes /* null : séance d'un modèle */ }
 SetLog           { id, sessionId, itemId, blockTypeId, elementId, exerciseId, setIndex, value, bandId, rpe,
                    quality: 'clean' | 'degraded' | null, kind: 'normal' | 'warmup' | 'failure', note, createdAt }
 Objective        { id, name, criterion, target, unit, exerciseId, order, tests: { id, date, value, note }[] }
 ```
 
-- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`).
+- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`) ; 4 (17/10/2026) ajoute `SessionLog.expressMinutes` (`null` sur les séances existantes).
 - Dans `weekPlan`, `null` signifie « rien » : Repos le soir, pas de séance le matin.
 - `SessionLog.resume` contient l'état d'interface de la séance en cours :
   - ligne où l'on vient d'agir, exercice choisi par ligne, lignes terminées ;
@@ -383,9 +421,9 @@ Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en do
 
 ## Sauvegarde et exports
 
-- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
+- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices ; format 4 : `expressMinutes` sur les séances, `null` avant). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
 - Rappel de sauvegarde sur Aujourd'hui : dernière sauvegarde de plus de 7 jours, ou aucune alors qu'au moins une séance a été faite dans l'appli. Sur Android, « Envoyer une sauvegarde » ouvre le menu de partage (Drive, e-mail). Le fichier envoyé est en `.txt` (`text/plain`) : Chrome ne partage qu'une liste fermée de types, sans le JSON, et `navigator.canShare` ne vérifie pas le type. La restauration accepte `.json` et `.txt`. Une annulation ne dit rien ; un refus s'affiche avec « Enregistrer » (téléchargement) à la place.
-- Export du journal ([src/io/journal/exportJournal.ts](src/io/journal/exportJournal.ts)) : .xlsx (onglet « Journal », vraies dates Excel) et .csv pour Excel en français (« ; », CRLF, marque UTF-8). Les notes de ligne reprennent la note de séance (1re ligne), les notes de série, « Séance abandonnée » et les numéros des séries dégradées.
+- Export du journal ([src/io/journal/exportJournal.ts](src/io/journal/exportJournal.ts)) : .xlsx (onglet « Journal », vraies dates Excel) et .csv pour Excel en français (« ; », CRLF, marque UTF-8). Les notes de ligne reprennent « Séance express (N min) », « Séance abandonnée » et la note de séance (1re ligne), les notes de série et les numéros des séries dégradées.
 - Version affichée dans Réglages → Sauvegarde et données → Appli : `version` du package.json et date du build.
 - `vite-plugin-pwa` reste en 1.3 (la 2.0, sortie le 03/10/2026, était trop récente). Mise à jour proposée par un message, jamais imposée.
 

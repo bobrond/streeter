@@ -40,7 +40,7 @@ describe('migrations du schéma', () => {
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', setIndex: 2, value: 10, createdAt: 2, kind: 'normal' },
     ]);
-    expect(db.verno).toBe(3);
+    expect(db.verno).toBe(4);
     expect(await db.sets.where('sessionId').equals('ses').count()).toBe(2);
     expect(await db.sessions.get('ses')).toMatchObject({ date: '2026-10-16', status: 'done' });
     db.close();
@@ -65,12 +65,34 @@ describe('migrations du schéma', () => {
     v2.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(3);
+    expect(db.verno).toBe(4);
     expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, archived: false });
     expect(await db.exercises.get('hold')).toEqual({ ...oldExercise, workSecPerSet: null });
     expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, archived: false });
     expect((await db.sessions.get('xlsx'))?.templateSnapshot).toBeNull();
     expect(await db.sets.get('s1')).toMatchObject({ value: 12, kind: 'warmup' });
+    db.close();
+  });
+
+  it('version 4 : aucune séance existante n’est une séance express, sans perte', async () => {
+    const name = `migration-${Math.random()}`;
+    names.push(name);
+    // Base telle que l'écrivait la version 3 de l'appli, avec une séance en cours.
+    const v3 = new Dexie(name);
+    v3.version(1).stores(SCHEMA_V1);
+    v3.version(2).stores({});
+    v3.version(3).stores({});
+    const running = { id: 'run', date: '2026-10-17', moment: 'evening', status: 'in_progress', templateId: 'tpl', resume: { activeItemId: 'it', rest: null } };
+    await v3.table('sessions').bulkAdd([running, { id: 'xlsx', date: '2026-10-07', status: 'done', source: 'xlsx' }]);
+    await v3.table('sets').add({ id: 's1', sessionId: 'run', exerciseId: 'hold', value: 8, kind: 'normal', createdAt: 1 });
+    v3.close();
+
+    const db = new StreeterDB(name);
+    expect(db.verno).toBe(4);
+    expect(await db.sessions.get('run')).toEqual({ ...running, expressMinutes: null });
+    expect(await db.sessions.get('xlsx')).toMatchObject({ source: 'xlsx', expressMinutes: null });
+    expect(await db.sessions.where('status').equals('in_progress').count()).toBe(1);
+    expect(await db.sets.get('s1')).toMatchObject({ sessionId: 'run', value: 8 });
     db.close();
   });
 });

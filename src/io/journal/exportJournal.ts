@@ -83,6 +83,7 @@ export function journalExportRows(data: JournalExportData): JournalExportRow[] {
     lines.forEach((line, index) => {
       const notes: string[] = [];
       if (index === 0) {
+        if (session.expressMinutes !== null) notes.push(`Séance express (${session.expressMinutes} min)`);
         if (session.status === 'abandoned') notes.push('Séance abandonnée');
         if (session.note) notes.push(`Séance : ${session.note}`);
       }

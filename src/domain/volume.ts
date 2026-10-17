@@ -75,6 +75,8 @@ export interface PlannedComponentVolume {
   totalMax: number;
   /** Σ séries max du soir une fois allégées, ligne par ligne. */
   deloadEvening: number;
+  /** Minimum garanti de la semaine allégée : séries min allégées, ligne par ligne (séance express). */
+  deloadEveningGuaranteed: number;
   status: VolumeStatus;
 }
 
@@ -89,6 +91,7 @@ export function plannedComponentVolume(program: Program, settings: VolumeSetting
       morningMax: 0,
       totalMax: 0,
       deloadEvening: 0,
+      deloadEveningGuaranteed: 0,
       status: 'ok',
     });
   }
@@ -97,10 +100,14 @@ export function plannedComponentVolume(program: Program, settings: VolumeSetting
       const row = rows.get(item.elementId);
       if (!row) continue;
       if (moment === 'evening') {
-        if (!item.optional && !template.optional) row.eveningGuaranteed += item.setsMin;
-        row.eveningMax += item.setsMax;
         const reduced = program.blocks.get(item.blockTypeId)?.reducedInDeload ?? true;
-        row.deloadEvening += reduced ? deloadSets(item.setsMax, settings.deloadReductionPct) : item.setsMax;
+        const deloaded = (sets: number) => (reduced ? deloadSets(sets, settings.deloadReductionPct) : sets);
+        if (!item.optional && !template.optional) {
+          row.eveningGuaranteed += item.setsMin;
+          row.deloadEveningGuaranteed += deloaded(item.setsMin);
+        }
+        row.eveningMax += item.setsMax;
+        row.deloadEvening += deloaded(item.setsMax);
       } else {
         row.morningMax += item.setsMax;
       }

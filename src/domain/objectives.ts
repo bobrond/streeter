@@ -66,6 +66,36 @@ export function bandRecords(
   return records;
 }
 
+/**
+ * Records battus par une séance : par exercice et par élastique (sans élastique compris), sa meilleure série dépasse
+ * le meilleur des séances d'avant. Une première fois sur un exercice ou un élastique ne bat rien.
+ */
+export function recordsBeaten(
+  sessionId: ID,
+  sets: readonly SetLog[],
+  sessions: ReadonlyMap<ID, Pick<SessionLog, 'date' | 'startedAt'>>,
+): number {
+  const target = sessions.get(sessionId);
+  if (!target) return 0;
+  const before = (s: Pick<SessionLog, 'date' | 'startedAt'>) => s.date < target.date || (s.date === target.date && (s.startedAt ?? 0) < (target.startedAt ?? 0));
+  const previous = new Map<string, number>();
+  const current = new Map<string, number>();
+  for (const set of sets) {
+    if (!countsForRecord(set)) continue;
+    const session = sessions.get(set.sessionId);
+    const map = set.sessionId === sessionId ? current : session && before(session) ? previous : null;
+    if (!map) continue;
+    const key = `${set.exerciseId}|${set.bandId ?? ''}`;
+    map.set(key, Math.max(map.get(key) ?? Number.NEGATIVE_INFINITY, set.value as number));
+  }
+  let count = 0;
+  for (const [key, value] of current) {
+    const best = previous.get(key);
+    if (best !== undefined && value > best) count += 1;
+  }
+  return count;
+}
+
 /** Meilleure performance enregistrée en séance sur un exercice : le record sans élastique. */
 export function bestSessionPerformance(
   exerciseId: ID,

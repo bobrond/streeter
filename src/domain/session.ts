@@ -393,7 +393,8 @@ export function readResume(raw: unknown): SessionResume {
 
 /**
  * Nouvelle séance à partir d'un modèle : copie figée du modèle tel qu'il se pratique ce jour-là
- * (séries réduites en semaine allégée, lignes dans l'ordre des blocs).
+ * (séries réduites en semaine allégée, lignes dans l'ordre des blocs). `express` : `template` est une séance
+ * express déjà générée (déjà allégée), qui remplace la séance du jour `replacedId`.
  */
 export function newSessionLog(args: {
   id: ID;
@@ -403,9 +404,10 @@ export function newSessionLog(args: {
   blocksById: ReadonlyMap<ID, BlockType>;
   settings: Pick<Settings, 'deloadReductionPct'>;
   now: number;
+  express?: { minutes: number; replacedId: ID };
 }): SessionLog {
-  const { template, info } = args;
-  const practiced = info.isDeload ? deloadTemplate(template, args.blocksById, args.settings) : template;
+  const { template, info, express } = args;
+  const practiced = info.isDeload && !express ? deloadTemplate(template, args.blocksById, args.settings) : template;
   const snapshot: SessionTemplate = structuredClone({ ...practiced, items: sortItemsByBlock(practiced.items, args.blocksById) });
   return {
     id: args.id,
@@ -414,7 +416,7 @@ export function newSessionLog(args: {
     cycleWeek: info.cycleWeek,
     seqDay: info.seqDay,
     moment: template.moment,
-    templateId: template.id,
+    templateId: express?.replacedId ?? template.id,
     templateSnapshot: snapshot,
     sessionTypeId: template.sessionTypeId || null,
     sessionTypeName: args.sessionType?.name ?? template.name,
@@ -425,5 +427,6 @@ export function newSessionLog(args: {
     note: '',
     source: 'app',
     resume: emptyResume(),
+    expressMinutes: express?.minutes ?? null,
   };
 }

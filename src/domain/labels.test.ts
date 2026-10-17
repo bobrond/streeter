@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatClock, formatDayMonth, formatDuration, formatDurationRange, formatRange, formatRest, restParts, formatSetValue, formatTarget, formatValue, formatValueList } from './labels';
+import { expressName, formatClock, formatDayMonth, formatRelativeDay, formatDuration, formatDurationRange, formatRange, formatRest, restParts, formatSetValue, formatTarget, formatValue, formatValueList } from './labels';
 
 describe('formats', () => {
   it('accorde les unités', () => {
@@ -53,5 +53,18 @@ describe('formats', () => {
     expect(restParts(null, null)).toEqual(['Libre']);
     expect(restParts(90, 120)).toEqual(['90 s', '2 min']);
     expect(restParts(60, 90)).toEqual(['60-90 s']);
+  });
+});
+
+describe('jours relatifs et séance express', () => {
+  it('« aujourd’hui », « hier », le jour de la semaine, puis la date', () => {
+    expect(formatRelativeDay('2026-10-17', '2026-10-17')).toBe('aujourd’hui');
+    expect(formatRelativeDay('2026-10-16', '2026-10-17')).toBe('hier');
+    expect(formatRelativeDay('2026-10-14', '2026-10-17')).toBe('mercredi');
+    expect(formatRelativeDay('2026-10-10', '2026-10-17')).toBe('10/10');
+  });
+
+  it('nomme une séance express d’après la durée et la séance remplacée', () => {
+    expect(expressName(30, 'Max')).toBe('Express 30 min · Max');
   });
 });

@@ -426,6 +426,27 @@ describe('newSessionLog', () => {
     expect(sets(plancheHold.id)).toMatchObject({ setsMin: 2, setsMax: 3 });
     expect(sets(cars.id)).toMatchObject({ setsMin: 2, setsMax: 2 });
   });
+
+  it('séance express : copie la séance générée telle quelle, garde la séance remplacée et la durée', () => {
+    const generated = template('Express 20 min · Max', 'evening', [{ ...plancheHold, setsMin: 4, setsMax: 4 }, cars]);
+    const log = newSessionLog({
+      id: 'x',
+      template: generated,
+      sessionType: undefined,
+      info: dayInfo('2026-10-26', s),
+      blocksById,
+      settings: s,
+      now: 1,
+      express: { minutes: 20, replacedId: j1.id },
+    });
+    expect(log).toMatchObject({ templateId: j1.id, expressMinutes: 20, deload: true, moment: 'evening' });
+    // Déjà allégée à la génération : pas réduite une seconde fois.
+    expect(log.templateSnapshot?.items.map((i) => [i.id, i.setsMin])).toEqual([
+      [cars.id, 2],
+      [plancheHold.id, 4],
+    ]);
+    expect(newSessionLog({ id: 'y', template: j1, sessionType: undefined, info: dayInfo('2026-10-07', s), blocksById, settings: s, now: 1 }).expressMinutes).toBeNull();
+  });
 });
 
 describe('readResume', () => {

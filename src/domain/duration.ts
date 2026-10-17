@@ -48,7 +48,7 @@ function alternateSec(items: readonly PrescriptionItem[], bound: Bound, settings
  * Durée estimée = Σ séries × (temps de travail par série + repos prescrit), sauf dans une alternance
  * planche / FL : pas de repos entre les deux séries d'une paire, un seul repos par tour.
  */
-export function estimateDuration(template: SessionTemplate, settings: DurationSettings, structure: PlanStructure): DurationEstimate {
+export function estimateDuration(template: Pick<SessionTemplate, 'items'>, settings: DurationSettings, structure: PlanStructure): DurationEstimate {
   const plan = buildPlan(template, structure.blocks, structure.elements);
   const { exercises } = structure;
   let minSec = 0;

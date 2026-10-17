@@ -85,6 +85,18 @@ export class StreeterDB extends Dexie {
             if (session.templateSnapshot) session.templateSnapshot.archived ??= false;
           });
       });
+    // 4 (17/10/2026) : séance express (`SessionLog.expressMinutes`), sans nouvel index ; les séances existantes n'en
+    // sont pas.
+    this.version(4)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table('sessions')
+          .toCollection()
+          .modify((session: Partial<SessionLog>) => {
+            session.expressMinutes ??= null;
+          }),
+      );
   }
 }
 

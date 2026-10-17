@@ -1,9 +1,10 @@
 // Séances prévues un jour donné (matin, soir), telles qu'elles se pratiquent ce jour-là.
 import type { AppData } from '../../db/hooks';
 import type { Lookups } from '../../db/lookups';
-import type { DayInfo } from '../../domain/cycle';
+import { addDays, dayInfo, type DayInfo } from '../../domain/cycle';
 import { deloadTemplate, morningsHidden } from '../../domain/deload';
-import type { Moment, SessionLog, SessionTemplate } from '../../domain/types';
+import type { Moment, SeqDay, SessionLog, SessionTemplate } from '../../domain/types';
+import { MOMENTS } from '../../domain/types';
 
 export interface Planned {
   moment: Moment;
@@ -35,4 +36,23 @@ export function plannedFor(info: DayInfo, data: AppData, lookups: Lookups): Plan
 /** La prochaine séance à faire aujourd'hui : visible et pas encore faite. */
 export function pendingPlanned(planned: readonly Planned[]): Planned | undefined {
   return planned.find((p) => !p.hidden && p.done.length === 0);
+}
+
+/** Séances du jour qu'une séance express peut remplacer : visibles, ni faites ni abandonnées. */
+export function replaceablePlanned(planned: readonly Planned[]): Planned[] {
+  return planned.filter((p) => !p.hidden && p.done.length === 0);
+}
+
+/** Prochaine séance prévue après aujourd'hui (matins masqués en semaine allégée exclus), dans les 7 jours. */
+export function nextPlanned(info: DayInfo, data: AppData, lookups: Lookups): { date: string; seqDay: SeqDay; moment: Moment; template: SessionTemplate } | null {
+  for (let delta = 1; delta <= 7; delta++) {
+    const day = dayInfo(addDays(info.date, delta), data.settings);
+    if (day.beforeStart) continue;
+    for (const moment of MOMENTS) {
+      const template = lookups.templates.get(data.settings.weekPlan[day.seqDay][moment] ?? '');
+      if (!template || (moment === 'morning' && morningsHidden(day.isDeload, data.settings))) continue;
+      return { date: day.date, seqDay: day.seqDay, moment, template };
+    }
+  }
+  return null;
 }

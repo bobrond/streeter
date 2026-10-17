@@ -60,7 +60,7 @@ describe('sauvegarde JSON', () => {
       tables: { settings: [{ id: 'settings', weekPlan: {} }], sets: [oldSet, { ...oldSet, id: 's2', kind: 'warmup' }] },
     });
     const backup = parseBackup(text, 2);
-    expect(backup.formatVersion).toBe(3);
+    expect(backup.formatVersion).toBe(4);
     expect(backup.tables.sets).toEqual([
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', kind: 'warmup' },
@@ -90,7 +90,7 @@ describe('sauvegarde JSON', () => {
       },
     });
     const backup = parseBackup(text, 3);
-    expect(backup.formatVersion).toBe(3);
+    expect(backup.formatVersion).toBe(4);
     expect(backup.tables.templates).toEqual([
       { ...oldTemplate, archived: false },
       { ...oldTemplate, id: 'old', archived: true },
@@ -100,13 +100,39 @@ describe('sauvegarde JSON', () => {
       { ...oldExercise, id: 'slow', workSecPerSet: 60 },
     ]);
     expect(backup.tables.sessions).toEqual([
-      { id: 'ses', date: '2026-10-16', templateSnapshot: { ...oldTemplate, archived: false } },
-      { id: 'xlsx', date: '2026-10-07', templateSnapshot: null },
+      { id: 'ses', date: '2026-10-16', templateSnapshot: { ...oldTemplate, archived: false }, expressMinutes: null },
+      { id: 'xlsx', date: '2026-10-07', templateSnapshot: null, expressMinutes: null },
     ]);
 
     const target = freshDb();
     await restoreBackup(target, backup);
     expect(await target.templates.get('tpl')).toMatchObject({ archived: false });
     expect(await target.exercises.get('slow')).toMatchObject({ workSecPerSet: 60 });
+  });
+
+  it('convertit une sauvegarde du format 3 : aucune séance express', async () => {
+    const text = JSON.stringify({
+      app: 'streeter',
+      formatVersion: 3,
+      dbVersion: 3,
+      exportedAt: 0,
+      tables: {
+        settings: [{ id: 'settings', weekPlan: {} }],
+        sessions: [
+          { id: 'ses', date: '2026-10-16', status: 'done' },
+          { id: 'new', date: '2026-10-17', status: 'done', expressMinutes: 30 },
+        ],
+      },
+    });
+    const backup = parseBackup(text, 4);
+    expect(backup.formatVersion).toBe(4);
+    expect(backup.tables.sessions).toEqual([
+      { id: 'ses', date: '2026-10-16', status: 'done', expressMinutes: null },
+      { id: 'new', date: '2026-10-17', status: 'done', expressMinutes: 30 },
+    ]);
+
+    const target = freshDb();
+    await restoreBackup(target, backup);
+    expect(await target.sessions.get('ses')).toMatchObject({ expressMinutes: null });
   });
 });

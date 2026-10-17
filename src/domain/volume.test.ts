@@ -69,6 +69,8 @@ describe('plannedComponentVolume', () => {
     const range = template('Combo', 'evening', [...skills(), item({ blockTypeId: renfo.id, elementId: dentele.id, setsMin: 1, setsMax: 2 })]);
     const p = program([range], weekPlan({ 2: { evening: range.id }, 6: { evening: range.id } }));
     expect(plannedComponentVolume(p, s)[0]).toMatchObject({ eveningGuaranteed: 2, eveningMax: 4, status: 'under_min' });
+    // Semaine allégée : 1 série min → 1, jamais sous 1 ; 2 séries max → 1.
+    expect(plannedComponentVolume(p, s)[0]).toMatchObject({ deloadEveningGuaranteed: 2, deloadEvening: 2 });
   });
 
   it('ne compte pas une ligne ni une séance du soir optionnelles dans le minimum garanti', () => {

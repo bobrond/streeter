@@ -636,6 +636,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
       note: '',
       source: 'xlsx',
       resume: null,
+      expressMinutes: null,
     };
     sessions.push(session);
 

@@ -53,6 +53,17 @@ describe('journalExportRows', () => {
     expect(rows[2]).toMatchObject({ day: 'J4', moment: 'Matin', sessionType: 'Matin A', block: '', values: '-', rpe: '', notes: 'Séance abandonnée' });
   });
 
+  it('signale une séance express sur sa première ligne', () => {
+    const session = sessionLog('2026-10-17', { week: 2, seqDay: 6, sessionTypeName: 'Combo', expressMinutes: 30, note: 'pressé' });
+    const sets = [
+      setLog({ sessionId: session.id, exerciseId: hold.id, blockTypeId: skill.id, value: 4 }),
+      setLog({ sessionId: session.id, exerciseId: hold.id, blockTypeId: assisted.id, value: 9 }),
+    ];
+    const rows = journalExportRows({ ...data(), sessions: [session], sets });
+    expect(rows.map((r) => r.notes)).toEqual(['Séance express (30 min) · Séance : pressé', '']);
+    expect(rows[0].sessionType).toBe('Combo');
+  });
+
   it('garde l’échauffement et l’échec dans la ligne et les signale dans les notes', () => {
     const session = sessionLog('2026-10-16', { week: 2, seqDay: 5, sessionTypeName: 'Max' });
     const sets = [

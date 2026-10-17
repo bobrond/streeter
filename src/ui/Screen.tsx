@@ -5,8 +5,10 @@ import { BackIcon } from './icons';
  * Mise en page d'un écran : contenu défilant, actions principales fixées en bas (zone du pouce),
  * au-dessus de la barre d'onglets quand elle est là (`--tabbar-h`), marges des téléphones à encoche.
  * `onBack` : écran secondaire, avec un bouton retour devant le titre. `nav` : choix de vue sous le titre.
+ * `kicker` : petite ligne au-dessus du titre (la date sur Aujourd'hui).
  */
 export function Screen({
+  kicker,
   title,
   subtitle,
   aside,
@@ -15,6 +17,7 @@ export function Screen({
   onBack,
   children,
 }: {
+  kicker?: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
   aside?: ReactNode;
@@ -32,6 +35,7 @@ export function Screen({
           </button>
         )}
         <div className="min-w-0 flex-1 self-center">
+          {kicker && <p className="mb-1 text-base text-ink-2 first-letter:uppercase">{kicker}</p>}
           <h1 className="font-display text-4xl leading-none tracking-wide">{title}</h1>
           {subtitle && <p className="mt-1.5 text-base text-ink-2">{subtitle}</p>}
         </div>

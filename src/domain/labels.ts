@@ -1,4 +1,5 @@
 // Libellés et formats français.
+import { diffDays } from './cycle';
 import type { ObjectiveStatus } from './objectives';
 import type { Intensity, Measure, Moment, SeqDay, Target, TargetUnit } from './types';
 import type { VolumeStatus } from './volume';
@@ -117,6 +118,22 @@ export function formatDateShort(iso: string): string {
 /** Date calendaire YYYY-MM-DD → « 07/10 », quand l'année va de soi. */
 export function formatDayMonth(iso: string): string {
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
+const WEEKDAY_FORMAT = new Intl.DateTimeFormat('fr-FR', { weekday: 'long' });
+
+/** Jour d'une date passée vu d'aujourd'hui : « aujourd'hui », « hier », « mercredi » dans la semaine, « 07/10 » avant. */
+export function formatRelativeDay(iso: string, today: string): string {
+  const days = diffDays(iso, today);
+  if (days === 0) return 'aujourd’hui';
+  if (days === 1) return 'hier';
+  if (days > 1 && days < 7) return WEEKDAY_FORMAT.format(new Date(`${iso}T12:00:00`));
+  return formatDayMonth(iso);
+}
+
+/** « Express 30 min · Max » : nom d'une séance express, d'après le type de la séance remplacée. */
+export function expressName(minutes: number, replacedLabel: string): string {
+  return `Express ${minutes} min · ${replacedLabel}`;
 }
 
 /** Chronomètre : « 1:30 », « 0:05 », « 12:00 ». */

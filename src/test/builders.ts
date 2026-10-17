@@ -121,6 +121,7 @@ export function sessionLog(date: string, overrides: Partial<SessionLog> = {}): S
     note: '',
     source: 'app',
     resume: null,
+    expressMinutes: null,
     ...overrides,
   };
 }

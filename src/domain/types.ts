@@ -207,6 +207,11 @@ export interface SessionLog {
   source: 'app' | 'xlsx';
   /** État d'interface de la séance en cours, pour la reprise ; `null` une fois terminée. */
   resume: SessionResume | null;
+  /**
+   * Séance express : durée choisie, en minutes (20, 30 ou 45). `templateId` est alors la séance du jour remplacée
+   * et `templateSnapshot` la séance générée. `null` : séance d'un modèle ou importée.
+   */
+  expressMinutes: number | null;
 }
 
 export interface SetLog {

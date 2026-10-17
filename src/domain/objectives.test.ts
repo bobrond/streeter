@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandRecords, bestSessionPerformance, bestTest, objectiveState } from './objectives';
+import { bandRecords, bestSessionPerformance, bestTest, objectiveState, recordsBeaten } from './objectives';
 import type { SessionLog, SetLog } from './types';
 
 const test = (date: string, value: number) => ({ id: `${date}-${value}`, date, value, note: '' });
@@ -101,5 +101,44 @@ describe('bandRecords', () => {
   it('retient la première fois en cas d’égalité', () => {
     const sets = [set('1', 'b', 12, { bandId: 'vert' }), set('2', 'a', 12, { bandId: 'vert' })];
     expect(bandRecords('planche-hold', sets, sessions).get('vert')?.date).toBe('2026-10-07');
+  });
+});
+
+describe('recordsBeaten', () => {
+  const sessions = new Map(
+    [
+      { id: 'a', date: '2026-10-07', startedAt: 1 },
+      { id: 'b', date: '2026-10-12', startedAt: 1 },
+      { id: 'c', date: '2026-10-12', startedAt: 2 },
+    ].map((x) => [x.id, x as SessionLog]),
+  );
+  const set = (sessionId: string, exerciseId: string, value: number | null, extra: Partial<SetLog> = {}) =>
+    ({ id: `${sessionId}-${exerciseId}-${value}`, sessionId, exerciseId, value, bandId: null, quality: null, kind: 'normal', ...extra }) as SetLog;
+
+  it('compte, par exercice et par élastique, une meilleure série que les séances d’avant', () => {
+    const sets = [
+      set('a', 'hold', 6),
+      set('a', 'hold', 12, { bandId: 'vert' }),
+      set('a', 'pn', 1),
+      set('b', 'hold', 7),
+      set('b', 'hold', 8),
+      set('b', 'hold', 12, { bandId: 'vert' }),
+      set('b', 'pn', 1),
+    ];
+    // Hold sans élastique battu (8 > 6) ; vert égalé ; P/N égalé.
+    expect(recordsBeaten('b', sets, sessions)).toBe(1);
+  });
+
+  it('ne compte ni une première fois, ni une série dégradée ou d’échauffement, ni une séance d’après', () => {
+    const sets = [
+      set('a', 'hold', 6),
+      set('b', 'hold', 9, { quality: 'degraded' }),
+      set('b', 'hold', 9, { kind: 'warmup', id: 'w' }),
+      set('b', 'hold', 5, { bandId: 'bleue' }),
+      set('c', 'hold', 20),
+    ];
+    expect(recordsBeaten('b', sets, sessions)).toBe(0);
+    // Même jour : la séance commencée avant compte comme précédente.
+    expect(recordsBeaten('c', sets, sessions)).toBe(1);
   });
 });
