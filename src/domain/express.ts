@@ -10,7 +10,7 @@ import {
   plannedSlots,
   realizedComponentVolume,
   remainingEveningSets,
-  type Program,
+  type PlanContext,
   type VolumeSettings,
 } from './volume';
 import type { DayProgress } from './week';
@@ -53,7 +53,7 @@ export interface ComponentNeed {
  * c'est la séance express qui prend sa place.
  */
 export function componentNeeds(args: {
-  program: Program;
+  program: PlanContext;
   settings: VolumeSettings;
   week: number;
   isDeload: boolean;
@@ -119,7 +119,7 @@ const fixed = (item: PrescriptionItem, sets: number): PrescriptionItem => ({ ...
  * Ligne du programme qui sert de modèle à une composante (exercices, cible, intensité, repos) : celle de la séance
  * remplacée, sinon celle d'un soir de la semaine type, sinon celle d'un matin ; une ligne obligatoire d'abord.
  */
-function componentSource(elementId: ID, replaced: SessionTemplate, program: Program): PrescriptionItem | null {
+function componentSource(elementId: ID, replaced: SessionTemplate, program: PlanContext): PrescriptionItem | null {
   const pick = (template: SessionTemplate) =>
     template.items.find((i) => i.elementId === elementId && !i.optional) ?? template.items.find((i) => i.elementId === elementId);
   const slots = plannedSlots(program.weekPlan, program.templates);
@@ -150,7 +150,7 @@ export function buildExpress(args: {
   replaced: SessionTemplate;
   name: string;
   isDeload: boolean;
-  program: Program;
+  program: PlanContext;
   settings: ExpressSettings;
   needs: readonly ComponentNeed[];
   newId: () => ID;
@@ -269,6 +269,7 @@ export function buildExpress(args: {
       notes: '',
       items: sortItemsByBlock(ordered, program.blocks),
       archived: false,
+      programId: args.replaced.programId,
     },
     reasons,
     components,

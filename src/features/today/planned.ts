@@ -3,6 +3,7 @@ import type { AppData } from '../../db/hooks';
 import type { Lookups } from '../../db/lookups';
 import { addDays, dayInfo, type DayInfo } from '../../domain/cycle';
 import { deloadTemplate, morningsHidden } from '../../domain/deload';
+import { settingsAtDate } from '../../domain/programs';
 import type { Moment, SeqDay, SessionLog, SessionTemplate } from '../../domain/types';
 import { MOMENTS } from '../../domain/types';
 
@@ -46,11 +47,14 @@ export function replaceablePlanned(planned: readonly Planned[]): Planned[] {
 /** Prochaine séance prévue après aujourd'hui (matins masqués en semaine allégée exclus), dans les 7 jours. */
 export function nextPlanned(info: DayInfo, data: AppData, lookups: Lookups): { date: string; seqDay: SeqDay; moment: Moment; template: SessionTemplate } | null {
   for (let delta = 1; delta <= 7; delta++) {
-    const day = dayInfo(addDays(info.date, delta), data.settings);
+    const date = addDays(info.date, delta);
+    // Le programme suivant peut commencer dans la semaine.
+    const settings = settingsAtDate(data.appSettings, data.programs, date) ?? data.settings;
+    const day = dayInfo(date, settings);
     if (day.beforeStart) continue;
     for (const moment of MOMENTS) {
-      const template = lookups.templates.get(data.settings.weekPlan[day.seqDay][moment] ?? '');
-      if (!template || (moment === 'morning' && morningsHidden(day.isDeload, data.settings))) continue;
+      const template = lookups.templates.get(settings.weekPlan[day.seqDay][moment] ?? '');
+      if (!template || (moment === 'morning' && morningsHidden(day.isDeload, settings))) continue;
       return { date: day.date, seqDay: day.seqDay, moment, template };
     }
   }

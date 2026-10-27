@@ -1,6 +1,6 @@
 import type { Settings, WeekPlan } from './types';
 
-export const DEFAULT_SETTINGS: Omit<Settings, 'cycleStartDate' | 'weekPlan'> = {
+export const DEFAULT_SETTINGS: Omit<Settings, 'cycleStartDate' | 'weekPlan' | 'programId' | 'programStartWeek'> = {
   id: 'settings',
   cycleLengthWeeks: 4,
   deloadWeek: 4,

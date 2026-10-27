@@ -2,7 +2,7 @@
 import { VOLUME_STATUS_LABEL } from '../../domain/labels';
 import { nameKey } from '../../domain/text';
 import type { Settings } from '../../domain/types';
-import { plannedComponentVolume, skillTotals, type Program, type VolumeSettings } from '../../domain/volume';
+import { plannedComponentVolume, skillTotals, type PlanContext, type VolumeSettings } from '../../domain/volume';
 import type { VolumeSheet } from './readWorkbook';
 
 export interface VolumeCheckField {
@@ -32,7 +32,7 @@ function field(label: string, sheet: string | number | null, app: string | numbe
 
 export function compareVolume(
   sheet: VolumeSheet,
-  program: Program,
+  program: PlanContext,
   settings: VolumeSettings & Pick<Settings, 'volumeMin' | 'volumeMax' | 'deloadReductionPct'>,
 ): VolumeCheck {
   const lines: VolumeCheckLine[] = [

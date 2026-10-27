@@ -363,7 +363,7 @@ export function TodayScreen({ data }: { data: AppData }) {
         info.beforeStart ? undefined : (
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>
-              <b className="text-ink">{seqDayLabel(info.seqDay)}</b> · semaine {info.week} · cycle {info.cycle} · S{info.cycleWeek}/{data.settings.cycleLengthWeeks}
+              <b className="text-ink">{seqDayLabel(info.seqDay)}</b> · semaine {info.week} · {data.program.name}{info.cycle > 1 ? ` cycle ${info.cycle}` : ''} · S{info.cycleWeek}/{data.settings.cycleLengthWeeks}
             </span>
             {info.isDeload && <Badge tone="accent">Semaine allégée</Badge>}
           </span>

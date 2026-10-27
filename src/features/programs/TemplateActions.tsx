@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import type { Lookups } from '../../db/lookups';
-import { changeTemplateMoment, deleteTemplate, saveTemplate, setTemplateArchived, updateSettings } from '../../db/programStore';
+import { changeTemplateMoment, deleteTemplate, saveTemplate, setTemplateArchived, updateProgram } from '../../db/programStore';
 import { duplicateTemplate, nameError, templateDays, uniqueName } from '../../domain/editing';
 import { MOMENT_LABEL, seqDayLabel } from '../../domain/labels';
 import { cleanSpaces } from '../../domain/text';
@@ -17,6 +17,7 @@ import { ArchiveIcon, CopyIcon, PencilIcon, SettingsIcon, SwapIcon, TrashIcon } 
 import { MenuItem, MenuList } from '../../ui/Menu';
 import { ConfirmSheet, Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/toastStore';
+import { programContext } from './programContext';
 import { SlotPickerSheet, type Slot } from './SlotPickerSheet';
 
 export interface TemplateTarget {
@@ -45,7 +46,8 @@ export function TemplateActions({
   const [mode, setMode] = useState<Mode>('menu');
   if (!target) return null;
   const { template, slot } = target;
-  const days = templateDays(template.id, data.settings.weekPlan);
+  const context = programContext(data, lookups, template.programId);
+  const days = templateDays(template.id, context.program.weekPlan);
   const type = lookups.sessionTypes.get(template.sessionTypeId);
   const close = () => {
     setMode('menu');
@@ -53,7 +55,7 @@ export function TemplateActions({
   };
 
   const duplicate = async () => {
-    const copy = { ...duplicateTemplate(template, newId, uniqueName(`${template.name} (copie)`, data.templates)), archived: false };
+    const copy = { ...duplicateTemplate(template, newId, uniqueName(`${template.name} (copie)`, context.templates)), archived: false };
     await saveTemplate(db, copy);
     close();
     showToast('Modèle dupliqué : il n’est pas dans la semaine type.');
@@ -61,14 +63,14 @@ export function TemplateActions({
   };
 
   const archive = async () => {
-    const previous = data.settings.weekPlan;
+    const previous = context.program.weekPlan;
     await setTemplateArchived(db, template.id, true);
     close();
     if (inEditor) goBack('/programs');
     showToast(`« ${template.name} » archivé.`, {
       action: {
         label: 'Annuler',
-        run: () => void setTemplateArchived(db, template.id, false).then(() => updateSettings(db, { weekPlan: previous })),
+        run: () => void setTemplateArchived(db, template.id, false).then(() => updateProgram(db, template.programId, { weekPlan: previous })),
       },
     });
   };
@@ -119,7 +121,7 @@ export function TemplateActions({
 
       {mode === 'rename' && <RenameSheet template={template} data={data} onClose={close} />}
       {mode === 'settings' && <TemplateSettingsSheet template={template} data={data} onClose={close} />}
-      <SlotPickerSheet slot={mode === 'slot' && slot ? slot : null} onClose={close} data={data} lookups={lookups} />
+      <SlotPickerSheet slot={mode === 'slot' && slot ? slot : null} onClose={close} context={context} lookups={lookups} />
       <ConfirmSheet
         open={mode === 'archive'}
         onClose={close}
@@ -156,7 +158,7 @@ export function TemplateActions({
 
 function RenameSheet({ template, data, onClose }: { template: SessionTemplate; data: AppData; onClose: () => void }) {
   const [name, setName] = useState(template.name);
-  const error = nameError(name, template.id, data.templates);
+  const error = nameError(name, template.id, data.templates.filter((t) => t.programId === template.programId));
   const save = async () => {
     if (error) return;
     await saveTemplate(db, { ...template, name: cleanSpaces(name) });
@@ -182,7 +184,7 @@ function RenameSheet({ template, data, onClose }: { template: SessionTemplate; d
 
 function TemplateSettingsSheet({ template, data, onClose }: { template: SessionTemplate; data: AppData; onClose: () => void }) {
   const [form, setForm] = useState({ sessionTypeId: template.sessionTypeId, moment: template.moment, optional: template.optional, notes: template.notes });
-  const days = templateDays(template.id, data.settings.weekPlan);
+  const days = templateDays(template.id, data.programs.find((p) => p.id === template.programId)?.weekPlan ?? data.settings.weekPlan);
   const types = [...data.sessionTypes].sort((a, b) => Number(b.moment === form.moment) - Number(a.moment === form.moment));
   const save = async () => {
     const next = { ...template, sessionTypeId: form.sessionTypeId, optional: form.optional, notes: form.notes.trim() };

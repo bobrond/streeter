@@ -1,12 +1,14 @@
 // Constructeurs de données pour les tests.
 import { DEFAULT_SETTINGS, emptyWeekPlan } from '../domain/defaults';
 import type {
+  AppSettings,
   BlockType,
   Element,
   ElementKind,
   Exercise,
   Moment,
   PrescriptionItem,
+  Program,
   SeqDay,
   SessionLog,
   SessionTemplate,
@@ -52,7 +54,7 @@ export function item(base: Pick<PrescriptionItem, 'blockTypeId' | 'elementId'> &
 }
 
 export function template(name: string, moment: Moment, items: PrescriptionItem[], options: Partial<SessionTemplate> = {}): SessionTemplate {
-  return { id: testId('tpl'), name, sessionTypeId: 'type', moment, optional: false, notes: '', items, archived: false, ...options };
+  return { id: testId('tpl'), name, sessionTypeId: 'type', moment, optional: false, notes: '', items, archived: false, programId: 'prog', ...options };
 }
 
 export function weekPlan(slots: Partial<Record<SeqDay, Partial<WeekSlot>>>): WeekPlan {
@@ -62,7 +64,32 @@ export function weekPlan(slots: Partial<Record<SeqDay, Partial<WeekSlot>>>): Wee
 }
 
 export function settings(overrides: Partial<Settings> = {}): Settings {
-  return { ...DEFAULT_SETTINGS, cycleStartDate: '2026-10-05', weekPlan: emptyWeekPlan(), ...overrides };
+  return { ...DEFAULT_SETTINGS, cycleStartDate: '2026-10-05', weekPlan: emptyWeekPlan(), programId: 'prog', programStartWeek: 1, ...overrides };
+}
+
+export function appSettings(overrides: Partial<AppSettings> = {}): AppSettings {
+  return { id: 'settings', cycleStartDate: '2026-10-05', avgWorkSecPerSet: 30, freeRestSec: 30, lastBackupAt: null, ...overrides };
+}
+
+/** Programme : réglages par défaut, semaine 1, identifiant `prog` (celui des modèles de `template`) par défaut. */
+export function program(overrides: Partial<Program> = {}): Program {
+  return {
+    id: 'prog',
+    name: 'Octobre 2026',
+    startWeek: 1,
+    notes: '',
+    objectiveIds: [],
+    createdAt: 0,
+    cycleLengthWeeks: DEFAULT_SETTINGS.cycleLengthWeeks,
+    deloadWeek: DEFAULT_SETTINGS.deloadWeek,
+    deloadReductionPct: DEFAULT_SETTINGS.deloadReductionPct,
+    hideMorningsInDeload: DEFAULT_SETTINGS.hideMorningsInDeload,
+    volumeMin: DEFAULT_SETTINGS.volumeMin,
+    volumeMax: DEFAULT_SETTINGS.volumeMax,
+    morningMaxMinutes: DEFAULT_SETTINGS.morningMaxMinutes,
+    weekPlan: emptyWeekPlan(),
+    ...overrides,
+  };
 }
 
 export function exercise(name: string, elementId: string | null, options: Partial<Exercise> = {}): Exercise {

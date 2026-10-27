@@ -10,7 +10,8 @@ import {
   swapWeekSlots,
   withoutExercise,
 } from '../domain/editing';
-import type { Band, BlockType, Element, Exercise, ID, Moment, SeqDay, SessionTemplate, SessionType, Settings } from '../domain/types';
+import { splitSettingsPatch } from '../domain/programs';
+import type { AppSettings, Band, BlockType, Element, Exercise, ID, Moment, Program, SeqDay, SessionTemplate, SessionType, Settings, WeekPlan } from '../domain/types';
 import type { StreeterDB } from './db';
 
 export class InUseError extends Error {}
@@ -98,24 +99,28 @@ export async function saveTemplate(db: StreeterDB, template: SessionTemplate): P
   await db.templates.put(template);
 }
 
+/** Modifie la semaine type d'un programme dans la transaction en cours. */
+async function editWeekPlan(db: StreeterDB, programId: ID, edit: (weekPlan: WeekPlan) => WeekPlan): Promise<void> {
+  const program = await db.programs.get(programId);
+  if (program) await db.programs.update(programId, { weekPlan: edit(structuredClone(program.weekPlan)) });
+}
+
 /** Change le moment d'un modèle : il est retiré des créneaux de l'ancien moment dans la semaine type. */
 export async function changeTemplateMoment(db: StreeterDB, template: SessionTemplate, moment: Moment): Promise<void> {
-  await db.transaction('rw', [db.templates, db.settings], async () => {
-    const settings = await db.settings.get('settings');
-    if (settings) {
-      const weekPlan = structuredClone(settings.weekPlan);
+  await db.transaction('rw', [db.templates, db.programs], async () => {
+    await editWeekPlan(db, template.programId, (weekPlan) => {
       for (const slot of Object.values(weekPlan)) if (slot[template.moment] === template.id) slot[template.moment] = null;
-      await db.settings.update('settings', { weekPlan });
-    }
+      return weekPlan;
+    });
     await db.templates.put({ ...template, moment });
   });
 }
 
 /** Supprime un modèle et le retire de la semaine type. Les séances déjà faites gardent leur copie. */
 export async function deleteTemplate(db: StreeterDB, id: ID): Promise<void> {
-  await db.transaction('rw', [db.templates, db.settings], async () => {
-    const settings = await db.settings.get('settings');
-    if (settings) await db.settings.update('settings', { weekPlan: removeFromWeekPlan(settings.weekPlan, id) });
+  await db.transaction('rw', [db.templates, db.programs], async () => {
+    const template = await db.templates.get(id);
+    if (template) await editWeekPlan(db, template.programId, (weekPlan) => removeFromWeekPlan(weekPlan, id));
     await db.templates.delete(id);
   });
 }
@@ -125,33 +130,64 @@ export async function deleteTemplate(db: StreeterDB, id: ID): Promise<void> {
  * (sans revenir dans la semaine type). Les séances déjà faites gardent leur copie.
  */
 export async function setTemplateArchived(db: StreeterDB, id: ID, archived: boolean): Promise<void> {
-  await db.transaction('rw', [db.templates, db.settings], async () => {
-    if (archived) {
-      const settings = await db.settings.get('settings');
-      if (settings) await db.settings.update('settings', { weekPlan: removeFromWeekPlan(settings.weekPlan, id) });
-    }
+  await db.transaction('rw', [db.templates, db.programs], async () => {
+    const template = await db.templates.get(id);
+    if (archived && template) await editWeekPlan(db, template.programId, (weekPlan) => removeFromWeekPlan(weekPlan, id));
     await db.templates.update(id, { archived });
   });
 }
 
-/** Échange les séances d'un moment entre deux jours de la semaine type. */
-export async function swapWeekSlotsOf(db: StreeterDB, moment: Moment, from: SeqDay, to: SeqDay): Promise<void> {
-  await db.transaction('rw', db.settings, async () => {
-    const settings = await db.settings.get('settings');
-    if (settings) await db.settings.update('settings', { weekPlan: swapWeekSlots(settings.weekPlan, moment, from, to) });
-  });
+/** Échange les séances d'un moment entre deux jours de la semaine type d'un programme. */
+export async function swapWeekSlotsOf(db: StreeterDB, programId: ID, moment: Moment, from: SeqDay, to: SeqDay): Promise<void> {
+  await db.transaction('rw', db.programs, () => editWeekPlan(db, programId, (weekPlan) => swapWeekSlots(weekPlan, moment, from, to)));
 }
 
-export async function setWeekSlot(db: StreeterDB, day: SeqDay, moment: Moment, templateId: ID | null): Promise<void> {
-  await db.transaction('rw', db.settings, async () => {
-    const settings = await db.settings.get('settings');
-    if (!settings) return;
-    const weekPlan = structuredClone(settings.weekPlan);
-    weekPlan[day][moment] = templateId;
-    await db.settings.update('settings', { weekPlan });
-  });
+export async function setWeekSlot(db: StreeterDB, programId: ID, day: SeqDay, moment: Moment, templateId: ID | null): Promise<void> {
+  await db.transaction('rw', db.programs, () =>
+    editWeekPlan(db, programId, (weekPlan) => {
+      weekPlan[day][moment] = templateId;
+      return weekPlan;
+    }),
+  );
 }
 
-export async function updateSettings(db: StreeterDB, patch: Partial<Omit<Settings, 'id'>>): Promise<void> {
+/** Réglages de l'appli, communs à tous les programmes. */
+export async function updateSettings(db: StreeterDB, patch: Partial<Omit<AppSettings, 'id'>>): Promise<void> {
   await db.settings.update('settings', patch);
+}
+
+export async function updateProgram(db: StreeterDB, programId: ID, patch: Partial<Omit<Program, 'id'>>): Promise<void> {
+  await db.programs.update(programId, patch);
+}
+
+/** Écrit des réglages effectifs : ceux de l'appli dans les réglages, les autres dans le programme. */
+export async function updateEffectiveSettings(db: StreeterDB, programId: ID, patch: Partial<Omit<Settings, 'id'>>): Promise<void> {
+  const { app, program } = splitSettingsPatch(patch);
+  await db.transaction('rw', [db.settings, db.programs], async () => {
+    if (Object.keys(app).length > 0) await db.settings.update('settings', app);
+    if (Object.keys(program).length > 0) await db.programs.update(programId, program);
+  });
+}
+
+/** Ajoute un programme et ses modèles (copie pour la suite). */
+export async function addProgram(db: StreeterDB, program: Program, templates: readonly SessionTemplate[]): Promise<void> {
+  await db.transaction('rw', [db.programs, db.templates], async () => {
+    await db.programs.add(program);
+    await db.templates.bulkAdd([...templates]);
+  });
+}
+
+/**
+ * Supprime un programme à venir et ses modèles. Un programme déjà commencé ne se supprime pas : ses semaines
+ * reviendraient au programme précédent et changeraient l'historique du volume.
+ */
+export async function deleteProgram(db: StreeterDB, programId: ID, currentWeek: number): Promise<void> {
+  await db.transaction('rw', [db.programs, db.templates], async () => {
+    const program = await db.programs.get(programId);
+    if (!program) return;
+    if (program.startWeek <= currentWeek) throw new InUseError('Ce programme a déjà commencé : impossible de le supprimer.');
+    if ((await db.programs.count()) <= 1) throw new InUseError('Il faut garder au moins un programme.');
+    await db.templates.where('programId').equals(programId).delete();
+    await db.programs.delete(programId);
+  });
 }

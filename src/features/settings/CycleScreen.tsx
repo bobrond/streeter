@@ -1,8 +1,9 @@
 import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
-import { updateSettings } from '../../db/programStore';
+import { updateEffectiveSettings } from '../../db/programStore';
 import { dayInfo, localISODate } from '../../domain/cycle';
 import { formatDateLong, seqDayLabel } from '../../domain/labels';
+import { effectiveSettings, programStartDate } from '../../domain/programs';
 import type { Settings } from '../../domain/types';
 import { useNow } from '../../lib/device';
 import { goBack } from '../../lib/router';
@@ -48,25 +49,33 @@ function NumberSetting({
   );
 }
 
-export function CycleScreen({ data }: { data: AppData }) {
-  const { settings } = data;
+/** Réglages du programme affiché (`programId`, le programme en cours par défaut) ; la séquence est commune. */
+export function CycleScreen({ data, programId }: { data: AppData; programId: string | null }) {
+  const program = data.programs.find((p) => p.id === programId) ?? data.program;
+  const settings = effectiveSettings(data.appSettings, program);
   const today = localISODate(new Date(useNow(60_000)));
-  const info = dayInfo(today, settings);
-  const save = (patch: Partial<Omit<Settings, 'id'>>) => void updateSettings(db, patch);
+  const info = dayInfo(today, data.settings);
+  const save = (patch: Partial<Omit<Settings, 'id'>>) => void updateEffectiveSettings(db, program.id, patch);
   return (
-    <Screen title="Cycle, volume et durées" onBack={() => goBack('/settings')}>
-      <ListGroup title="Calendrier">
+    <Screen title="Cycle, volume et durées" subtitle={program.name} onBack={() => goBack('/settings')}>
+      <ListGroup title="Séquence (tous les programmes)">
         <div className="flex flex-col gap-4 p-4">
           <Field
-            label="Date de début (un J1)"
+            label="Début de la semaine 1 (un J1)"
             hint={
               info.beforeStart
-                ? `Le programme commencera le ${formatDateLong(settings.cycleStartDate)}.`
-                : `J1 = ${WEEKDAY.format(new Date(`${settings.cycleStartDate}T12:00:00`))} · aujourd’hui : ${seqDayLabel(info.seqDay)}, semaine ${info.week} (cycle ${info.cycle}, S${info.cycleWeek}).`
+                ? `Le premier programme commencera le ${formatDateLong(settings.cycleStartDate)}.`
+                : `J1 = ${WEEKDAY.format(new Date(`${settings.cycleStartDate}T12:00:00`))} · aujourd’hui : ${seqDayLabel(info.seqDay)}, semaine ${info.week} (cycle ${info.cycle}, S${info.cycleWeek}). Déplacer cette date déplace aussi le début de chaque programme.`
             }
           >
             <TextInput type="date" value={settings.cycleStartDate} onChange={(v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && save({ cycleStartDate: v })} />
           </Field>
+        </div>
+      </ListGroup>
+
+      <ListGroup title={`Cycle de « ${program.name} »`}>
+        <div className="flex flex-col gap-4 p-4">
+          <p className="text-ink-2">Commence le {formatDateLong(programStartDate(data.appSettings, program))}, en S1 de son cycle.</p>
           <NumberSetting
             label="Durée du cycle"
             unit="semaines"

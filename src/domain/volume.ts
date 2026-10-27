@@ -17,7 +17,7 @@ import type {
 import { MOMENTS, SEQ_DAYS } from './types';
 import type { DayProgress } from './week';
 
-export interface Program {
+export interface PlanContext {
   weekPlan: WeekPlan;
   templates: ReadonlyMap<ID, SessionTemplate>;
   elements: readonly Element[];
@@ -80,7 +80,7 @@ export interface PlannedComponentVolume {
   status: VolumeStatus;
 }
 
-export function plannedComponentVolume(program: Program, settings: VolumeSettings): PlannedComponentVolume[] {
+export function plannedComponentVolume(program: PlanContext, settings: VolumeSettings): PlannedComponentVolume[] {
   const rows = new Map<ID, PlannedComponentVolume>();
   for (const element of componentElements(program.elements)) {
     rows.set(element.id, {
@@ -178,7 +178,7 @@ export interface SkillTotal {
   deloadMax: number;
 }
 
-export function skillTotals(program: Program, settings: VolumeSettings): SkillTotal[] {
+export function skillTotals(program: PlanContext, settings: VolumeSettings): SkillTotal[] {
   const skills = new Map(program.elements.filter((e) => e.kind === 'skill').map((e) => [e.id, e]));
   const totals = new Map<string, SkillTotal & { days: Set<SeqDay> }>();
   for (const { seqDay, moment, template } of plannedSlots(program.weekPlan, program.templates)) {
@@ -224,7 +224,7 @@ type CheckSettings = VolumeSettings & Pick<Settings, 'morningMaxMinutes' | 'avgW
  * Contrôles d'un modèle seul, qu'il soit ou non dans la semaine type : planche et FL à chaque soir (règle 2),
  * durée maximum d'un matin.
  */
-export function templateIssues(template: SessionTemplate, program: Program, settings: CheckSettings): ProgramIssue[] {
+export function templateIssues(template: SessionTemplate, program: PlanContext, settings: CheckSettings): ProgramIssue[] {
   const issues: ProgramIssue[] = [];
   if (template.moment === 'evening') {
     for (const skill of program.elements.filter((e) => e.kind === 'skill')) {
@@ -241,7 +241,7 @@ export function templateIssues(template: SessionTemplate, program: Program, sett
 }
 
 /** Contrôles à afficher dès qu'on modifie le programme : volume des composantes, puis chaque modèle de la semaine type. */
-export function programIssues(program: Program, settings: CheckSettings): ProgramIssue[] {
+export function programIssues(program: PlanContext, settings: CheckSettings): ProgramIssue[] {
   const issues: ProgramIssue[] = [];
   for (const row of plannedComponentVolume(program, settings)) {
     if (row.status === 'under_min' || row.status === 'over_max') {
@@ -258,7 +258,7 @@ export function programIssues(program: Program, settings: CheckSettings): Progra
 }
 
 /** Contrôles affichés dans l'éditeur d'un modèle : ceux du programme, plus ceux du modèle s'il n'est pas dans la semaine type. */
-export function editorIssues(program: Program, settings: CheckSettings, template: SessionTemplate): ProgramIssue[] {
+export function editorIssues(program: PlanContext, settings: CheckSettings, template: SessionTemplate): ProgramIssue[] {
   const issues = programIssues(program, settings);
   const inWeek = plannedSlots(program.weekPlan, program.templates).some((slot) => slot.template.id === template.id);
   return inWeek ? issues : [...issues, ...templateIssues(template, program, settings)];

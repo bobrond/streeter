@@ -8,7 +8,7 @@ import { estimateDuration } from '../../domain/duration';
 import { VOLUME_STATUS_LABEL } from '../../domain/labels';
 import { objectiveState } from '../../domain/objectives';
 import type { ID, SeqDay, SessionTemplate, Settings } from '../../domain/types';
-import { plannedComponentVolume, programIssues, skillTotals, type Program } from '../../domain/volume';
+import { plannedComponentVolume, programIssues, skillTotals, type PlanContext } from '../../domain/volume';
 import { buildImport, emptyExisting, type ImportResult } from './importWorkbook';
 import { readWorkbook } from './readWorkbook';
 
@@ -29,7 +29,7 @@ describe.skipIf(!existsSync(FILE))('import du tableur programme_planche_touch_fl
   let exerciseName: Map<ID, string>;
   let elementName: Map<ID, string>;
   let blockName: Map<ID, string>;
-  let program: Program;
+  let program: PlanContext;
   const templateAt = (day: SeqDay, moment: 'morning' | 'evening') => byId.get(settings.weekPlan[day][moment] ?? '') ?? null;
 
   beforeAll(() => {

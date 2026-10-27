@@ -1,11 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { dayInfo, localISODate } from '../domain/cycle';
+import { effectiveSettings, programAtWeek, sortPrograms } from '../domain/programs';
 import type {
+  AppSettings,
   Band,
   BlockType,
   Element,
   Exercise,
   Objective,
+  Program,
   SessionLog,
   SessionTemplate,
   SessionType,
@@ -16,7 +20,14 @@ import { db } from './db';
 import type { LastImport } from './importStore';
 
 export interface AppData {
+  /** Réglages effectifs du programme en vigueur aujourd'hui. */
   settings: Settings;
+  /** Réglages de l'appli, communs aux programmes. */
+  appSettings: AppSettings;
+  /** Par semaine de début. */
+  programs: Program[];
+  /** Programme en vigueur aujourd'hui. */
+  program: Program;
   elements: Element[];
   blockTypes: BlockType[];
   sessionTypes: SessionType[];
@@ -31,6 +42,16 @@ export interface AppData {
   lastImport: LastImport | null;
 }
 
+/** Date du jour (YYYY-MM-DD), mise à jour au changement de jour. */
+export function useToday(): string {
+  const [today, setToday] = useState(() => localISODate(new Date()));
+  useEffect(() => {
+    const id = window.setInterval(() => setToday(localISODate(new Date())), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return today;
+}
+
 const byOrder = <T extends { order: number }>(list: T[]) => list.sort((a, b) => a.order - b.order);
 
 /**
@@ -38,7 +59,9 @@ const byOrder = <T extends { order: number }>(list: T[]) => list.sort((a, b) => 
  * Une requête par table : une écriture ne recharge que la table modifiée.
  */
 export function useAppData(): AppData | null | undefined {
+  const today = useToday();
   const settings = useLiveQuery(async () => (await db.settings.get('settings')) ?? null, []);
+  const programs = useLiveQuery(async () => sortPrograms(await db.programs.toArray()), []);
   const elements = useLiveQuery(async () => byOrder(await db.elements.toArray()), []);
   const blockTypes = useLiveQuery(async () => byOrder(await db.blockTypes.toArray()), []);
   const sessionTypes = useLiveQuery(() => db.sessionTypes.toArray(), []);
@@ -54,11 +77,16 @@ export function useAppData(): AppData | null | undefined {
   const lastImport = useLiveQuery(async () => ((await db.meta.get('lastImport'))?.value as LastImport | undefined) ?? null, []);
 
   return useMemo(() => {
-    const parts = [settings, elements, blockTypes, sessionTypes, exercises, bands, templates, objectives, sessions, sets, lastImport];
+    const parts = [settings, programs, elements, blockTypes, sessionTypes, exercises, bands, templates, objectives, sessions, sets, lastImport];
     if (parts.some((p) => p === undefined)) return undefined;
-    if (settings === null) return null;
+    const week = settings ? dayInfo(today, { cycleStartDate: settings.cycleStartDate, cycleLengthWeeks: 1, deloadWeek: 0 }).week : 1;
+    const program = programAtWeek(programs!, week);
+    if (settings === null || !program) return null;
     return {
-      settings: settings!,
+      settings: effectiveSettings(settings!, program),
+      appSettings: settings!,
+      programs: programs!,
+      program,
       elements: elements!,
       blockTypes: blockTypes!,
       sessionTypes: sessionTypes!,
@@ -70,5 +98,5 @@ export function useAppData(): AppData | null | undefined {
       sets: sets!,
       lastImport: lastImport!,
     };
-  }, [settings, elements, blockTypes, sessionTypes, exercises, bands, templates, objectives, sessions, sets, lastImport]);
+  }, [today, settings, programs, elements, blockTypes, sessionTypes, exercises, bands, templates, objectives, sessions, sets, lastImport]);
 }

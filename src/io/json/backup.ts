@@ -1,15 +1,20 @@
 // Sauvegarde JSON complète : toutes les tables, avec un numéro de version de format.
+import { programFromLegacySettings } from '../../domain/programs';
+
 export const BACKUP_APP = 'streeter';
 /**
  * À incrémenter à chaque changement du format, avec une conversion à l'import.
  * 2 (17/10/2026) : type de série (`kind`) sur chaque série.
  * 3 (17/10/2026) : modèle archivé (`archived`, copies figées des séances comprises), temps par série d'un exercice.
  * 4 (17/10/2026) : séance express (`expressMinutes`) sur chaque séance.
+ * 5 (27/10/2026) : programmes datés (table `programs`) ; cycle, volume, matins et semaine type passent des réglages
+ * au programme ; `programId` sur chaque modèle et chaque copie figée.
  */
-export const BACKUP_FORMAT_VERSION = 4;
+export const BACKUP_FORMAT_VERSION = 5;
 
 export const BACKUP_TABLES = [
   'settings',
+  'programs',
   'elements',
   'blockTypes',
   'sessionTypes',
@@ -60,7 +65,7 @@ const isObject = (x: unknown): x is Record<string, unknown> => typeof x === 'obj
  * Conversion d'une sauvegarde d'un format plus ancien vers le format courant.
  * À compléter à chaque nouvelle version du format (une étape par version).
  */
-function migrate(backup: Backup): Backup {
+function migrate(backup: Backup, newId: () => string): Backup {
   let current = backup;
   if (current.formatVersion < 2) {
     // Format 1 → 2 : les séries d'avant le type de série sont des séries normales.
@@ -83,11 +88,25 @@ function migrate(backup: Backup): Backup {
     const sessions = current.tables.sessions.map((session) => ({ expressMinutes: null, ...(session as Record<string, unknown>) }));
     current = { ...current, formatVersion: 4, tables: { ...current.tables, sessions } };
   }
+  if (current.formatVersion < 5) {
+    // Format 4 → 5 : un premier programme reprend le cycle, le volume, les matins et la semaine type des réglages ;
+    // il commence en semaine 1, suit tous les objectifs et porte tous les modèles.
+    const legacy = current.tables.settings[0] as Record<string, unknown>;
+    const objectiveIds = current.tables.objectives.map((o) => (o as { id: string }).id);
+    const { program, app } = programFromLegacySettings(legacy, { id: newId(), objectiveIds, now: current.exportedAt });
+    const attached = (template: unknown) => ({ programId: program.id, ...(template as Record<string, unknown>) });
+    const templates = current.tables.templates.map(attached);
+    const sessions = current.tables.sessions.map((record) => {
+      const session = record as Record<string, unknown>;
+      return isObject(session.templateSnapshot) ? { ...session, templateSnapshot: attached(session.templateSnapshot) } : session;
+    });
+    current = { ...current, formatVersion: 5, tables: { ...current.tables, settings: [app], programs: [program], templates, sessions } };
+  }
   return current;
 }
 
 /** Lit et vérifie un fichier de sauvegarde ; lève une `BackupError` au message lisible sinon. */
-export function parseBackup(text: string, currentDbVersion: number): Backup {
+export function parseBackup(text: string, currentDbVersion: number, newId: () => string = () => crypto.randomUUID()): Backup {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -111,20 +130,29 @@ export function parseBackup(text: string, currentDbVersion: number): Backup {
     tables[name] = list;
   }
   const settings = tables.settings[0];
-  if (tables.settings.length !== 1 || !isObject(settings) || settings.id !== 'settings' || !isObject(settings.weekPlan)) {
+  if (tables.settings.length !== 1 || !isObject(settings) || settings.id !== 'settings') {
     throw new BackupError('Sauvegarde abîmée : réglages manquants.');
   }
-  return migrate({
-    app: BACKUP_APP,
-    formatVersion: raw.formatVersion,
-    dbVersion: typeof raw.dbVersion === 'number' ? raw.dbVersion : currentDbVersion,
-    exportedAt: typeof raw.exportedAt === 'number' ? raw.exportedAt : 0,
-    tables,
-  });
+  if (raw.formatVersion < 5 && !isObject(settings.weekPlan)) throw new BackupError('Sauvegarde abîmée : semaine type manquante.');
+  const backup = migrate(
+    {
+      app: BACKUP_APP,
+      formatVersion: raw.formatVersion,
+      dbVersion: typeof raw.dbVersion === 'number' ? raw.dbVersion : currentDbVersion,
+      exportedAt: typeof raw.exportedAt === 'number' ? raw.exportedAt : 0,
+      tables,
+    },
+    newId,
+  );
+  if (backup.tables.programs.length === 0 || !backup.tables.programs.every((p) => isObject(p) && isObject(p.weekPlan) && typeof p.startWeek === 'number')) {
+    throw new BackupError('Sauvegarde abîmée : programme manquant.');
+  }
+  return backup;
 }
 
 export interface BackupSummary {
   exportedAt: number;
+  programs: number;
   sessions: number;
   sets: number;
   exercises: number;
@@ -135,6 +163,7 @@ export interface BackupSummary {
 export function backupSummary(backup: Backup): BackupSummary {
   return {
     exportedAt: backup.exportedAt,
+    programs: backup.tables.programs.length,
     sessions: backup.tables.sessions.length,
     sets: backup.tables.sets.length,
     exercises: backup.tables.exercises.length,

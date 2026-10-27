@@ -1,15 +1,17 @@
-// Onglet Programmes : deux vues, « Programmes » (le programme actif, la semaine type J1-J7 avec la séance du jour mise
-// en avant ; les autres modèles et les archivés) et « Exercices » (bibliothèque) ; l'éditeur de modèle, la fiche et
-// l'éditeur d'exercice, l'éditeur des créneaux. Un seul programme, pas de rotation (décidé avec l'utilisateur).
+// Onglet Programmes : deux vues, « Programmes » (le programme affiché, en cours par défaut : la semaine type J1-J7 avec
+// la séance du jour mise en avant ; les autres modèles et les archivés) et « Exercices » (bibliothèque) ; la liste des
+// programmes datés, l'éditeur de modèle, la fiche et l'éditeur d'exercice, l'éditeur des créneaux. Un programme à la
+// fois, daté (un par mois en général), pas de rotation (décidé avec l'utilisateur).
 import { useState } from 'react';
 import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
 import { saveTemplate, swapWeekSlotsOf } from '../../db/programStore';
-import { dayInfo, localISODate } from '../../domain/cycle';
+import { dateOf, dayInfo, localISODate } from '../../domain/cycle';
 import { estimateDuration } from '../../domain/duration';
 import { uniqueName } from '../../domain/editing';
-import { MOMENT_LABEL, formatDurationRange, seqDayLabel } from '../../domain/labels';
+import { MOMENT_LABEL, formatDateLong, formatDurationRange, seqDayLabel } from '../../domain/labels';
+import { programPhase, programStartDate } from '../../domain/programs';
 import { MOMENTS, SEQ_DAYS, type SessionTemplate } from '../../domain/types';
 import { weekProgress, type DayProgress, type SlotProgress } from '../../domain/week';
 import { useNow } from '../../lib/device';
@@ -17,7 +19,7 @@ import { newId } from '../../lib/id';
 import { navigate, queryParam } from '../../lib/router';
 import { Badge } from '../../ui/Badge';
 import { containingIndex, measureDropRects, useVerticalDrag, type DragHandleProps } from '../../ui/gestures';
-import { ChevronDownIcon, DotsIcon, DragIcon, PlusIcon } from '../../ui/icons';
+import { ChevronDownIcon, CopyIcon, DotsIcon, DragIcon, PencilIcon, PlusIcon } from '../../ui/icons';
 import { MenuItem, MenuList } from '../../ui/Menu';
 import { Screen } from '../../ui/Screen';
 import { Sheet } from '../../ui/Sheet';
@@ -25,7 +27,9 @@ import { showToast } from '../../ui/toastStore';
 import { ExerciseDetail } from '../journal/ExerciseDetail';
 import { ExerciseEditor } from './ExerciseEditor';
 import { ExerciseLibrary } from './ExerciseLibrary';
+import { PHASE_LABEL, programContext, programDates, withProgram, type ProgramContext } from './programContext';
 import { ProgramChecks } from './ProgramChecks';
+import { DuplicateProgramSheet, ProgramsList, RenameProgramSheet } from './ProgramsList';
 import { ProgramsNav, SettingsButton } from './ProgramsNav';
 import { SlotPickerSheet, type Slot } from './SlotPickerSheet';
 import { TemplateActions, type TemplateTarget } from './TemplateActions';
@@ -35,37 +39,47 @@ import { WeekPlanEditor } from './WeekPlanEditor';
 const SHORT_WEEKDAY = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' });
 const byName = (a: SessionTemplate, b: SessionTemplate) => a.name.localeCompare(b.name);
 
-/** #/programs (?vue=exercices), #/programs/template/:id, #/programs/exercise/:id(/edit), #/programs/exercise/new, #/programs/week. */
+/**
+ * #/programs (?vue=exercices, ?programme=:id), #/programs/all, #/programs/template/:id, #/programs/exercise/:id(/edit),
+ * #/programs/exercise/new, #/programs/week (?programme=:id).
+ */
 export function ProgramsScreen({ data, path }: { data: AppData; path: string }) {
   const parts = path.split('?')[0].split('/').filter(Boolean);
   if (parts[1] === 'template' && parts[2]) return <TemplateEditor key={parts[2]} data={data} templateId={parts[2]} />;
   if (parts[1] === 'exercise' && parts[2] === 'new') return <ExerciseEditor key="new" data={data} exerciseId="new" path={path} />;
   if (parts[1] === 'exercise' && parts[2] && parts[3] === 'edit') return <ExerciseEditor key={parts[2]} data={data} exerciseId={parts[2]} path={path} />;
   if (parts[1] === 'exercise' && parts[2]) return <ExerciseDetail key={parts[2]} data={data} exerciseId={parts[2]} backTo="/programs?vue=exercices" />;
-  if (parts[1] === 'week') return <WeekPlanEditor data={data} />;
+  if (parts[1] === 'week') return <WeekPlanEditor data={data} programId={queryParam(path, 'programme')} />;
+  if (parts[1] === 'all') return <ProgramsListRoute data={data} />;
   if (queryParam(path, 'vue') === 'exercices') return <ExerciseLibrary data={data} path={path} />;
-  return <ProgramView data={data} />;
+  return <ProgramView key={queryParam(path, 'programme') ?? 'current'} data={data} programId={queryParam(path, 'programme')} />;
 }
 
-async function createTemplate(data: AppData): Promise<void> {
+function ProgramsListRoute({ data }: { data: AppData }) {
+  const today = localISODate(new Date(useNow(60_000)));
+  return <ProgramsList data={data} today={today} />;
+}
+
+async function createTemplate(data: AppData, context: ProgramContext): Promise<void> {
   const type = data.sessionTypes.find((t) => t.moment === 'evening') ?? data.sessionTypes[0];
   const template: SessionTemplate = {
     id: newId(),
-    name: uniqueName('Nouveau modèle', data.templates),
+    name: uniqueName('Nouveau modèle', context.templates),
     sessionTypeId: type?.id ?? '',
     moment: 'evening',
     optional: false,
     notes: '',
     items: [],
     archived: false,
+    programId: context.program.id,
   };
   await saveTemplate(db, template);
   navigate(`/programs/template/${template.id}`);
 }
 
 /** « Soir · 9 lignes · 46 min à 1 h 06 ». */
-function templateMeta(template: SessionTemplate, data: AppData, lookups: Lookups): string {
-  const { minSec, maxSec } = estimateDuration(template, data.settings, lookups);
+function templateMeta(template: SessionTemplate, context: ProgramContext, lookups: Lookups): string {
+  const { minSec, maxSec } = estimateDuration(template, context.settings, lookups);
   const lines = template.items.length;
   return `${MOMENT_LABEL[template.moment]} · ${lines} ligne${lines > 1 ? 's' : ''} · ${formatDurationRange(minSec, maxSec)}`;
 }
@@ -79,7 +93,7 @@ const SLOT_STATUS: Partial<Record<SlotProgress['status'], { label: string; class
 function SlotRow({
   day,
   slot,
-  data,
+  context,
   lookups,
   dragging,
   dy,
@@ -89,7 +103,7 @@ function SlotRow({
 }: {
   day: DayProgress;
   slot: SlotProgress;
-  data: AppData;
+  context: ProgramContext;
   lookups: Lookups;
   dragging: boolean;
   dy: number;
@@ -126,7 +140,7 @@ function SlotRow({
           <span className="min-w-0 font-semibold leading-snug">{template.name}</span>
         </span>
         <span className="block text-sm text-ink-2">
-          {templateMeta(template, data, lookups)}
+          {templateMeta(template, context, lookups)}
           {template.optional ? ' · optionnelle' : ''}
         </span>
         {status && <span className={`block text-sm font-semibold ${status.className}`}>{status.label}</span>}
@@ -138,7 +152,7 @@ function SlotRow({
   );
 }
 
-function TemplateRow({ template, data, lookups, onMenu }: { template: SessionTemplate; data: AppData; lookups: Lookups; onMenu: () => void }) {
+function TemplateRow({ template, context, lookups, onMenu }: { template: SessionTemplate; context: ProgramContext; lookups: Lookups; onMenu: () => void }) {
   const type = lookups.sessionTypes.get(template.sessionTypeId);
   return (
     <div className="flex items-center rounded-2xl border border-line bg-card pl-1">
@@ -147,7 +161,7 @@ function TemplateRow({ template, data, lookups, onMenu }: { template: SessionTem
           <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: type?.color }} aria-hidden />
           <span className="min-w-0 font-semibold">{template.name}</span>
         </span>
-        <span className="block text-sm text-ink-2">{templateMeta(template, data, lookups)}</span>
+        <span className="block text-sm text-ink-2">{templateMeta(template, context, lookups)}</span>
       </button>
       <button type="button" aria-label={`Options de ${template.name}`} onClick={onMenu} className="flex size-12 shrink-0 items-center justify-center rounded-xl text-ink-2 active:bg-card-2">
         <DotsIcon className="size-6" />
@@ -156,18 +170,25 @@ function TemplateRow({ template, data, lookups, onMenu }: { template: SessionTem
   );
 }
 
-function ProgramView({ data }: { data: AppData }) {
+function ProgramView({ data, programId }: { data: AppData; programId: string | null }) {
   const lookups = useLookups(data);
-  const { settings } = data;
+  const context = programContext(data, lookups, programId);
+  const { program, settings } = context;
   const today = localISODate(new Date(useNow(60_000)));
-  const info = dayInfo(today, settings);
-  const days = weekProgress(Math.max(1, info.week), today, settings, lookups.templates, data.sessions);
+  const current = dayInfo(today, data.settings);
+  const phase = programPhase(data.programs, program, current.week);
+  const isCurrent = phase === 'current';
+  // Programme passé ou à venir : sa première semaine.
+  const shownWeek = isCurrent ? Math.max(1, current.week) : program.startWeek;
+  const info = isCurrent ? current : dayInfo(dateOf(shownWeek, 1, settings), settings);
+  const days = weekProgress(shownWeek, today, settings, lookups.templates, data.sessions);
   const [menu, setMenu] = useState<TemplateTarget | null>(null);
   const [picker, setPicker] = useState<Slot | null>(null);
   const [programMenu, setProgramMenu] = useState(false);
+  const [programSheet, setProgramSheet] = useState<'rename' | 'duplicate' | null>(null);
   const inWeek = new Set(SEQ_DAYS.flatMap((day) => [settings.weekPlan[day].morning, settings.weekPlan[day].evening]));
-  const others = data.templates.filter((t) => !t.archived && !inWeek.has(t.id)).sort(byName);
-  const archived = data.templates.filter((t) => t.archived).sort(byName);
+  const others = context.templates.filter((t) => !t.archived && !inWeek.has(t.id)).sort(byName);
+  const archived = context.templates.filter((t) => t.archived).sort(byName);
 
   // Glisser une séance sur un autre jour : les deux jours échangent leur séance de ce moment.
   const drag = useVerticalDrag<Slot>({
@@ -177,8 +198,8 @@ function ProgramView({ data }: { data: AppData }) {
       const to = SEQ_DAYS[index];
       if (!to || to === slot.day) return;
       const label = `${MOMENT_LABEL[slot.moment]} de ${seqDayLabel(slot.day)} et ${seqDayLabel(to)} échangés.`;
-      void swapWeekSlotsOf(db, slot.moment, slot.day, to).then(() =>
-        showToast(label, { action: { label: 'Annuler', run: () => void swapWeekSlotsOf(db, slot.moment, slot.day, to) } }),
+      void swapWeekSlotsOf(db, program.id, slot.moment, slot.day, to).then(() =>
+        showToast(label, { action: { label: 'Annuler', run: () => void swapWeekSlotsOf(db, program.id, slot.moment, slot.day, to) } }),
       );
     },
   });
@@ -187,25 +208,43 @@ function ProgramView({ data }: { data: AppData }) {
 
   return (
     <Screen title="Programmes" aside={<SettingsButton />} nav={<ProgramsNav current="programs" />}>
-      <ProgramChecks program={lookups.program} settings={settings} lookups={lookups} sticky />
+      <ProgramChecks program={context.plan} settings={settings} lookups={lookups} sticky />
+
+      {!isCurrent && (
+        <div className="flex items-center gap-3 rounded-2xl border border-line bg-card-2 p-3">
+          <span className="flex-1 text-ink-2">
+            {phase === 'upcoming' ? `Commence le ${formatDateLong(programStartDate(data.appSettings, program))}.` : 'Programme terminé.'}
+          </span>
+          <button type="button" onClick={() => navigate('/programs')} className="min-h-11 rounded-xl border border-line px-3 font-semibold active:bg-card">
+            En cours
+          </button>
+        </div>
+      )}
 
       <section className="flex flex-col gap-2">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="font-display text-lg leading-none tracking-wider text-accent">Programme actif</div>
-            <h2 className="font-display text-3xl leading-tight tracking-wide">Semaine type J1-J7</h2>
-          </div>
+          <button type="button" onClick={() => navigate('/programs/all')} className="min-w-0 rounded-xl text-left active:bg-card-2">
+            <div className="font-display text-lg leading-none tracking-wider text-accent">{PHASE_LABEL[phase]}</div>
+            <h2 className="font-display text-3xl leading-tight tracking-wide">
+              {program.name} <ChevronDownIcon className="inline size-6 -rotate-90 text-ink-3" />
+            </h2>
+            <span className="block text-sm text-ink-3">{programDates(data, program)} · tous les programmes</span>
+          </button>
           <button type="button" aria-label="Options du programme" onClick={() => setProgramMenu(true)} className="flex size-12 shrink-0 items-center justify-center rounded-2xl text-ink-2 active:bg-card-2">
             <DotsIcon className="size-7" />
           </button>
         </div>
         <p className="flex flex-wrap items-center gap-2 text-ink-2">
-          {info.beforeStart ? 'Pas encore commencé' : `Cycle ${info.cycle} · semaine ${info.cycleWeek}/${settings.cycleLengthWeeks} · aujourd’hui ${seqDayLabel(info.seqDay)}`}
-          {info.isDeload && <Badge tone="accent">Semaine allégée</Badge>}
+          {!isCurrent
+            ? `Semaine type J1-J7 · cycle de ${settings.cycleLengthWeeks} semaines`
+            : info.beforeStart
+              ? 'Pas encore commencé'
+              : `Cycle ${info.cycle} · semaine ${info.cycleWeek}/${settings.cycleLengthWeeks} · aujourd’hui ${seqDayLabel(info.seqDay)}`}
+          {isCurrent && info.isDeload && <Badge tone="accent">Semaine allégée</Badge>}
         </p>
         <ul className="flex flex-col gap-2">
           {days.map((day) => {
-            const isToday = day.isToday && !info.beforeStart;
+            const isToday = isCurrent && day.isToday && !info.beforeStart;
             const isDropTarget = dropDay === day.seqDay && dragState?.source.day !== day.seqDay;
             const slots = MOMENTS.map((moment) => day.slots[moment]).filter((slot) => slot.planned || slot.moment === 'evening');
             return (
@@ -229,7 +268,7 @@ function ProgramView({ data }: { data: AppData }) {
                         key={slot.moment}
                         day={day}
                         slot={slot}
-                        data={data}
+                        context={context}
                         lookups={lookups}
                         dragging={dragState?.source.day === day.seqDay && dragState.source.moment === slot.moment}
                         dy={dragState?.dy ?? 0}
@@ -247,7 +286,7 @@ function ProgramView({ data }: { data: AppData }) {
         <p className="px-1 text-sm text-ink-3">⠿ : glisser une séance sur un autre jour pour échanger les deux jours.</p>
         <button
           type="button"
-          onClick={() => void createTemplate(data)}
+          onClick={() => void createTemplate(data, context)}
           className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line font-semibold text-ink-2 active:bg-card-2"
         >
           <PlusIcon className="size-5" /> Nouveau modèle
@@ -259,7 +298,7 @@ function ProgramView({ data }: { data: AppData }) {
           <h2 className="font-display text-2xl leading-none tracking-wider text-ink-3">Autres modèles</h2>
           <p className="text-sm text-ink-3">Hors de la semaine type : à choisir pour une séance ponctuelle ou à placer dans un créneau.</p>
           {others.map((template) => (
-            <TemplateRow key={template.id} template={template} data={data} lookups={lookups} onMenu={() => setMenu({ template })} />
+            <TemplateRow key={template.id} template={template} context={context} lookups={lookups} onMenu={() => setMenu({ template })} />
           ))}
         </section>
       )}
@@ -271,28 +310,48 @@ function ProgramView({ data }: { data: AppData }) {
           </summary>
           <div className="flex flex-col gap-2 pt-1">
             {archived.map((template) => (
-              <TemplateRow key={template.id} template={template} data={data} lookups={lookups} onMenu={() => setMenu({ template })} />
+              <TemplateRow key={template.id} template={template} context={context} lookups={lookups} onMenu={() => setMenu({ template })} />
             ))}
           </div>
         </details>
       )}
 
-      <Sheet open={programMenu} onClose={() => setProgramMenu(false)} title="Programme actif">
+      <Sheet open={programMenu} onClose={() => setProgramMenu(false)} title={program.name}>
         <MenuList>
-          <MenuItem label="Créneaux matin et soir" hint="Les 14 créneaux de J1 à J7 et le volume prévu des composantes." onClick={() => navigate('/programs/week')} />
-          <MenuItem label="Cycle et semaine allégée" hint="Date de début (un J1), longueur du cycle, volume, durée des matins." onClick={() => navigate('/settings/cycle')} />
+          <MenuItem label="Tous les programmes" hint="Passés, en cours, à venir ; préparer le suivant." onClick={() => navigate('/programs/all')} />
+          <MenuItem label="Créneaux matin et soir" hint="Les 14 créneaux de J1 à J7 et le volume prévu des composantes." onClick={() => navigate(withProgram('/programs/week', data, program.id))} />
+          <MenuItem label="Cycle et semaine allégée" hint="Longueur du cycle, semaine allégée, volume, durée des matins." onClick={() => navigate(withProgram('/settings/cycle', data, program.id))} />
+          <MenuItem
+            icon={<CopyIcon />}
+            label="Dupliquer pour la suite"
+            hint="Nouveau programme après le dernier, avec la même semaine type."
+            onClick={() => {
+              setProgramMenu(false);
+              setProgramSheet('duplicate');
+            }}
+          />
+          <MenuItem
+            icon={<PencilIcon />}
+            label="Renommer le programme"
+            onClick={() => {
+              setProgramMenu(false);
+              setProgramSheet('rename');
+            }}
+          />
           <MenuItem
             icon={<PlusIcon />}
             label="Nouveau modèle"
             onClick={() => {
               setProgramMenu(false);
-              void createTemplate(data);
+              void createTemplate(data, context);
             }}
           />
         </MenuList>
       </Sheet>
+      {programSheet === 'rename' && <RenameProgramSheet program={program} data={data} onClose={() => setProgramSheet(null)} />}
+      {programSheet === 'duplicate' && <DuplicateProgramSheet source={program} data={data} today={today} onClose={() => setProgramSheet(null)} />}
       <TemplateActions key={menu?.template.id ?? 'aucun'} target={menu} onClose={() => setMenu(null)} data={data} lookups={lookups} />
-      <SlotPickerSheet slot={picker} onClose={() => setPicker(null)} data={data} lookups={lookups} />
+      <SlotPickerSheet slot={picker} onClose={() => setPicker(null)} context={context} lookups={lookups} />
     </Screen>
   );
 }

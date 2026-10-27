@@ -3,7 +3,7 @@ import type { AppData } from '../../db/hooks';
 import { localISODate } from '../../domain/cycle';
 import { formatDateShort } from '../../domain/labels';
 import type { ImportReport } from '../../io/xlsx/importWorkbook';
-import { goBack, navigate } from '../../lib/router';
+import { goBack, navigate, queryParam } from '../../lib/router';
 import { ListGroup, ListRow } from '../../ui/form';
 import { Screen } from '../../ui/Screen';
 import { BandsScreen } from './BandsScreen';
@@ -86,7 +86,7 @@ export function SettingsScreen({
     case 'bands':
       return <BandsScreen data={data} />;
     case 'cycle':
-      return <CycleScreen data={data} />;
+      return <CycleScreen data={data} programId={queryParam(path, 'programme')} />;
     case 'data':
       return <DataScreen data={data} onImported={onImported} onShowReport={onShowReport} />;
     default:

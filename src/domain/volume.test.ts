@@ -11,7 +11,7 @@ import {
   remainingEveningSets,
   skillTotals,
   volumeStatus,
-  type Program,
+  type PlanContext,
 } from './volume';
 import { weekProgress } from './week';
 
@@ -28,7 +28,7 @@ const blocks = new Map([warmUp, skill, renfo].map((b) => [b.id, b]));
 
 const s = settings({ volumeMin: 4, volumeMax: 6, deloadReductionPct: 40 });
 
-function program(templates: SessionTemplate[], plan: Program['weekPlan']): Program {
+function program(templates: SessionTemplate[], plan: PlanContext['weekPlan']): PlanContext {
   return { weekPlan: plan, templates: new Map(templates.map((t) => [t.id, t])), elements, blocks, exercises: new Map() };
 }
 

@@ -20,6 +20,7 @@ import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/toastStore';
 import { CandidatesSheet } from './CandidatesSheet';
 import { ProgramChecks } from './ProgramChecks';
+import { programContext } from './programContext';
 
 export type ItemField = 'all' | 'sets' | 'target' | 'intensity' | 'rest' | 'notes';
 
@@ -99,7 +100,8 @@ function ItemSheetForm({ target, template, data, lookups, onClose }: { target: I
   const errors = formErrors(form);
   const draft = formToItem(existing?.id ?? 'brouillon', form, lookups.exercises);
   const draftTemplate = { ...template, items: existing ? template.items.map((i) => (i.id === existing.id ? draft : i)) : insertItem(template.items, draft, lookups.blocks) };
-  const draftProgram = { ...lookups.program, templates: new Map(lookups.templates).set(template.id, draftTemplate) };
+  const context = programContext(data, lookups, template.programId);
+  const draftProgram = { ...context.plan, templates: new Map(lookups.templates).set(template.id, draftTemplate) };
   const element = lookups.elements.get(form.elementId);
   const targets = parseTargets(form.targetText);
   const intensity = parseIntensity(form.intensityText);
@@ -213,7 +215,7 @@ function ItemSheetForm({ target, template, data, lookups, onClose }: { target: I
           </Field>
         )}
 
-        <ProgramChecks program={draftProgram} settings={data.settings} lookups={lookups} template={draftTemplate} compact />
+        <ProgramChecks program={draftProgram} settings={context.settings} lookups={lookups} template={draftTemplate} compact />
 
         {field !== 'all' && (
           <button type="button" onClick={() => setField('all')} className="flex min-h-12 items-center justify-between rounded-2xl border border-line px-4 font-semibold text-ink-2 active:bg-card-2">

@@ -39,13 +39,18 @@ export function localISODate(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export type CycleSettings = Pick<Settings, 'cycleStartDate' | 'cycleLengthWeeks' | 'deloadWeek'>;
+/**
+ * `programStartWeek` : semaine absolue où commence le programme en vigueur, S1 de son premier cycle
+ * (1 par défaut). Les cycles se comptent à partir de là.
+ */
+export type CycleSettings = Pick<Settings, 'cycleStartDate' | 'cycleLengthWeeks' | 'deloadWeek'> & { programStartWeek?: number };
 
 export interface DayInfo {
   date: string;
   seqDay: SeqDay;
   /** Semaine absolue depuis le début (1, 2… 5, 6…). */
   week: number;
+  /** Cycle dans le programme en vigueur (1 pour son premier cycle). */
   cycle: number;
   /** Semaine dans le cycle, 1…durée du cycle. */
   cycleWeek: number;
@@ -58,12 +63,13 @@ export function dayInfo(date: string, s: CycleSettings): DayInfo {
   const days = diffDays(s.cycleStartDate, date);
   const length = Math.max(1, s.cycleLengthWeeks);
   const week = Math.floor(days / 7) + 1;
-  const cycleWeek = mod(week - 1, length) + 1;
+  const sinceProgram = week - (s.programStartWeek ?? 1);
+  const cycleWeek = mod(sinceProgram, length) + 1;
   return {
     date,
     seqDay: (mod(days, 7) + 1) as SeqDay,
     week,
-    cycle: Math.floor((week - 1) / length) + 1,
+    cycle: Math.floor(sinceProgram / length) + 1,
     cycleWeek,
     isDeload: cycleWeek === s.deloadWeek,
     beforeStart: days < 0,
@@ -98,11 +104,11 @@ export function firstTestSeqDay(
 }
 
 /**
- * Semaine de test des objectifs : début de la semaine 5, c'est-à-dire la première semaine
- * de chaque cycle à partir du deuxième.
+ * Semaine de test des objectifs : la première semaine de chaque cycle (début d'un programme compris), sauf la toute
+ * première semaine (semaine 1), qui n'a rien à tester.
  */
 export function isObjectiveTestWeek(info: DayInfo): boolean {
-  return !info.beforeStart && info.cycle >= 2 && info.cycleWeek === 1;
+  return !info.beforeStart && info.week >= 2 && info.cycleWeek === 1;
 }
 
 export function isObjectiveTestDay(info: DayInfo, testSeqDay: SeqDay | null): boolean {
@@ -110,15 +116,17 @@ export function isObjectiveTestDay(info: DayInfo, testSeqDay: SeqDay | null): bo
 }
 
 /**
- * Prochain jour de test des objectifs, aujourd'hui compris : le jour `testSeqDay` de la première semaine
- * du prochain cycle (semaines 5, 9… avec des cycles de 4 semaines). `null` sans jour de test dans la semaine type.
+ * Prochain jour de test des objectifs d'un programme, aujourd'hui compris : le jour `testSeqDay` de la première
+ * semaine du prochain cycle (semaines 5, 9… avec des cycles de 4 semaines commencés en semaine 1). `null` sans jour
+ * de test dans la semaine type.
  */
 export function nextObjectiveTestDate(today: string, s: CycleSettings, testSeqDay: SeqDay | null): { date: string; week: number } | null {
   if (testSeqDay === null) return null;
   const length = Math.max(1, s.cycleLengthWeeks);
-  // Première semaine d'un cycle à partir du 2e : semaines absolues 1 + k × durée, k ≥ 1.
-  let week = Math.max(dayInfo(today, s).week, length + 1);
-  week += mod(1 - week, length);
+  const start = s.programStartWeek ?? 1;
+  // Première semaine d'un cycle : semaines start + k × durée, jamais la semaine 1.
+  let week = Math.max(dayInfo(today, s).week, start, 2);
+  week += mod(start - week, length);
   if (dateOf(week, testSeqDay, s) < today) week += length;
   return { date: dateOf(week, testSeqDay, s), week };
 }

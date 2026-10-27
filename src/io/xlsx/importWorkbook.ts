@@ -44,6 +44,7 @@ export interface ExistingData {
   templates: SessionTemplate[];
   objectives: Objective[];
   sessions: SessionLog[];
+  /** Réglages effectifs du programme où écrire l'import (celui en vigueur) ; `null` : base vide. */
   settings: Settings | null;
 }
 
@@ -102,6 +103,8 @@ export interface ImportResult {
   templates: SessionTemplate[];
   settings: Settings;
   objectives: Objective[];
+  /** Objectifs du tableur : le programme les suit. */
+  importedObjectiveIds: ID[];
   sessions: SessionLog[];
   sets: SetLog[];
   /** Séances déjà importées d'un précédent tableur, remplacées (leurs séries sont à supprimer). */
@@ -372,7 +375,8 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
     return entity;
   };
 
-  // Modèles de séance et semaine type.
+  // Modèles de séance et semaine type, dans le programme en vigueur (un premier programme sur une base vide).
+  const programId = existing.settings?.programId ?? newId();
   const weekPlan = emptyWeekPlan();
   const templates: SessionTemplate[] = [];
   const templateBySignature = new Map<string, SessionTemplate>();
@@ -462,6 +466,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
         notes: '',
         items,
         archived: false,
+        programId,
       };
       templateBySignature.set(signature, template);
       templates.push(template);
@@ -488,7 +493,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
   }
   // Ré-import : un modèle du même nom garde son identifiant.
   for (const template of templates) {
-    const previous = existing.templates.find((t) => nameKey(t.name) === nameKey(template.name));
+    const previous = existing.templates.find((t) => t.programId === programId && nameKey(t.name) === nameKey(template.name));
     if (!previous) continue;
     for (const slot of Object.values(weekPlan)) {
       if (slot.morning === template.id) slot.morning = previous.id;
@@ -514,11 +519,14 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
       volumeMax: data.volume?.max ?? DEFAULT_SETTINGS.volumeMax,
       deloadReductionPct: data.volume?.deloadPct ?? DEFAULT_SETTINGS.deloadReductionPct,
       weekPlan,
+      programId,
+      programStartWeek: 1,
     };
   }
 
   // Objectifs.
   const objectiveReg = new Registry(existing.objectives);
+  const importedObjectiveIds: ID[] = [];
   (data.objectives ?? []).forEach((row, index) => {
     if (row.target === null) {
       issue('warning', 'Objectifs', row.line, `« ${row.name} » : cible manquante, objectif ignoré.`);
@@ -543,6 +551,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
       }),
       (e) => ({ ...e, criterion: row.criterion, target, unit: unit ?? e.unit, exerciseId: e.exerciseId ?? match.exercise?.id ?? null }),
     );
+    importedObjectiveIds.push(entity.id);
     if (row.lastTest !== null) {
       const date = row.lastTestDate ?? opts.today;
       if (!row.lastTestDate) issue('warning', 'Objectifs', row.line, `« ${row.name} » : test sans date, daté d'aujourd'hui.`);
@@ -728,6 +737,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
     templates,
     settings,
     objectives,
+    importedObjectiveIds,
     sessions,
     sets,
     replacedSessionIds,

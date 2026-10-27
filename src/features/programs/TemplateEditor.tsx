@@ -24,6 +24,7 @@ import { showToast } from '../../ui/toastStore';
 import { CandidatesSheet } from './CandidatesSheet';
 import { ItemSheet, type ItemField, type ItemSheetTarget } from './ItemSheet';
 import { ProgramChecks } from './ProgramChecks';
+import { programContext } from './programContext';
 import { TemplateActions } from './TemplateActions';
 
 export function TemplateEditor({ data, templateId }: { data: AppData; templateId: string }) {
@@ -160,9 +161,10 @@ function Editor({ template, data, lookups }: { template: SessionTemplate; data: 
   const [sheet, setSheet] = useState<SheetState>(null);
   const [candidates, setCandidates] = useState<ID[]>([]);
   const plan = buildPlan(template, lookups.blocks, lookups.elements);
-  const days = templateDays(template.id, data.settings.weekPlan);
+  const context = programContext(data, lookups, template.programId);
+  const days = templateDays(template.id, context.program.weekPlan);
   const type = lookups.sessionTypes.get(template.sessionTypeId);
-  const { minSec, maxSec } = estimateDuration(template, data.settings, lookups);
+  const { minSec, maxSec } = estimateDuration(template, context.settings, lookups);
   const saveItems = (items: PrescriptionItem[]) => saveTemplate(db, { ...template, items });
   /** Lignes d'un bloc dans l'ordre affiché (paires et supersets ensemble). */
   const shownIds = (blockTypeId: ID) => plan.blocks.filter((b) => b.blockTypeId === blockTypeId).flatMap((b) => b.units.flatMap((u) => u.itemIds));
@@ -239,7 +241,7 @@ function Editor({ template, data, lookups }: { template: SessionTemplate; data: 
         </button>
       }
     >
-      <ProgramChecks program={lookups.program} settings={data.settings} lookups={lookups} template={template} sticky />
+      <ProgramChecks program={context.plan} settings={context.settings} lookups={lookups} template={template} sticky />
 
       {template.archived && (
         <div className="flex items-center gap-3 rounded-2xl border border-line bg-card-2 p-3">

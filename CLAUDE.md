@@ -8,7 +8,7 @@ PWA personnelle de programmation et de suivi d'entraînement street workout : un
 
 ## Méthode de travail
 
-- Phases livrables et testables sur téléphone : 0 socle, import, calculs testés, mise en ligne → 1 Aujourd'hui et mode séance, hors ligne, export JSON de secours → 2 édition complète dans Réglages → 3 Semaine, Journal, Objectifs → 4 sauvegarde complète, exports, finitions PWA. Refonte de l'interface (V2) : phases 0 et A à F, toutes livrées le 17/10/2026, voir « Interface V2 ».
+- Phases livrables et testables sur téléphone : 0 socle, import, calculs testés, mise en ligne → 1 Aujourd'hui et mode séance, hors ligne, export JSON de secours → 2 édition complète dans Réglages → 3 Semaine, Journal, Objectifs → 4 sauvegarde complète, exports, finitions PWA. Refonte de l'interface (V2) : phases 0 et A à F, toutes livrées le 17/10/2026, voir « Interface V2 ». Programmes mensuels : phases G1 à G3, puis Novembre, voir « Programmes mensuels ».
 - Fin de phase : tests verts, journal de bord du jour à jour, `git commit`, `git push` (déploiement automatique), puis court récapitulatif (ce qui marche, ce qui reste, quoi tester sur le téléphone).
 - Échanges en français, en tutoyant l'utilisateur. Son téléphone : Android (Chrome).
 
@@ -65,7 +65,7 @@ Refonte de l'interface d'après la spec et les maquettes de l'utilisateur (16/10
 Décidé avec l'utilisateur :
 
 - 4 onglets : Aujourd'hui, Séance, Programmes, Progression. Hors de l'écran Séance, une barre de séance active (nom, chrono total, repos) rouvre la séance d'un toucher : changer d'onglet ne perd jamais la séance.
-- Programme = la semaine J1-J7 actuelle (matin / soir, cycles, semaine allégée, jour de test, décalage de séquence). Un seul programme, pas de rotation A → B → C.
+- Programme = la semaine J1-J7 actuelle (matin / soir, cycles, semaine allégée, jour de test, décalage de séquence). Un programme à la fois, pas de rotation A → B → C ; depuis le 27/10/2026, les programmes sont datés et se succèdent (« Programmes mensuels »).
 - Séance en tableau : une ligne par série (numéro ou type, précédent, valeur, ✓) ; le ✓ valide la série et lance le repos ; « + Ajouter une série » copie la dernière ligne.
 - Alternance planche / FL (blocs Skill et Skill assisté) : **pas de repos entre la série planche et la série FL d'une paire**, comme un superset ; le repos vient après la paire. Partout ailleurs, supersets du matin compris : repos après chaque série, comme aujourd'hui. Détails : règles 3 et 8.
 - Types de série : normale, échauffement (hors volume hebdo), échec (aller chercher l'échec total ; compte dans le volume). La qualité reste à part : dégradée = mouvement mal maîtrisé. Les records excluent les séries dégradées et d'échauffement.
@@ -94,6 +94,42 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 - D (livrée le 17/10/2026, v1.4.0) : Programmes : semaine J1-J7, éditeur de modèle, bibliothèque d'exercices ; schéma Dexie v3 (modèle archivé, temps par série d'un exercice). Voir « Programmes (depuis la phase D) ».
 - E (livrée le 17/10/2026, v1.5.0) : Progression : Skills (objectifs, records par élastique, courbes), Volume (jauges, totaux skills, semaines). Pas de changement de schéma. Voir « Progression (depuis la phase E) ».
 - F (livrée le 17/10/2026, v1.6.0) : Aujourd'hui refondu et séance express ; schéma Dexie v4 (séance express). Voir « Aujourd'hui et séance express (depuis la phase F) ».
+
+## Programmes mensuels (décidé le 27/10/2026)
+
+Le programme évolue chaque mois ; il est conçu par un autre agent (IA) de l'utilisateur. Importer un tableur chaque mois n'est plus la voie : **l'appli est la source de vérité**, avec des programmes datés, et un fichier programme JSON sert d'échange avec l'agent. Un concept nouveau du programme entre d'abord dans l'appli (schéma, format), puis dans le programme.
+
+Décidé avec l'utilisateur :
+
+- Programmes datés, un par mois en général, à la place du programme unique.
+- **Programme = cycle** : un programme commence en S1 de son cycle à sa date de début, avec ses propres réglages (durée du cycle, semaine allégée, réduction, volume, matins). Il dure jusqu'au début du suivant ; sans suivant, ses cycles se répètent. Le numéro de semaine absolu continue toujours.
+- **Objectifs choisis par programme** : chaque programme liste ses objectifs ; les autres sont des « anciens objectifs », gardés avec leurs tests ; un objectif repris garde ses tests.
+- Échange avec l'agent par fichier (partage Android ou téléchargement) **et** par copier-coller, au choix.
+
+Phases :
+
+- **G1, programmes datés** (livrée le 27/10/2026, v1.7.0) : schéma Dexie v5, format de sauvegarde 5. Voir « Programmes datés (depuis la phase G1) ».
+- **G2, format programme JSON** : document du format pour l'agent (dans le dépôt), export d'un programme, import par fichier ou texte collé, aperçu des changements et contrôles avant de valider ; crée un programme daté ou remplace un programme à venir.
+- **G3, bilan du programme** : export pour l'agent (volume réalisé par semaine, records, tests, séances sautées ou dégradées, notes, séances express).
+- **Novembre** : ce que demande le programme de novembre (force / endurance par composante, bonus = matins + lignes optionnelles du soir, nouveaux types de séance, etc.), après les réponses de l'utilisateur aux questions du journal du 27/10/2026.
+
+## Programmes datés (depuis la phase G1)
+
+- **Données** ([src/domain/programs.ts](src/domain/programs.ts)) : table `programs` ; chaque modèle a un `programId`. Les réglages se répartissent :
+  - communs (`AppSettings`, table `settings`) : `cycleStartDate` (début de la semaine 1, origine de la séquence J1-J7 et des numéros de semaine), temps par série général, repos libre compté, dernière sauvegarde ;
+  - par programme (`ProgramConfig`) : cycle, semaine allégée, réduction, masquer les matins, volume min / max, durée des matins, semaine type.
+  - `Settings` = réglages effectifs (communs + programme en vigueur, avec `programId` et `programStartWeek`) : c'est ce que lit le reste de l'appli. `AppData.settings` est celui d'aujourd'hui ; `settingsAtWeek` / `settingsAtDate` pour une autre semaine (Volume d'une semaine passée, prochaine séance, tableau des semaines).
+- **Programme en vigueur** (`programAtWeek`) : le dernier dont la semaine de début est atteinte ; avant le premier, le premier. Un programme commence par un J1 (semaine de début stockée, sa date s'en déduit) : décaler la séquence décale aussi le début des programmes.
+- **Cycle** : `dayInfo` compte les cycles depuis `programStartWeek`. Test des objectifs : première semaine de chaque cycle (début d'un programme compris), jamais la semaine 1 ; `nextTestDate` suit les programmes à venir.
+- **Programmes** (onglet) : le programme en cours par défaut ; `?programme=:id` en affiche un autre (bandeau « Commence le… » ou « Programme terminé », bouton « En cours ») ; `/programs/all` liste les programmes (passé, en cours, à venir), « Préparer le programme suivant ». Menu ⋯ du programme : tous les programmes, créneaux, cycle (`/settings/cycle?programme=:id`), dupliquer pour la suite, renommer, nouveau modèle.
+- **Dupliquer pour la suite** : copie de la semaine type, de tous les modèles (archivés compris, nouveaux identifiants de modèle et de ligne), des objectifs et des réglages ; début proposé à la fin du cycle en cours du dernier programme, jamais avant la semaine prochaine ; nom par défaut : le mois du début (« Novembre 2026 »).
+- **Règles** : un nouveau programme commence au plus tôt la semaine prochaine, à une semaine libre ; seul un programme à venir change de date ou se supprime (avec ses modèles) ; il en reste toujours un.
+- Le reste suit le programme en cours : Aujourd'hui (nom du programme en sous-titre), « Choisir une séance », séance express, fiche exercice (« Dans le programme »), Skills (objectifs du programme, « Anciens objectifs » repliés). Un nouvel objectif rejoint le programme en cours. L'import du tableur écrit dans le programme en vigueur (un premier programme sur une base vide).
+- Choix sans l'utilisateur, à valider à l'usage :
+  - nom du programme en titre de Programmes, touché : la liste des programmes ;
+  - début proposé pour la copie (fin du cycle en cours du dernier programme) ;
+  - un programme commencé ne se supprime pas et ne change pas de date ;
+  - « Dans le programme » de la fiche exercice et « Choisir une séance » : programme en cours seulement.
 
 ## Navigation et charte (depuis la phase B)
 
@@ -136,7 +172,7 @@ Phases (même méthode : tests, journal, commit, push, test sur téléphone) :
 
 ## Programmes (depuis la phase D)
 
-Onglet Programmes ([src/features/programs/](src/features/programs/)). Un seul programme : la semaine type J1-J7 (pas de rotation, décidé).
+Onglet Programmes ([src/features/programs/](src/features/programs/)). Un programme à la fois : la semaine type J1-J7 (pas de rotation, décidé) ; programmes datés depuis la phase G1 (« Programmes datés »).
 
 - **Adresses** :
   - `/programs` : programme actif ; `/programs?vue=exercices` : bibliothèque (`&nature=skills|composantes|autres`, `&element=…`) ;
@@ -171,7 +207,7 @@ Onglet Programmes ([src/features/programs/](src/features/programs/)). Un seul pr
 Onglet Progression : Skills ([src/features/objectives/](src/features/objectives/)), Volume ([src/features/week/VolumeScreen.tsx](src/features/week/VolumeScreen.tsx)), Historique. Pas d'échelle de progression ni de règle de passage (décidé).
 
 - **Skills** (`/objectives`) :
-  - prochain test des objectifs (`nextObjectiveTestDate`), ou « Jour de test » le jour même ;
+  - prochain test des objectifs (`nextTestDate`, qui suit les programmes à venir), ou « Jour de test » le jour même ;
   - une carte par skill (éléments de nature `skill`) : ses objectifs (meilleur test en grand, cible, statut, meilleure série en séance, jauge), puis les records par élastique de ses 2 premiers exercices ; toucher la carte ouvre la fiche du skill ;
   - « Autres objectifs » : ceux dont l'exercice lié n'est pas un skill, ou sans exercice ; « + Nouvel objectif » en bas.
 - **Rattachement** ([src/domain/skills.ts](src/domain/skills.ts)) : un objectif appartient au skill de son exercice lié (`objectivesBySkill`). Exercices d'un skill (`skillRecords`) : ceux de l'élément, mesurés, avec au moins un record ; ceux des objectifs d'abord, puis les plus récemment faits.
@@ -312,8 +348,8 @@ Saisis par l'utilisateur dans Réglages, absents du tableur : **ne plus réimpor
 - Date de début actuelle : **lundi 05/10/2026, J1 = lundi** (décidé ; déduit du Journal : semaine 1, J3, le mercredi 07/10).
 - Numéro de semaine **absolu**, qui continue d'un cycle à l'autre (1, 2… 5, 6…) ; c'est lui qui va dans la colonne « Semaine » du Journal (décidé). La semaine du cycle s'affiche à part (« cycle 2 · S1/4 »).
 - On peut toujours choisir une autre séance pour aujourd'hui (choix ponctuel) ou **décaler la séquence** d'un jour : « Passer au jour suivant » ou « Reporter à demain ». Le décalage déplace la date de début, donc aussi les limites de semaine.
-- Cycles de 4 semaines (paramètre) qui s'enchaînent : S1 à S3 en progression, S4 allégée (numéro paramétrable).
-- Test des objectifs en début de semaine 5 (S1 des cycles suivants), le premier jour de type Max de la semaine ; l'appli le rappelle.
+- Cycles de 4 semaines (paramètre du programme) qui s'enchaînent : S1 à S3 en progression, S4 allégée (numéro paramétrable). Depuis la phase G1, chaque programme commence en S1 (programme = cycle, décidé le 27/10/2026).
+- Test des objectifs en S1 de chaque cycle (début de chaque programme compris), sauf la semaine 1, le premier jour de type « jour de test » (Max) de la semaine ; l'appli le rappelle.
 
 ### Semaine allégée
 
@@ -377,13 +413,15 @@ SessionType      { id, name, moment, description, color, isTestDay }
 Exercise         { id, name, category, elementId, measure: 'reps' | 'seconds' | 'combos' | 'none',
                    quick, active, notes, aliases, order, workSecPerSet /* null : réglage général */ }
 Band             { id, name, color, order /* 0 = le plus assistant */, active }
-SessionTemplate  { id, name, sessionTypeId, moment, optional, notes, items: PrescriptionItem[], archived }
+SessionTemplate  { id, name, sessionTypeId, moment, optional, notes, items: PrescriptionItem[], archived, programId }
 PrescriptionItem { id, blockTypeId, elementId, candidateExerciseIds, candidatesText, setsMin, setsMax,
                    targetText, targets: { unit, min, max }[], intensityText, intensity: { kind: 'rpe' | 'rir', min, max },
                    restText, restMinSec, restMaxSec, superset, optional, notes }
-Settings         { cycleStartDate, cycleLengthWeeks, deloadWeek, deloadReductionPct, hideMorningsInDeload,
-                   volumeMin, volumeMax, morningMaxMinutes, avgWorkSecPerSet, freeRestSec, lastBackupAt,
+AppSettings      { id: 'settings', cycleStartDate, avgWorkSecPerSet, freeRestSec, lastBackupAt }
+Program          { id, name, startWeek, notes, objectiveIds, createdAt, cycleLengthWeeks, deloadWeek,
+                   deloadReductionPct, hideMorningsInDeload, volumeMin, volumeMax, morningMaxMinutes,
                    weekPlan: { 1…7: { morning: templateId | null, evening: templateId | null } } }
+Settings         = AppSettings + réglages du programme en vigueur + { programId, programStartWeek } (calculé, non stocké)
 SessionLog       { id, date, week, cycleWeek, seqDay, moment, templateId, templateSnapshot, sessionTypeId,
                    sessionTypeName, deload, status: 'in_progress' | 'done' | 'abandoned', startedAt, endedAt,
                    note, source: 'app' | 'xlsx', resume, expressMinutes /* null : séance d'un modèle */ }
@@ -392,7 +430,7 @@ SetLog           { id, sessionId, itemId, blockTypeId, elementId, exerciseId, se
 Objective        { id, name, criterion, target, unit, exerciseId, order, tests: { id, date, value, note }[] }
 ```
 
-- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`) ; 4 (17/10/2026) ajoute `SessionLog.expressMinutes` (`null` sur les séances existantes).
+- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`) ; 4 (17/10/2026) ajoute `SessionLog.expressMinutes` (`null` sur les séances existantes) ; 5 (27/10/2026) ajoute la table `programs` (index `startWeek`) et l'index `templates.programId` : un premier programme (semaine 1, nommé d'après le mois de `cycleStartDate`, tous les objectifs) reprend les réglages du cycle, du volume, des matins et la semaine type, retirés de `settings` ; modèles et copies figées reçoivent son `programId`.
 - Dans `weekPlan`, `null` signifie « rien » : Repos le soir, pas de séance le matin.
 - `SessionLog.resume` contient l'état d'interface de la séance en cours :
   - ligne où l'on vient d'agir, exercice choisi par ligne, lignes terminées ;
@@ -404,7 +442,7 @@ Objective        { id, name, criterion, target, unit, exerciseId, order, tests: 
 
 ## Import du tableur
 
-Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en données et en rapport d'import ; elles sont testées sur le vrai fichier, puis le résultat est écrit dans Dexie. Un ré-import garde les identifiants existants (rapprochement par nom) et ne crée pas de doublon.
+Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en données et en rapport d'import ; elles sont testées sur le vrai fichier, puis le résultat est écrit dans Dexie. Un ré-import garde les identifiants existants (rapprochement par nom ; pour les modèles, dans le programme en vigueur, où il écrit) et ne crée pas de doublon. Remplacé par le format programme JSON (phase G2) pour les programmes suivants.
 
 - **Exercices** (35 lignes) : catégorie → élément (« Planche skill » et « Planche renfo spé » → Planche, « Touch FL skill » et « Touch FL renfo spé » → Touch FL, chaque composante → elle-même, « Connexion » → Connexion). « Rapide (matin) » → `quick`. Type de mesure déduit du nom : secondes pour les hold ; combos pour Planche Hold to press, Planche PU to press, PU to touch full / one leg et FL press ; reps pour le reste. Espaces normalisés (« PU to touch  one leg »).
 - **Programme** (69 lignes) : groupes (Jour, Moment) triés par Ordre ; groupes identiques dédoublonnés ; ligne « Repos » (J4 soir) → créneau vide. Parsing de « Reps / durée » (« 8-12 s ou 3-5 reps » → deux cibles), de « RPE / marge » (« RPE ≤ 5 », « RPE 8-9 », « 1-2 reps en réserve ») et de « Repos » (« Libre » → pas de décompte, « 90 s-2 min » → 90-120 s, « Superset, 60-90 s » → superset de 60-90 s). « Optionnel » Oui/Non par ligne ; séances optionnelles : Matin A, Matin B, Technique léger.
@@ -421,7 +459,7 @@ Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en do
 
 ## Sauvegarde et exports
 
-- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices ; format 4 : `expressMinutes` sur les séances, `null` avant). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
+- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices ; format 4 : `expressMinutes` sur les séances, `null` avant ; format 5 : table `programs`, même conversion que la version 5 du schéma). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
 - Rappel de sauvegarde sur Aujourd'hui : dernière sauvegarde de plus de 7 jours, ou aucune alors qu'au moins une séance a été faite dans l'appli. Sur Android, « Envoyer une sauvegarde » ouvre le menu de partage (Drive, e-mail). Le fichier envoyé est en `.txt` (`text/plain`) : Chrome ne partage qu'une liste fermée de types, sans le JSON, et `navigator.canShare` ne vérifie pas le type. La restauration accepte `.json` et `.txt`. Une annulation ne dit rien ; un refus s'affiche avec « Enregistrer » (téléchargement) à la place.
 - Export du journal ([src/io/journal/exportJournal.ts](src/io/journal/exportJournal.ts)) : .xlsx (onglet « Journal », vraies dates Excel) et .csv pour Excel en français (« ; », CRLF, marque UTF-8). Les notes de ligne reprennent « Séance express (N min) », « Séance abandonnée » et la note de séance (1re ligne), les notes de série et les numéros des séries dégradées.
 - Version affichée dans Réglages → Sauvegarde et données → Appli : `version` du package.json et date du build.

@@ -2,14 +2,15 @@
 import { useMemo, useState } from 'react';
 import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
-import { firstTestSeqDay, localISODate, nextObjectiveTestDate } from '../../domain/cycle';
+import { localISODate } from '../../domain/cycle';
 import { formatDateLong } from '../../domain/labels';
 import { bestSessionPerformance } from '../../domain/objectives';
 import { objectivesBySkill, skillRecords } from '../../domain/skills';
+import { nextTestDate, programObjectives } from '../../domain/programs';
 import type { Element, Objective, TargetUnit } from '../../domain/types';
 import { useNow } from '../../lib/device';
 import { navigate } from '../../lib/router';
-import { NextIcon, PlusIcon } from '../../ui/icons';
+import { ChevronDownIcon, NextIcon, PlusIcon } from '../../ui/icons';
 import { ProgressNav } from '../../ui/ProgressNav';
 import { Screen } from '../../ui/Screen';
 import { BandLadder } from './BandLadder';
@@ -62,7 +63,7 @@ function SkillCard({ skill, objectives, data, lookups }: { skill: Element; objec
 
 /** Prochain test des objectifs (début de cycle, premier jour Max). */
 function NextTest({ data, lookups, today }: { data: AppData; lookups: Lookups; today: string }) {
-  const next = nextObjectiveTestDate(today, data.settings, firstTestSeqDay(data.settings.weekPlan, lookups.templates, lookups.sessionTypes));
+  const next = nextTestDate(today, data.appSettings, data.programs, lookups.templates, lookups.sessionTypes);
   if (!next) return null;
   if (next.date === today) {
     return (
@@ -83,7 +84,8 @@ export function SkillsView({ data }: { data: AppData }) {
   const today = localISODate(new Date(useNow(60_000)));
   const [creating, setCreating] = useState(false);
   const skills = useMemo(() => data.elements.filter((e) => e.kind === 'skill'), [data.elements]);
-  const { bySkill, others } = useMemo(() => objectivesBySkill(data.objectives, lookups.exercises, skills), [data.objectives, lookups.exercises, skills]);
+  const { current, former } = useMemo(() => programObjectives(data.objectives, data.program), [data.objectives, data.program]);
+  const { bySkill, others } = useMemo(() => objectivesBySkill(current, lookups.exercises, skills), [current, lookups.exercises, skills]);
 
   return (
     <Screen title="Progression" nav={<ProgressNav current="skills" />}>
@@ -107,6 +109,19 @@ export function SkillsView({ data }: { data: AppData }) {
       >
         <PlusIcon /> Nouvel objectif
       </button>
+      {former.length > 0 && (
+        <details className="group/former">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-1 text-sm font-bold tracking-wide text-ink-3 uppercase">
+            Anciens objectifs ({former.length}) <ChevronDownIcon className="size-5 transition-transform group-open/former:rotate-180" />
+          </summary>
+          <p className="px-1 pb-2 text-sm text-ink-3">Hors du programme en cours, gardés avec leurs tests.</p>
+          <div className="flex flex-col gap-2">
+            {former.map((objective) => (
+              <ObjectiveCard key={objective.id} objective={objective} data={data} lookups={lookups} />
+            ))}
+          </div>
+        </details>
+      )}
       <ObjectiveSheet
         data={data}
         objective={null}

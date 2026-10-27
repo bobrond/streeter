@@ -111,7 +111,7 @@ function ObjectiveForm({ data, objective, onDone, onDeleted }: { data: AppData; 
       order: objective?.order ?? nextOrder(data.objectives),
       tests: objective?.tests ?? [],
     };
-    await saveObjective(db, saved);
+    await saveObjective(db, saved, objective ? undefined : data.program.id);
     onDone(saved.id);
   };
 

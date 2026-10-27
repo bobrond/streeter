@@ -117,6 +117,8 @@ export interface SessionTemplate {
   items: PrescriptionItem[];
   /** Archivé : hors de la semaine type, plus proposé ; gardé pour plus tard. */
   archived: boolean;
+  /** Programme auquel appartient le modèle. */
+  programId: ID;
 }
 
 export interface WeekSlot {
@@ -128,10 +130,19 @@ export interface WeekSlot {
 
 export type WeekPlan = Record<SeqDay, WeekSlot>;
 
-export interface Settings {
+/** Réglages de l'appli, communs à tous les programmes (table `settings`). */
+export interface AppSettings {
   id: 'settings';
-  /** Date d'un J1 (YYYY-MM-DD) : début de la semaine 1 du cycle 1. */
+  /** Date d'un J1 (YYYY-MM-DD) : début de la semaine 1, origine de la séquence J1…J7 et des numéros de semaine. */
   cycleStartDate: string;
+  avgWorkSecPerSet: number;
+  /** Durée comptée pour un repos « Libre » dans l'estimation de durée. */
+  freeRestSec: number;
+  lastBackupAt: number | null;
+}
+
+/** Réglages propres à un programme : cycle, semaine allégée, volume, matins, semaine type. */
+export interface ProgramConfig {
   cycleLengthWeeks: number;
   deloadWeek: number;
   /** Pourcentage entier (40 = −40 %). */
@@ -140,11 +151,29 @@ export interface Settings {
   volumeMin: number;
   volumeMax: number;
   morningMaxMinutes: number;
-  avgWorkSecPerSet: number;
-  /** Durée comptée pour un repos « Libre » dans l'estimation de durée. */
-  freeRestSec: number;
-  lastBackupAt: number | null;
   weekPlan: WeekPlan;
+}
+
+/**
+ * Programme daté (un par mois, en général) : il commence en S1 de son cycle à sa semaine de début et dure
+ * jusqu'au début du programme suivant (ses cycles se répètent s'il n'y en a pas).
+ */
+export interface Program extends ProgramConfig {
+  id: ID;
+  name: string;
+  /** Semaine absolue de début (sa date se déduit de `AppSettings.cycleStartDate`). */
+  startWeek: number;
+  notes: string;
+  /** Objectifs suivis pendant ce programme ; les autres sont d'anciens objectifs. */
+  objectiveIds: ID[];
+  createdAt: number;
+}
+
+/** Réglages effectifs : ceux de l'appli et ceux du programme en vigueur. */
+export interface Settings extends AppSettings, ProgramConfig {
+  programId: ID;
+  /** Semaine absolue où commence le programme, S1 de son premier cycle. */
+  programStartWeek: number;
 }
 
 export type SessionStatus = 'in_progress' | 'done' | 'abandoned';

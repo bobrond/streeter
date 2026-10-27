@@ -1,15 +1,17 @@
 import Dexie, { type EntityTable } from 'dexie';
+import { programFromLegacySettings } from '../domain/programs';
 import type {
+  AppSettings,
   Band,
   BlockType,
   Element,
   Exercise,
   Objective,
+  Program,
   SessionLog,
   SessionTemplate,
   SessionType,
   SetLog,
-  Settings,
 } from '../domain/types';
 
 export interface MetaRecord {
@@ -39,7 +41,8 @@ export class StreeterDB extends Dexie {
   exercises!: EntityTable<Exercise, 'id'>;
   bands!: EntityTable<Band, 'id'>;
   templates!: EntityTable<SessionTemplate, 'id'>;
-  settings!: EntityTable<Settings, 'id'>;
+  settings!: EntityTable<AppSettings, 'id'>;
+  programs!: EntityTable<Program, 'id'>;
   sessions!: EntityTable<SessionLog, 'id'>;
   sets!: EntityTable<SetLog, 'id'>;
   objectives!: EntityTable<Objective, 'id'>;
@@ -97,6 +100,31 @@ export class StreeterDB extends Dexie {
             session.expressMinutes ??= null;
           }),
       );
+    // 5 (27/10/2026) : programmes datés. Les réglages du cycle, du volume, des matins et la semaine type passent des
+    // réglages à un premier programme, qui commence en semaine 1 ; les modèles (copies figées comprises) et les
+    // objectifs lui sont rattachés.
+    this.version(5)
+      .stores({ programs: 'id, startWeek', templates: 'id, name, programId' })
+      .upgrade(async (tx) => {
+        const legacy = (await tx.table('settings').get('settings')) as Record<string, unknown> | undefined;
+        if (!legacy) return;
+        const objectiveIds = (await tx.table('objectives').toArray()).map((o: { id: string }) => o.id);
+        const { program, app } = programFromLegacySettings(legacy, { id: crypto.randomUUID(), objectiveIds, now: Date.now() });
+        await tx.table('programs').add(program);
+        await tx.table('settings').put(app);
+        await tx
+          .table('templates')
+          .toCollection()
+          .modify((template: Partial<SessionTemplate>) => {
+            template.programId ??= program.id;
+          });
+        await tx
+          .table('sessions')
+          .toCollection()
+          .modify((session: Partial<SessionLog>) => {
+            if (session.templateSnapshot) session.templateSnapshot.programId ??= program.id;
+          });
+      });
   }
 }
 

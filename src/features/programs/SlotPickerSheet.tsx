@@ -1,5 +1,4 @@
 import { db } from '../../db/db';
-import type { AppData } from '../../db/hooks';
 import type { Lookups } from '../../db/lookups';
 import { setWeekSlot } from '../../db/programStore';
 import { MOMENT_LABEL, seqDayLabel } from '../../domain/labels';
@@ -7,18 +6,22 @@ import type { ID, Moment, SeqDay } from '../../domain/types';
 import { Badge } from '../../ui/Badge';
 import { CheckIcon } from '../../ui/icons';
 import { Sheet } from '../../ui/Sheet';
+import type { ProgramContext } from './programContext';
 
 export interface Slot {
   day: SeqDay;
   moment: Moment;
 }
 
-/** Séance d'un créneau de la semaine type : un modèle du même moment (hors archivés), Repos ou pas de séance. */
-export function SlotPickerSheet({ slot, onClose, data, lookups }: { slot: Slot | null; onClose: () => void; data: AppData; lookups: Lookups }) {
-  const choices = slot ? data.templates.filter((t) => t.moment === slot.moment && !t.archived).sort((a, b) => a.name.localeCompare(b.name)) : [];
-  const current = slot ? data.settings.weekPlan[slot.day][slot.moment] : null;
+/**
+ * Séance d'un créneau de la semaine type d'un programme : un de ses modèles du même moment (hors archivés), Repos ou
+ * pas de séance.
+ */
+export function SlotPickerSheet({ slot, onClose, context, lookups }: { slot: Slot | null; onClose: () => void; context: ProgramContext; lookups: Lookups }) {
+  const choices = slot ? context.templates.filter((t) => t.moment === slot.moment && !t.archived).sort((a, b) => a.name.localeCompare(b.name)) : [];
+  const current = slot ? context.program.weekPlan[slot.day][slot.moment] : null;
   const choose = (templateId: ID | null) => {
-    if (slot) void setWeekSlot(db, slot.day, slot.moment, templateId);
+    if (slot) void setWeekSlot(db, context.program.id, slot.day, slot.moment, templateId);
     onClose();
   };
   const options = [

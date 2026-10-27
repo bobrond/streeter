@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Lookups } from '../../db/lookups';
 import type { SessionTemplate, Settings } from '../../domain/types';
-import { editorIssues, programIssues, type Program } from '../../domain/volume';
+import { editorIssues, programIssues, type PlanContext } from '../../domain/volume';
 import { CheckIcon, ChevronDownIcon, WarningIcon } from '../../ui/icons';
 import { issueText } from './issueText';
 
@@ -18,7 +18,7 @@ export function ProgramChecks({
   compact = false,
   sticky = false,
 }: {
-  program: Program;
+  program: PlanContext;
   settings: Settings;
   lookups: Lookups;
   template?: SessionTemplate;

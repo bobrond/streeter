@@ -5,6 +5,7 @@ import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
 import { dateOf, dayInfo, localISODate } from '../../domain/cycle';
 import { deloadTemplate } from '../../domain/deload';
+import { settingsAtWeek } from '../../domain/programs';
 import { MOMENT_LABEL, formatDayMonth, formatSets, seqDayLabel } from '../../domain/labels';
 import type { SessionTemplate } from '../../domain/types';
 import {
@@ -211,19 +212,20 @@ function WeekSessions({ days, data, onPreview }: { days: DayProgress[]; data: Ap
 
 /** Séries faites par composante sur les dernières semaines ; toucher une semaine l'affiche. */
 function WeekHistory({ data, lookups, currentWeek, shownWeek }: { data: AppData; lookups: Lookups; currentWeek: number; shownWeek: number }) {
-  const { settings } = data;
   const components = componentElements(data.elements);
   const columns = useMemo(() => {
     const first = Math.max(1, currentWeek - 5);
     return Array.from({ length: currentWeek - first + 1 }, (_, i) => {
       const week = first + i;
+      // Chaque semaine avec les réglages de son programme.
+      const settings = settingsAtWeek(data.appSettings, data.programs, week) ?? data.settings;
       const isDeload = dayInfo(dateOf(week, 1, settings), settings).isDeload;
       const realized = realizedComponentVolume(data.sets, lookups.sessions, data.elements, settings, { week, isDeload });
-      return { week, isDeload, totals: new Map(realized.map((r) => [r.elementId, r.total])) };
+      return { week, isDeload, settings, totals: new Map(realized.map((r) => [r.elementId, r.total])) };
     });
-  }, [currentWeek, settings, data.sets, data.elements, lookups.sessions]);
+  }, [currentWeek, data.appSettings, data.programs, data.settings, data.sets, data.elements, lookups.sessions]);
   if (components.length === 0 || columns.length === 0) return null;
-  const cellClass = (total: number, isDeload: boolean) => {
+  const cellClass = (total: number, isDeload: boolean, settings: { volumeMin: number; volumeMax: number }) => {
     if (isDeload) return 'text-ink-2';
     const status = rangeStatus(total, settings.volumeMin, settings.volumeMax);
     return status === 'within' ? 'bg-accent text-accent-ink' : status === 'above' ? 'text-warn' : 'text-ink-3';
@@ -261,7 +263,7 @@ function WeekHistory({ data, lookups, currentWeek, shownWeek }: { data: AppData;
                   const total = column.totals.get(element.id) ?? 0;
                   return (
                     <td key={column.week} className="p-0.5">
-                      <span className={`flex min-h-9 items-center justify-center rounded-md font-semibold ${cellClass(total, column.isDeload)}`}>{total}</span>
+                      <span className={`flex min-h-9 items-center justify-center rounded-md font-semibold ${cellClass(total, column.isDeload, column.settings)}`}>{total}</span>
                     </td>
                   );
                 })}
@@ -275,13 +277,22 @@ function WeekHistory({ data, lookups, currentWeek, shownWeek }: { data: AppData;
   );
 }
 
-export function VolumeScreen({ data, path }: { data: AppData; path: string }) {
-  const lookups = useLookups(data);
+export function VolumeScreen({ data: todayData, path }: { data: AppData; path: string }) {
+  const todayLookups = useLookups(todayData);
   const today = localISODate(new Date(useNow(60_000)));
-  const current = dayInfo(today, data.settings);
+  const current = dayInfo(today, todayData.settings);
   const currentWeek = Math.max(1, current.week);
   const asked = Number(queryParam(path, 'semaine'));
   const week = Number.isInteger(asked) && asked >= 1 ? asked : currentWeek;
+  // La semaine affichée se lit avec les réglages et la semaine type de son programme.
+  const data = useMemo(() => {
+    const settings = settingsAtWeek(todayData.appSettings, todayData.programs, week) ?? todayData.settings;
+    return settings.programId === todayData.settings.programId ? todayData : { ...todayData, settings };
+  }, [todayData, week]);
+  const lookups = useMemo(
+    () => (data === todayData ? todayLookups : { ...todayLookups, program: { ...todayLookups.program, weekPlan: data.settings.weekPlan } }),
+    [data, todayData, todayLookups],
+  );
   const [preview, setPreview] = useState<SessionTemplate | null>(null);
   const range = weekRange(week, data.settings);
   const info = dayInfo(range.from, data.settings);

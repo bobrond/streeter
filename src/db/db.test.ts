@@ -40,7 +40,7 @@ describe('migrations du schéma', () => {
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', setIndex: 2, value: 10, createdAt: 2, kind: 'normal' },
     ]);
-    expect(db.verno).toBe(4);
+    expect(db.verno).toBe(5);
     expect(await db.sets.where('sessionId').equals('ses').count()).toBe(2);
     expect(await db.sessions.get('ses')).toMatchObject({ date: '2026-10-16', status: 'done' });
     db.close();
@@ -65,7 +65,7 @@ describe('migrations du schéma', () => {
     v2.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(4);
+    expect(db.verno).toBe(5);
     expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, archived: false });
     expect(await db.exercises.get('hold')).toEqual({ ...oldExercise, workSecPerSet: null });
     expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, archived: false });
@@ -88,11 +88,88 @@ describe('migrations du schéma', () => {
     v3.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(4);
+    expect(db.verno).toBe(5);
     expect(await db.sessions.get('run')).toEqual({ ...running, expressMinutes: null });
     expect(await db.sessions.get('xlsx')).toMatchObject({ source: 'xlsx', expressMinutes: null });
     expect(await db.sessions.where('status').equals('in_progress').count()).toBe(1);
     expect(await db.sets.get('s1')).toMatchObject({ sessionId: 'run', value: 8 });
+    db.close();
+  });
+  it('version 5 : un premier programme reprend cycle, volume, matins et semaine type ; modèles et objectifs lui sont rattachés', async () => {
+    const name = `migration-${Math.random()}`;
+    names.push(name);
+    // Base telle que l'écrivait la version 4 de l'appli.
+    const v4 = new Dexie(name);
+    v4.version(1).stores(SCHEMA_V1);
+    v4.version(2).stores({});
+    v4.version(3).stores({});
+    v4.version(4).stores({});
+    const weekPlan = { 1: { morning: null, evening: 'tpl' }, 2: { morning: null, evening: null }, 3: { morning: null, evening: null }, 4: { morning: null, evening: null }, 5: { morning: null, evening: null }, 6: { morning: null, evening: null }, 7: { morning: null, evening: null } };
+    const legacy = {
+      id: 'settings',
+      cycleStartDate: '2026-10-05',
+      cycleLengthWeeks: 4,
+      deloadWeek: 4,
+      deloadReductionPct: 40,
+      hideMorningsInDeload: true,
+      volumeMin: 4,
+      volumeMax: 6,
+      morningMaxMinutes: 30,
+      avgWorkSecPerSet: 35,
+      freeRestSec: 20,
+      lastBackupAt: 123,
+      weekPlan,
+    };
+    const oldTemplate = { id: 'tpl', name: 'Max', sessionTypeId: 'max', moment: 'evening', optional: false, notes: '', items: [], archived: false };
+    await v4.table('settings').add(legacy);
+    await v4.table('templates').add(oldTemplate);
+    await v4.table('objectives').bulkAdd([{ id: 'o1', name: 'Planche hold' }, { id: 'o2', name: 'P/N' }]);
+    await v4.table('sessions').bulkAdd([
+      { id: 'ses', date: '2026-10-16', status: 'done', templateSnapshot: oldTemplate, expressMinutes: null },
+      { id: 'xlsx', date: '2026-10-07', status: 'done', templateSnapshot: null, expressMinutes: null },
+    ]);
+    await v4.table('sets').add({ id: 's1', sessionId: 'ses', exerciseId: 'hold', value: 12, kind: 'normal', createdAt: 1 });
+    v4.close();
+
+    const db = new StreeterDB(name);
+    expect(db.verno).toBe(5);
+    const programs = await db.programs.toArray();
+    expect(programs).toHaveLength(1);
+    const [program] = programs;
+    expect(program).toMatchObject({
+      name: 'Octobre 2026',
+      startWeek: 1,
+      notes: '',
+      cycleLengthWeeks: 4,
+      deloadWeek: 4,
+      deloadReductionPct: 40,
+      hideMorningsInDeload: true,
+      volumeMin: 4,
+      volumeMax: 6,
+      morningMaxMinutes: 30,
+      weekPlan,
+      objectiveIds: ['o1', 'o2'],
+    });
+    expect(await db.settings.get('settings')).toEqual({ id: 'settings', cycleStartDate: '2026-10-05', avgWorkSecPerSet: 35, freeRestSec: 20, lastBackupAt: 123 });
+    expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, programId: program.id });
+    expect(await db.templates.where('programId').equals(program.id).count()).toBe(1);
+    expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, programId: program.id });
+    expect((await db.sessions.get('xlsx'))?.templateSnapshot).toBeNull();
+    expect(await db.sets.get('s1')).toMatchObject({ sessionId: 'ses', value: 12 });
+    db.close();
+  });
+
+  it('version 5 : une base vide reste vide (pas de programme sans réglages)', async () => {
+    const name = `migration-${Math.random()}`;
+    names.push(name);
+    const v4 = new Dexie(name);
+    v4.version(1).stores(SCHEMA_V1);
+    v4.version(4).stores({});
+    await v4.open();
+    v4.close();
+    const db = new StreeterDB(name);
+    expect(await db.programs.count()).toBe(0);
+    expect(await db.settings.count()).toBe(0);
     db.close();
   });
 });

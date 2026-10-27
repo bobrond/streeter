@@ -3,7 +3,7 @@ import { block, element, item, sessionLog, setLog, settings, template, weekPlan 
 import { estimateDuration } from './duration';
 import { blockRoles, buildExpress, componentNeeds, expressToStart, setExpressSets, type ComponentNeed } from './express';
 import type { PrescriptionItem, SessionTemplate } from './types';
-import type { Program } from './volume';
+import type { PlanContext } from './volume';
 import { weekProgress } from './week';
 
 const planche = element('Planche', 'skill', 0);
@@ -69,7 +69,7 @@ const morningA = template(
 );
 const plan = weekPlan({ 1: { evening: max.id }, 2: { evening: combo.id }, 4: { morning: morningA.id }, 6: { evening: combo.id } });
 const withPlan = { ...s, weekPlan: plan };
-const program: Program = { weekPlan: plan, templates: new Map([max, combo, morningA].map((t) => [t.id, t])), elements, blocks, exercises: new Map() };
+const program: PlanContext = { weekPlan: plan, templates: new Map([max, combo, morningA].map((t) => [t.id, t])), elements, blocks, exercises: new Map() };
 
 const need = (elementId: string, overrides: Partial<ComponentNeed> = {}): ComponentNeed => ({
   elementId,
@@ -217,7 +217,7 @@ describe('buildExpress : composantes', () => {
     expect(fromCombo.template.items.find((i) => i.elementId === dentele.id)).toMatchObject({ restText: '90 s (Combo)', optional: false, superset: false });
     const fromEvening = express(45, max, [need(dentele.id, { deficit: 1, done: 3 })]);
     expect(fromEvening.template.items.find((i) => i.elementId === dentele.id)?.restText).toBe('90 s (Combo)');
-    const morningOnly: Program = { ...program, weekPlan: weekPlan({ 1: { evening: max.id }, 4: { morning: morningA.id } }) };
+    const morningOnly: PlanContext = { ...program, weekPlan: weekPlan({ 1: { evening: max.id }, 4: { morning: morningA.id } }) };
     const fromMorning = buildExpress({ minutes: 45, replaced: max, name: 'x', isDeload: false, program: morningOnly, settings: s, needs: [need(dentele.id, { deficit: 1, done: 3 })], newId: () => `m-${++n}` });
     expect(fromMorning.template.items.find((i) => i.elementId === dentele.id)).toMatchObject({ restText: 'Superset (matin)', optional: false, superset: false });
   });

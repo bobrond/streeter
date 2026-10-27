@@ -10,22 +10,25 @@ import { useNow } from '../../lib/device';
 import { goBack } from '../../lib/router';
 import { Badge } from '../../ui/Badge';
 import { Screen } from '../../ui/Screen';
+import { programContext } from './programContext';
 import { ProgramChecks } from './ProgramChecks';
 import { SlotPickerSheet, type Slot } from './SlotPickerSheet';
 
 const SHORT_WEEKDAY = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' });
 
-export function WeekPlanEditor({ data }: { data: AppData }) {
+export function WeekPlanEditor({ data, programId }: { data: AppData; programId: string | null }) {
   const lookups = useLookups(data);
-  const { settings } = data;
+  const context = programContext(data, lookups, programId);
+  const { settings } = context;
   const [editing, setEditing] = useState<Slot | null>(null);
   const today = localISODate(new Date(useNow(60_000)));
-  const info = dayInfo(today, settings);
-  const volume = plannedComponentVolume(lookups.program, settings);
+  const isCurrent = context.program.id === data.program.id;
+  const info = isCurrent ? dayInfo(today, data.settings) : dayInfo(dateOf(context.program.startWeek, 1, settings), settings);
+  const volume = plannedComponentVolume(context.plan, settings);
 
   return (
-    <Screen title="Créneaux" subtitle="Matin et soir de J1 à J7 (jours de séquence, pas jours de la semaine)." onBack={() => goBack('/programs')}>
-      <ProgramChecks program={lookups.program} settings={settings} lookups={lookups} />
+    <Screen title="Créneaux" subtitle={`${context.program.name} · matin et soir de J1 à J7 (jours de séquence, pas jours de la semaine).`} onBack={() => goBack('/programs')}>
+      <ProgramChecks program={context.plan} settings={settings} lookups={lookups} />
 
       <section className="rounded-2xl border border-line bg-card p-3">
         <h2 className="mb-2 text-sm font-bold tracking-wide text-ink-3 uppercase">Volume prévu des composantes</h2>
@@ -58,7 +61,7 @@ export function WeekPlanEditor({ data }: { data: AppData }) {
         {SEQ_DAYS.map((day) => {
           const date = dateOf(Math.max(1, info.week), day, settings);
           return (
-            <section key={day} className={`rounded-2xl border bg-card p-2 ${day === info.seqDay && !info.beforeStart ? 'border-accent' : 'border-line'}`}>
+            <section key={day} className={`rounded-2xl border bg-card p-2 ${isCurrent && day === info.seqDay && !info.beforeStart ? 'border-accent' : 'border-line'}`}>
               <div className="flex items-baseline gap-2 px-2 pt-1">
                 <span className="text-xl font-bold">{seqDayLabel(day)}</span>
                 <span className="text-ink-2">{SHORT_WEEKDAY.format(new Date(`${date}T12:00:00`))}</span>
@@ -87,7 +90,7 @@ export function WeekPlanEditor({ data }: { data: AppData }) {
         })}
       </div>
 
-      <SlotPickerSheet slot={editing} onClose={() => setEditing(null)} data={data} lookups={lookups} />
+      <SlotPickerSheet slot={editing} onClose={() => setEditing(null)} context={context} lookups={lookups} />
     </Screen>
   );
 }

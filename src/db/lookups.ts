@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { Band, BlockType, Element, Exercise, ID, Objective, SessionLog, SessionTemplate, SessionType } from '../domain/types';
-import type { Program } from '../domain/volume';
+import type { PlanContext } from '../domain/volume';
 import type { AppData } from './hooks';
 
 /** Index par identifiant des données de l'appli. */
@@ -13,7 +13,7 @@ export interface Lookups {
   sessionTypes: Map<ID, SessionType>;
   sessions: Map<ID, SessionLog>;
   objectives: Map<ID, Objective>;
-  program: Program;
+  program: PlanContext;
 }
 
 function byId<T extends { id: ID }>(list: readonly T[]): Map<ID, T> {

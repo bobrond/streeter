@@ -2,12 +2,35 @@
 import type { ID, Objective, ObjectiveTest } from '../domain/types';
 import type { StreeterDB } from './db';
 
-export async function saveObjective(db: StreeterDB, objective: Objective): Promise<void> {
-  await db.objectives.put(objective);
+/** Enregistre un objectif ; `programId` : programme qui le suit (ajouté à ses objectifs s'il n'y est pas). */
+export async function saveObjective(db: StreeterDB, objective: Objective, programId?: ID): Promise<void> {
+  await db.transaction('rw', [db.objectives, db.programs], async () => {
+    await db.objectives.put(objective);
+    const program = programId ? await db.programs.get(programId) : undefined;
+    if (program && !program.objectiveIds.includes(objective.id)) {
+      await db.programs.update(program.id, { objectiveIds: [...program.objectiveIds, objective.id] });
+    }
+  });
 }
 
+/** Suit ou ne suit plus un objectif dans un programme (ancien objectif : gardé avec ses tests). */
+export async function setObjectiveFollowed(db: StreeterDB, programId: ID, objectiveId: ID, followed: boolean): Promise<void> {
+  await db.transaction('rw', db.programs, async () => {
+    const program = await db.programs.get(programId);
+    if (!program) return;
+    const others = program.objectiveIds.filter((id) => id !== objectiveId);
+    await db.programs.update(programId, { objectiveIds: followed ? [...others, objectiveId] : others });
+  });
+}
+
+/** Supprime un objectif, retiré aussi des objectifs des programmes. */
 export async function deleteObjective(db: StreeterDB, id: ID): Promise<void> {
-  await db.objectives.delete(id);
+  await db.transaction('rw', [db.objectives, db.programs], async () => {
+    await db.objectives.delete(id);
+    for (const program of await db.programs.toArray()) {
+      if (program.objectiveIds.includes(id)) await db.programs.update(program.id, { objectiveIds: program.objectiveIds.filter((o) => o !== id) });
+    }
+  });
 }
 
 /** Ajoute un test, ou le remplace s'il a le même identifiant. */

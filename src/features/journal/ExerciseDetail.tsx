@@ -41,7 +41,7 @@ export function ExerciseDetail({ data, exerciseId, backTo = '/journal?vue=exerci
     .sort((a, b) => b.date.localeCompare(a.date));
   const last = sessionIds[0];
   const lastSets = last ? sets.filter((s) => s.sessionId === last.id) : [];
-  const uses = exerciseUses(exercise.id, data.templates);
+  const uses = exerciseUses(exercise.id, data.templates.filter((t) => t.programId === data.program.id));
 
   return (
     <Screen

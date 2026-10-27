@@ -1,8 +1,21 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { block, element, exercise, item, setLog, settings, template, weekPlan } from '../test/builders';
+import { appSettings, block, element, exercise, item, program, setLog, template, weekPlan } from '../test/builders';
 import { StreeterDB } from './db';
-import { InUseError, deleteBand, deleteElement, deleteExercise, deleteTemplate, saveOrder, setTemplateArchived, setWeekSlot, swapWeekSlotsOf } from './programStore';
+import {
+  InUseError,
+  addProgram,
+  deleteBand,
+  deleteElement,
+  deleteExercise,
+  deleteProgram,
+  deleteTemplate,
+  saveOrder,
+  setTemplateArchived,
+  setWeekSlot,
+  swapWeekSlotsOf,
+  updateEffectiveSettings,
+} from './programStore';
 
 const databases: StreeterDB[] = [];
 function freshDb(): StreeterDB {
@@ -27,7 +40,8 @@ async function seed(db: StreeterDB) {
   await db.blockTypes.put(renfo);
   await db.exercises.bulkPut([wallSlide, uppercut]);
   await db.templates.put(tpl);
-  await db.settings.put(settings({ weekPlan: weekPlan({ 2: { evening: tpl.id }, 6: { evening: tpl.id } }) }));
+  await db.settings.put(appSettings());
+  await db.programs.put(program({ weekPlan: weekPlan({ 2: { evening: tpl.id }, 6: { evening: tpl.id } }) }));
   await db.objectives.put({ id: 'o', name: 'Obj', criterion: '', target: 1, unit: 'reps', exerciseId: uppercut.id, order: 0, tests: [] });
   return tpl;
 }
@@ -67,7 +81,7 @@ describe('programStore', () => {
     const db = freshDb();
     const tpl = await seed(db);
     await deleteTemplate(db, tpl.id);
-    const plan = (await db.settings.get('settings'))!.weekPlan;
+    const plan = (await db.programs.get('prog'))!.weekPlan;
     expect(plan[2].evening).toBeNull();
     expect(plan[6].evening).toBeNull();
   });
@@ -75,8 +89,8 @@ describe('programStore', () => {
   it('change un créneau de la semaine type et l’ordre d’une liste', async () => {
     const db = freshDb();
     const tpl = await seed(db);
-    await setWeekSlot(db, 4, 'morning', tpl.id);
-    expect((await db.settings.get('settings'))!.weekPlan[4].morning).toBe(tpl.id);
+    await setWeekSlot(db, 'prog', 4, 'morning', tpl.id);
+    expect((await db.programs.get('prog'))!.weekPlan[4].morning).toBe(tpl.id);
     await saveOrder(db, 'exercises', [
       { id: wallSlide.id, order: 1 },
       { id: uppercut.id, order: 0 },
@@ -89,18 +103,41 @@ describe('programStore', () => {
     const tpl = await seed(db);
     await setTemplateArchived(db, tpl.id, true);
     expect(await db.templates.get(tpl.id)).toMatchObject({ archived: true, items: tpl.items });
-    const plan = (await db.settings.get('settings'))!.weekPlan;
+    const plan = (await db.programs.get('prog'))!.weekPlan;
     expect([plan[2].evening, plan[6].evening]).toEqual([null, null]);
     await setTemplateArchived(db, tpl.id, false);
     expect((await db.templates.get(tpl.id))?.archived).toBe(false);
-    expect((await db.settings.get('settings'))!.weekPlan[2].evening).toBeNull();
+    expect((await db.programs.get('prog'))!.weekPlan[2].evening).toBeNull();
   });
 
   it('échange les séances du soir de deux jours', async () => {
     const db = freshDb();
     const tpl = await seed(db);
-    await swapWeekSlotsOf(db, 'evening', 2, 4);
-    const plan = (await db.settings.get('settings'))!.weekPlan;
+    await swapWeekSlotsOf(db, 'prog', 'evening', 2, 4);
+    const plan = (await db.programs.get('prog'))!.weekPlan;
     expect([plan[2].evening, plan[4].evening, plan[6].evening]).toEqual([null, tpl.id, tpl.id]);
+  });
+
+  it('écrit les réglages effectifs : séquence et durées dans les réglages, cycle et volume dans le programme', async () => {
+    const db = freshDb();
+    await seed(db);
+    await updateEffectiveSettings(db, 'prog', { cycleStartDate: '2026-10-06', freeRestSec: 45, volumeMin: 3, deloadWeek: 3 });
+    expect(await db.settings.get('settings')).toMatchObject({ cycleStartDate: '2026-10-06', freeRestSec: 45 });
+    expect(await db.settings.get('settings')).not.toHaveProperty('volumeMin');
+    expect(await db.programs.get('prog')).toMatchObject({ volumeMin: 3, deloadWeek: 3 });
+  });
+
+  it('ajoute un programme avec ses modèles ; seul un programme à venir se supprime, avec ses modèles', async () => {
+    const db = freshDb();
+    const tpl = await seed(db);
+    const copy = { ...tpl, id: 'copie', programId: 'nov' };
+    await addProgram(db, program({ id: 'nov', name: 'Novembre 2026', startWeek: 5, weekPlan: weekPlan({ 2: { evening: 'copie' } }) }), [copy]);
+    expect(await db.templates.where('programId').equals('nov').count()).toBe(1);
+    await expect(deleteProgram(db, 'prog', 4)).rejects.toBeInstanceOf(InUseError);
+    await expect(deleteProgram(db, 'nov', 5)).rejects.toBeInstanceOf(InUseError);
+    await deleteProgram(db, 'nov', 4);
+    expect(await db.programs.get('nov')).toBeUndefined();
+    expect(await db.templates.get('copie')).toBeUndefined();
+    expect(await db.templates.get(tpl.id)).toBeDefined();
   });
 });
