@@ -109,8 +109,8 @@ Décidé avec l'utilisateur :
 Phases :
 
 - **G1, programmes datés** (livrée le 27/10/2026, v1.7.0) : schéma Dexie v5, format de sauvegarde 5. Voir « Programmes datés (depuis la phase G1) ».
-- **G2, format programme JSON** : document du format pour l'agent (dans le dépôt), export d'un programme, import par fichier ou texte collé, aperçu des changements et contrôles avant de valider ; crée un programme daté ou remplace un programme à venir.
-- **G3, bilan du programme** : export pour l'agent (volume réalisé par semaine, records, tests, séances sautées ou dégradées, notes, séances express).
+- **G2, format programme JSON** : le format version 1 est fixé par la consigne donnée à l'agent, [docs/consigne_agent_programmation.md](docs/consigne_agent_programmation.md) (27/10/2026) : l'implémenter tel quel (noms plutôt qu'identifiants, textes de cible / intensité / repos lus comme à l'import, `nouveautes`, `demandesAppli`, `catalogue` ignoré à l'import). Export d'un programme (avec `catalogue`), import par fichier ou texte collé, aperçu des changements et contrôles avant de valider ; crée un programme daté ou remplace un programme à venir. Tout changement du format passe par une nouvelle version de la consigne.
+- **G3, bilan du programme** : export Markdown pour l'agent, contenu promis dans la consigne (volume réalisé par semaine, records, tests, séances sautées ou dégradées, notes, séances express).
 - **Novembre** : ce que demande le programme de novembre (force / endurance par composante, bonus = matins + lignes optionnelles du soir, nouveaux types de séance, etc.), après les réponses de l'utilisateur aux questions du journal du 27/10/2026.
 
 ## Programmes datés (depuis la phase G1)
