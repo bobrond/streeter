@@ -273,3 +273,40 @@ describe('modifier avant de démarrer', () => {
     expect(removed.items).toHaveLength(plan.items.length - 1);
   });
 });
+
+describe('buildExpress : Travail prioritaire (novembre)', () => {
+  // Blocs de novembre ajoutés après l'échauffement ; les anciens blocs (Skill…) restent au catalogue, après.
+  const priority = block('Travail prioritaire', 0.5);
+  const main = block('Travail principal', 0.6, { alternateSkills: true });
+  const assist = block('Assisté / progression', 0.7, { alternateSkills: true });
+  const all = new Map([warmUp, priority, main, assist, skill, assisted, specific, renfo].map((b) => [b.id, b]));
+  const leanUp = line(priority.id, planche.id, 5, 5, { restMinSec: 120, restMaxSec: 180 });
+  const negative = line(priority.id, planche.id, 4, 4, { restMinSec: 120, restMaxSec: 180 });
+  const comboFree = template('Combo libre', 'evening', [
+    line(warmUp.id, connexion.id, 1, 2, free),
+    leanUp,
+    negative,
+    line(main.id, planche.id, 0, 8, skillRest),
+    line(main.id, fl.id, 0, 8, skillRest),
+    line(assist.id, planche.id, 3, 4),
+    line(assist.id, fl.id, 3, 4),
+  ]);
+  const novProgram: PlanContext = { ...program, blocks: all };
+
+  it('reconnaît le Travail prioritaire et le Skill parmi les blocs de la séance', () => {
+    const roles = blockRoles(all, new Set(comboFree.items.map((i) => i.blockTypeId)));
+    expect([warmUp, priority, main, assist, skill].map((b) => roles.get(b.id))).toEqual(['warmup', 'priority', 'skill', 'assisted', 'assisted']);
+  });
+
+  it('garde toujours lean-up et négatives au minimum de séries, même au-delà de la durée choisie', () => {
+    const result = buildExpress({ minutes: 20, replaced: comboFree, name: 'x', isDeload: false, cycleWeek: 1, program: novProgram, settings: s, needs: satisfied, newId: () => `p-${++n}` });
+    expect(result.template.items.filter((i) => i.blockTypeId === priority.id).map((i) => [i.id, i.setsMin])).toEqual([
+      [leanUp.id, 5],
+      [negative.id, 4],
+    ]);
+    expect(result.reasons[leanUp.id]).toBe('priority');
+    // La paire du Travail principal (sans minimum) reste là, à 2 séries ; l'assisté n'est jamais repris.
+    expect(result.template.items.filter((i) => i.blockTypeId === main.id).map((i) => i.setsMin)).toEqual([2, 2]);
+    expect(result.leftOut.filter((l) => l.why === 'assisted')).toHaveLength(2);
+  });
+});

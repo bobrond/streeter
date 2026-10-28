@@ -22,16 +22,22 @@ export const EXPRESS_MINUTES = [20, 30, 45] as const;
 /**
  * Rôle d'un bloc dans la séance express, d'après ses réglages et non d'après son nom (modifiable) :
  * l'échauffement n'est pas réduit en semaine allégée ; le Skill est le premier bloc à alternance planche / FL,
- * les suivants (Skill assisté) ne sont jamais repris ; les autres blocs portent le Renfo spé et les composantes.
+ * les suivants (Skill assisté) ne sont jamais repris ; un bloc sans alternance placé avant le Skill est prioritaire
+ * (Travail prioritaire : lean-up, négatives) ; les autres blocs portent le Renfo spé et les composantes. `used` : blocs
+ * de la séance, pour trouver son Skill parmi eux (un ancien bloc à alternance absent de la séance ne compte pas).
  */
-export type BlockRole = 'warmup' | 'skill' | 'assisted' | 'other';
+export type BlockRole = 'warmup' | 'priority' | 'skill' | 'assisted' | 'other';
 
-export function blockRoles(blocks: ReadonlyMap<ID, BlockType>): Map<ID, BlockRole> {
+export function blockRoles(blocks: ReadonlyMap<ID, BlockType>, used?: ReadonlySet<ID>): Map<ID, BlockRole> {
   const sorted = [...blocks.values()].sort((a, b) => a.order - b.order);
-  const skill = sorted.find((b) => b.alternateSkills && b.reducedInDeload);
-  return new Map(
-    sorted.map((b): [ID, BlockRole] => [b.id, !b.reducedInDeload ? 'warmup' : b.id === skill?.id ? 'skill' : b.alternateSkills ? 'assisted' : 'other']),
-  );
+  const skill = sorted.find((b) => b.alternateSkills && b.reducedInDeload && (!used || used.has(b.id)));
+  const role = (b: BlockType): BlockRole => {
+    if (!b.reducedInDeload) return 'warmup';
+    if (b.id === skill?.id) return 'skill';
+    if (b.alternateSkills) return 'assisted';
+    return skill && b.order < skill.order ? 'priority' : 'other';
+  };
+  return new Map(sorted.map((b): [ID, BlockRole] => [b.id, role(b)]));
 }
 
 /** Où en est une composante cette semaine, pour la séance express. */
@@ -94,7 +100,7 @@ export function componentNeeds(args: {
 }
 
 /** Pourquoi une ligne est dans la séance express. */
-export type ExpressReason = 'warmup' | 'skill' | 'specific' | 'component';
+export type ExpressReason = 'warmup' | 'priority' | 'skill' | 'specific' | 'component';
 
 export interface ExpressComponent extends ComponentNeed {
   /** Séries de la séance qui comblent le retard. */
@@ -144,12 +150,13 @@ function componentSource(elementId: ID, replaced: SessionTemplate, program: Plan
 /**
  * Séance express (règles décidées avec l'utilisateur) :
  * 1. l'échauffement de la séance remplacée, au minimum de séries ;
- * 2. ses paires du Skill dans l'ordre, au minimum de séries ; la dernière qui rentre peut perdre des séries
+ * 2. son Travail prioritaire (bloc sans alternance avant le Skill), toujours, au minimum de séries ;
+ * 3. ses paires du Skill dans l'ordre, au minimum de séries ; la dernière qui rentre peut perdre des séries
  *    (au moins 2), les suivantes sont retirées ; la première est toujours là (planche et FL à chaque séance) ;
- * 3. son Renfo spé (lignes planche / FL des autres blocs), en entier, si tout le Skill est là et qu'il rentre :
+ * 4. son Renfo spé (lignes planche / FL des autres blocs), en entier, si tout le Skill est là et qu'il rentre :
  *    il est retiré avant de raccourcir le Skill ;
- * 4. jamais le Skill assisté ;
- * 5. les composantes en retard, la plus en retard d'abord, série par série ; puis le bonus jusqu'au maximum
+ * 5. jamais le Skill assisté ;
+ * 6. les composantes en retard, la plus en retard d'abord, série par série ; puis le bonus jusqu'au maximum
  *    (pas en semaine allégée).
  * Les lignes gardent la prescription de la séance remplacée (allégée en semaine allégée), avec un nombre de séries
  * fixe. La durée se remplit avec la borne haute de l'estimation : repos maximum, exercice le plus long.
@@ -172,7 +179,7 @@ export function buildExpress(args: {
   const elements = new Map(program.elements.map((e) => [e.id, e]));
   const structure: PlanStructure = { blocks: program.blocks, elements, exercises: program.exercises };
   const cost = (items: PrescriptionItem[]) => estimateDuration({ items }, settings, structure).maxSec;
-  const roles = blockRoles(program.blocks);
+  const roles = blockRoles(program.blocks, new Set(args.replaced.items.map((i) => i.blockTypeId)));
   const roleOf = (item: PrescriptionItem) => roles.get(item.blockTypeId) ?? 'other';
   const isSkill = (item: PrescriptionItem) => elements.get(item.elementId)?.kind === 'skill';
 
@@ -196,7 +203,14 @@ export function buildExpress(args: {
     'warmup',
   );
 
-  // 2. Paires du Skill.
+  // 2. Travail prioritaire : toujours repris, au minimum de séries, même si la séance dépasse la durée choisie
+  // (décidé avec l'utilisateur le 28/10/2026 : lean-up et négatives se font à chaque séance, express comprise).
+  take(
+    plan.items.filter((i) => roleOf(i) === 'priority' && baseSets(i) > 0).map((i) => fixed(i, baseSets(i))),
+    'priority',
+  );
+
+  // 3. Paires du Skill.
   let shortened = false;
   const skillUnits = plan.units
     .map((unit) => unit.itemIds.map((id) => plan.itemsById.get(id)!).filter((i) => roleOf(i) === 'skill' && isSkill(i) && baseSets(i) > 0))
@@ -222,13 +236,13 @@ export function buildExpress(args: {
     else leftOut.push(...items.map((item) => ({ item, why: 'time' as const })));
   });
 
-  // 3. Renfo spé, 4. Skill assisté.
+  // 4. Renfo spé, 5. Skill assisté.
   const specific = plan.items.filter((i) => roleOf(i) === 'other' && isSkill(i) && baseSets(i) > 0).map((i) => fixed(i, baseSets(i)));
   if (specific.length > 0 && !shortened && used + cost(specific) <= budget) take(specific, 'specific');
   else leftOut.push(...specific.map((item) => ({ item, why: 'time' as const })));
   leftOut.push(...plan.items.filter((i) => roleOf(i) === 'assisted' && isSkill(i)).map((item) => ({ item, why: 'assisted' as const })));
 
-  // 5. Composantes : retard, puis bonus.
+  // 6. Composantes : retard, puis bonus.
   const sources = new Map<ID, PrescriptionItem>();
   for (const need of args.needs) {
     const source = componentSource(need.elementId, practiced, program);

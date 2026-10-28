@@ -147,6 +147,7 @@ Demandé par l'utilisateur le 28/10/2026 (les 5 `demandesAppli` du programme de 
 - **Repères par tranche** (`PrescriptionItem.byTranche`, facultatif) : séries, cible, intensité d'une tranche (une semaine du cycle en semaine type). `practicedTemplate` les applique (Aujourd'hui, copie figée de la séance, séries encore prévues, séance express) ; des séries données pour la tranche allégée ne sont pas réduites (choix sans l'utilisateur, écrit dans la consigne). Le volume prévu et les contrôles restent sur les valeurs de base. Affichés dans l'éditeur, modifiables par le fichier seulement.
 - **Progressions inférieures** (`PrescriptionItem.lowerProgressionIds`, facultatif) : dans le pavé, « Ou progression inférieure » à côté des élastiques ; la série est enregistrée sur l'exercice de la progression, sans élastique, donc suivie à part et jamais record de la figure ; la série suivante la garde. Le pavé propose aussi les autres candidats de la ligne pour la série (changer de combo d'une série à l'autre).
 - **Ligne sans minimum** (`setsMin` = 0, affiché « ≤ 8 ») : une série à faire de plus que celles faites, jusqu'au plafond (`rowTarget`) ; « Plafond atteint » ; « Terminer cet exercice » ou retirer la série à faire pour arrêter. Séance express : 2 séries (choix sans l'utilisateur).
+- Pas de rappel du test des objectifs pour novembre (aucun type « jour de test ») : voulu par l'utilisateur (28/10/2026).
 - Choix sans l'utilisateur, à valider à l'usage : séance abandonnée non comptée ; toute séance du soir faite prend une position (même une autre séance) ; une tranche ≈ une semaine pour les dates indicatives ; matins proposés dans l'ordre de la liste ; un programme par semaine ; progression inférieure listée du plus difficile au plus facile.
 
 ## Format programme JSON (depuis la phase G2)
@@ -278,13 +279,14 @@ Onglet Progression : Skills ([src/features/objectives/](src/features/objectives/
 **Séance express** ([src/domain/express.ts](src/domain/express.ts), `componentNeeds` et `buildExpress`). Décidé avec l'utilisateur le 17/10/2026, sauf mention contraire :
 
 - Elle remplace une séance du jour ni faite ni abandonnée, matin ou soir (au choix s'il y en a deux) ; sans séance à remplacer, pas de séance express. La fatigue de la veille ne compte pas.
-- Rôle des blocs d'après leurs réglages, pas leur nom (choix sans l'utilisateur) : échauffement = bloc non réduit en semaine allégée ; Skill = premier bloc à alternance ; Skill assisté = blocs à alternance suivants ; Renfo spé = lignes planche / FL des autres blocs.
+- Rôle des blocs d'après leurs réglages, pas leur nom (choix sans l'utilisateur) : échauffement = bloc non réduit en semaine allégée ; Skill = premier bloc à alternance parmi ceux de la séance remplacée ; Skill assisté = blocs à alternance suivants ; Travail prioritaire = bloc sans alternance placé avant le Skill ; Renfo spé = lignes planche / FL des autres blocs.
 - Contenu, dans l'ordre :
   1. l'échauffement de la séance remplacée, au minimum de séries ;
-  2. ses paires du Skill, dans l'ordre, au minimum de séries ;
-  3. son Renfo spé, en entier, s'il rentre ;
-  4. jamais le Skill assisté, même s'il reste du temps ;
-  5. les composantes en retard (minimum − séries faites − séries du soir encore prévues, sans la séance remplacée), la plus en retard d'abord, série par série ; puis le bonus jusqu'au maximum.
+  2. son Travail prioritaire (lean-up, négatives), **toujours**, au minimum de séries, même au-delà de la durée choisie (décidé avec l'utilisateur le 28/10/2026 : il se fait à chaque séance, express comprise) ;
+  3. ses paires du Skill, dans l'ordre, au minimum de séries (une ligne sans minimum : 2 séries) ;
+  4. son Renfo spé, en entier, s'il rentre ;
+  5. jamais le Skill assisté, même s'il reste du temps ;
+  6. les composantes en retard (minimum − séries faites − séries du soir encore prévues, sans la séance remplacée), la plus en retard d'abord, série par série ; puis le bonus jusqu'au maximum.
 - Quand ça ne tient pas : le Renfo spé est retiré d'abord, puis les dernières paires du Skill. La dernière paire qui rentre peut perdre des séries, au moins 2 ; la première paire est toujours là, à 2 séries s'il le faut (ces deux bornes : choix sans l'utilisateur).
 - Semaine allégée : lignes reprises allégées ; minimum des composantes = séries min allégées des soirs obligatoires de la semaine type (`deloadEveningGuaranteed`, 2 par composante aujourd'hui) ; pas de bonus.
 - Durée : la borne haute de l'estimation (repos maximum, exercice le plus long) tient dans la durée choisie, comme pour le contrôle des matins.
