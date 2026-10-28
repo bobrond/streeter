@@ -1,10 +1,12 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { appSettings, block, element, exercise, item, program, setLog, template, weekPlan } from '../test/builders';
+import { programToFile, readProgramFile } from '../io/program/programFile';
 import { StreeterDB } from './db';
 import {
   InUseError,
   addProgram,
+  applyProgramImport,
   deleteBand,
   deleteElement,
   deleteExercise,
@@ -139,5 +141,46 @@ describe('programStore', () => {
     expect(await db.programs.get('nov')).toBeUndefined();
     expect(await db.templates.get('copie')).toBeUndefined();
     expect(await db.templates.get(tpl.id)).toBeDefined();
+  });
+
+  it('écrit un fichier programme importé : nouveautés, objectifs repris avec leurs tests, modèles remplacés', async () => {
+    const db = freshDb();
+    const tpl = await seed(db);
+    await db.objectives.update('o', { tests: [{ id: 't', date: '2026-10-07', value: 3, note: '' }] });
+    const unused = template('Matin A', 'morning', [], { id: 'matin' });
+    await db.templates.put(unused);
+    const catalog = {
+      elements: await db.elements.toArray(),
+      blockTypes: await db.blockTypes.toArray(),
+      sessionTypes: [{ id: 'type', name: 'Combo', moment: 'evening' as const, description: '', color: '#ffb020', isTestDay: false }],
+      exercises: await db.exercises.toArray(),
+      bands: [],
+      objectives: await db.objectives.toArray(),
+    };
+    const october = (await db.programs.get('prog'))!;
+    const file = programToFile({ ...october, objectiveIds: ['o'] }, [tpl, unused], catalog, appSettings());
+    file.seances = file.seances.filter((s) => s.nom === 'Combo');
+    file.seances[0].lignes[0].exercices = ['Face pull'];
+    file.nouveautes.exercices = [{ nom: 'Face pull', element: 'Grand dentelé', mesure: 'reps', categorie: '', rapide: true, tempsParSerieSec: null, autresNoms: [], notes: '' }];
+    file.objectifs = [{ nom: 'Obj', critere: 'Propre', cible: 5, unite: 'reps', exercice: 'Uppercut' }];
+    const read = readProgramFile(JSON.stringify(file), {
+      ...catalog,
+      app: appSettings(),
+      programs: [october],
+      templates: [tpl, unused],
+      usedTemplateIds: new Set(),
+      currentWeek: 2,
+      newId: () => crypto.randomUUID(),
+      now: 1,
+    });
+    if (!read.ok) throw new Error(read.errors.join(' | '));
+    await applyProgramImport(db, read.value);
+
+    const faceKey = (await db.exercises.toArray()).find((e) => e.name === 'Face pull')!;
+    expect((await db.templates.get(tpl.id))!.items[0].candidateExerciseIds).toEqual([faceKey.id]);
+    expect(await db.templates.get('matin')).toBeUndefined();
+    expect(await db.objectives.get('o')).toMatchObject({ criterion: 'Propre', target: 5, tests: [{ id: 't', value: 3 }] });
+    expect((await db.programs.get('prog'))!.objectiveIds).toEqual(['o']);
+    expect(await db.programs.count()).toBe(1);
   });
 });

@@ -29,6 +29,7 @@ import { ExerciseEditor } from './ExerciseEditor';
 import { ExerciseLibrary } from './ExerciseLibrary';
 import { PHASE_LABEL, programContext, programDates, withProgram, type ProgramContext } from './programContext';
 import { ProgramChecks } from './ProgramChecks';
+import { ExportProgramSheet, ProgramImportScreen } from './ProgramExchange';
 import { DuplicateProgramSheet, ProgramsList, RenameProgramSheet } from './ProgramsList';
 import { ProgramsNav, SettingsButton } from './ProgramsNav';
 import { SlotPickerSheet, type Slot } from './SlotPickerSheet';
@@ -41,7 +42,7 @@ const byName = (a: SessionTemplate, b: SessionTemplate) => a.name.localeCompare(
 
 /**
  * #/programs (?vue=exercices, ?programme=:id), #/programs/all, #/programs/template/:id, #/programs/exercise/:id(/edit),
- * #/programs/exercise/new, #/programs/week (?programme=:id).
+ * #/programs/exercise/new, #/programs/week (?programme=:id), #/programs/import.
  */
 export function ProgramsScreen({ data, path }: { data: AppData; path: string }) {
   const parts = path.split('?')[0].split('/').filter(Boolean);
@@ -51,6 +52,7 @@ export function ProgramsScreen({ data, path }: { data: AppData; path: string }) 
   if (parts[1] === 'exercise' && parts[2]) return <ExerciseDetail key={parts[2]} data={data} exerciseId={parts[2]} backTo="/programs?vue=exercices" />;
   if (parts[1] === 'week') return <WeekPlanEditor data={data} programId={queryParam(path, 'programme')} />;
   if (parts[1] === 'all') return <ProgramsListRoute data={data} />;
+  if (parts[1] === 'import') return <ProgramImportScreen data={data} />;
   if (queryParam(path, 'vue') === 'exercices') return <ExerciseLibrary data={data} path={path} />;
   return <ProgramView key={queryParam(path, 'programme') ?? 'current'} data={data} programId={queryParam(path, 'programme')} />;
 }
@@ -185,7 +187,7 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
   const [menu, setMenu] = useState<TemplateTarget | null>(null);
   const [picker, setPicker] = useState<Slot | null>(null);
   const [programMenu, setProgramMenu] = useState(false);
-  const [programSheet, setProgramSheet] = useState<'rename' | 'duplicate' | null>(null);
+  const [programSheet, setProgramSheet] = useState<'rename' | 'duplicate' | 'export' | null>(null);
   const inWeek = new Set(SEQ_DAYS.flatMap((day) => [settings.weekPlan[day].morning, settings.weekPlan[day].evening]));
   const others = context.templates.filter((t) => !t.archived && !inWeek.has(t.id)).sort(byName);
   const archived = context.templates.filter((t) => t.archived).sort(byName);
@@ -331,6 +333,15 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
             }}
           />
           <MenuItem
+            label="Exporter pour l’agent"
+            hint="Le programme et le catalogue, à donner à ton agent de programmation."
+            onClick={() => {
+              setProgramMenu(false);
+              setProgramSheet('export');
+            }}
+          />
+          <MenuItem label="Importer un programme" hint="Le fichier ou le texte de ton agent, avec l’aperçu avant de valider." onClick={() => navigate('/programs/import')} />
+          <MenuItem
             icon={<PencilIcon />}
             label="Renommer le programme"
             onClick={() => {
@@ -350,6 +361,7 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
       </Sheet>
       {programSheet === 'rename' && <RenameProgramSheet program={program} data={data} onClose={() => setProgramSheet(null)} />}
       {programSheet === 'duplicate' && <DuplicateProgramSheet source={program} data={data} today={today} onClose={() => setProgramSheet(null)} />}
+      {programSheet === 'export' && <ExportProgramSheet program={program} data={data} onClose={() => setProgramSheet(null)} />}
       <TemplateActions key={menu?.template.id ?? 'aucun'} target={menu} onClose={() => setMenu(null)} data={data} lookups={lookups} />
       <SlotPickerSheet slot={picker} onClose={() => setPicker(null)} context={context} lookups={lookups} />
     </Screen>

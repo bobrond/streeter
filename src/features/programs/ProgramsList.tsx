@@ -1,5 +1,6 @@
 // Programmes datés : la liste (passés, en cours, à venir), renommer, dupliquer pour la suite, changer la date de début
-// d'un programme à venir, le supprimer. Un programme commence en S1 de son cycle et dure jusqu'au suivant.
+// d'un programme à venir, le supprimer, l'exporter pour l'agent de programmation ; importer un programme. Un programme
+// commence en S1 de son cycle et dure jusqu'au suivant.
 import { useState } from 'react';
 import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
@@ -29,6 +30,7 @@ import { MenuItem, MenuList } from '../../ui/Menu';
 import { Screen } from '../../ui/Screen';
 import { ConfirmSheet, Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/toastStore';
+import { ExportProgramSheet } from './ProgramExchange';
 import { currentWeekOf, programDates, withProgram } from './programContext';
 
 const PHASE_BADGE: Record<ProgramPhase, string> = { past: 'passé', current: 'en cours', upcoming: 'à venir' };
@@ -151,7 +153,7 @@ function StartWeekSheet({ program, data, today, onClose }: { program: Program; d
   );
 }
 
-type Action = { kind: 'menu' | 'rename' | 'duplicate' | 'start' | 'delete'; program: Program };
+type Action = { kind: 'menu' | 'rename' | 'duplicate' | 'start' | 'delete' | 'export'; program: Program };
 
 /** #/programs/all */
 export function ProgramsList({ data, today }: { data: AppData; today: string }) {
@@ -188,12 +190,17 @@ export function ProgramsList({ data, today }: { data: AppData; today: string }) 
         Préparer le programme suivant
       </Button>
       <p className="px-1 text-sm text-ink-3">Copie du dernier programme, à modifier ensuite.</p>
+      <Button variant="secondary" onClick={() => navigate('/programs/import')}>
+        Importer un programme
+      </Button>
+      <p className="px-1 text-sm text-ink-3">Conçu par ton agent de programmation : fichier ou texte collé, avec l’aperçu des changements avant de valider.</p>
 
       <Sheet open={action?.kind === 'menu'} onClose={close} title={action?.program.name ?? ''}>
         {action && (
           <MenuList>
             <MenuItem label="Afficher" onClick={() => open(action.program)} />
             <MenuItem icon={<PencilIcon />} label="Renommer" onClick={() => setAction({ ...action, kind: 'rename' })} />
+            <MenuItem label="Exporter pour l’agent" hint="Le programme et le catalogue, au format de la consigne." onClick={() => setAction({ ...action, kind: 'export' })} />
             <MenuItem icon={<CopyIcon />} label="Dupliquer pour la suite" hint="Nouveau programme après le dernier, avec la même semaine type." onClick={() => setAction({ ...action, kind: 'duplicate' })} />
             {action.program.startWeek > currentWeek && (
               <>
@@ -206,6 +213,7 @@ export function ProgramsList({ data, today }: { data: AppData; today: string }) 
       </Sheet>
       {action?.kind === 'rename' && <RenameProgramSheet program={action.program} data={data} onClose={close} />}
       {action?.kind === 'duplicate' && <DuplicateProgramSheet source={action.program} data={data} today={today} onClose={close} />}
+      {action?.kind === 'export' && <ExportProgramSheet program={action.program} data={data} onClose={close} />}
       {action?.kind === 'start' && <StartWeekSheet program={action.program} data={data} today={today} onClose={close} />}
       <ConfirmSheet
         open={action?.kind === 'delete'}

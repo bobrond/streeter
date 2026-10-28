@@ -154,6 +154,14 @@ Si je te demande seulement une retouche, rends quand même le programme complet.
 - `blocs` : `nom`, `alternance` (alternance planche / FL appariée par ordre), `reduitEnAllegee` (séries réduites en semaine allégée), `apres` (nom du bloc après lequel il se place).
 - `typesSeance` : `nom`, `moment`, `description`, `couleur` (`"#rrggbb"`), `jourDeTest`.
 
+**`catalogue`** (seulement dans le programme que je te donne ; ne le recopie pas, l'appli l'ignore à l'import) : ce qui existe déjà dans l'appli, avec les mêmes champs que `nouveautes`.
+- `elements` : `nom`, `nature`.
+- `blocs` : `nom`, `alternance`, `reduitEnAllegee`, dans l'ordre d'exécution des blocs.
+- `typesSeance` : `nom`, `moment`, `description`, `couleur`, `jourDeTest`.
+- `exercices` : les exercices actifs (et ceux du programme), mêmes champs que `nouveautes.exercices`.
+- `elastiques` : `nom`, du plus assistant au moins assistant.
+- `objectifs` : tous les objectifs de l'appli, suivis ou anciens, mêmes champs que `objectifs` ; reprends un ancien objectif par son nom exact pour garder ses tests.
+
 **`demandesAppli`** : ce que tu voudrais exprimer et que ce format ne permet pas (un nouveau type de volume, un appariement explicite, une progression S1 à S4 chiffrée…). Chaque demande : `sujet`, `besoin`, `exemple`. Je les transmets au développement de l'appli ; une fois prises en charge, le format passe à la version suivante et je te donne la nouvelle consigne. En attendant, **approche-toi au mieux avec les champs existants** (notes comprises) et signale-le dans le résumé. N'invente jamais de clé.
 
 ## Règles d'écriture

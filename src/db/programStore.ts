@@ -12,6 +12,7 @@ import {
 } from '../domain/editing';
 import { splitSettingsPatch } from '../domain/programs';
 import type { AppSettings, Band, BlockType, Element, Exercise, ID, Moment, Program, SeqDay, SessionTemplate, SessionType, Settings, WeekPlan } from '../domain/types';
+import type { ProgramImport } from '../io/program/programFile';
 import type { StreeterDB } from './db';
 
 export class InUseError extends Error {}
@@ -189,5 +190,34 @@ export async function deleteProgram(db: StreeterDB, programId: ID, currentWeek: 
     if ((await db.programs.count()) <= 1) throw new InUseError('Il faut garder au moins un programme.');
     await db.templates.where('programId').equals(programId).delete();
     await db.programs.delete(programId);
+  });
+}
+
+/**
+ * Écrit l'import d'un fichier programme en une transaction : nouveautés du catalogue, objectifs, programme et ses
+ * modèles. Un programme remplacé garde son identifiant ; ses modèles absents du fichier sont archivés s'ils ont servi,
+ * supprimés sinon. Les séances déjà faites gardent leur copie.
+ */
+export async function applyProgramImport(db: StreeterDB, imported: ProgramImport): Promise<void> {
+  await db.transaction('rw', [db.elements, db.blockTypes, db.sessionTypes, db.exercises, db.objectives, db.programs, db.templates], async () => {
+    if (imported.replaces) {
+      const current = await db.programs.get(imported.replaces.id);
+      if (!current || current.startWeek !== imported.program.startWeek) throw new InUseError('Le programme à remplacer a changé entre-temps : relis le fichier.');
+    }
+    await db.elements.bulkAdd(imported.newElements);
+    await db.blockTypes.bulkPut(imported.blockTypes);
+    await db.sessionTypes.bulkAdd(imported.newSessionTypes);
+    await db.exercises.bulkAdd(imported.newExercises);
+    await db.objectives.bulkAdd(imported.newObjectives);
+    // Objectifs repris : leurs tests ne sont pas réécrits.
+    for (const { id, criterion, target, unit, exerciseId } of imported.updatedObjectives) {
+      await db.objectives.update(id, { criterion, target, unit, exerciseId });
+    }
+    for (const { template, archive } of imported.removedTemplates) {
+      if (archive) await db.templates.update(template.id, { archived: true });
+      else await db.templates.delete(template.id);
+    }
+    await db.templates.bulkPut(imported.templates);
+    await db.programs.put(imported.program);
   });
 }
