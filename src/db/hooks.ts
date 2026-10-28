@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
-import { dayInfo, localISODate } from '../domain/cycle';
-import { effectiveSettings, programAtWeek, sortPrograms } from '../domain/programs';
+import { localISODate } from '../domain/cycle';
+import { effectiveSettings, programAtDate, sortPrograms } from '../domain/programs';
 import type {
   AppSettings,
   Band,
@@ -79,8 +79,7 @@ export function useAppData(): AppData | null | undefined {
   return useMemo(() => {
     const parts = [settings, programs, elements, blockTypes, sessionTypes, exercises, bands, templates, objectives, sessions, sets, lastImport];
     if (parts.some((p) => p === undefined)) return undefined;
-    const week = settings ? dayInfo(today, { cycleStartDate: settings.cycleStartDate, cycleLengthWeeks: 1, deloadWeek: 0 }).week : 1;
-    const program = programAtWeek(programs!, week);
+    const program = settings ? programAtDate(programs!, settings, today) : undefined;
     if (settings === null || !program) return null;
     return {
       settings: effectiveSettings(settings!, program),

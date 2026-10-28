@@ -144,8 +144,11 @@ export function useSessionController(session: SessionLog, data: AppData, lookups
         unlockAudio();
         vibrate(40);
         const now = Date.now();
-        const { item, exercise } = line;
+        const { item } = line;
         const draft = values ?? row.draft;
+        // Exercice de la série : celui choisi dans le pavé (autre candidat, ou progression inférieure), sinon la ligne.
+        const exercise = (draft.exerciseId ? lookups.exercises.get(draft.exerciseId) : undefined) ?? line.exercise;
+        const lower = item.lowerProgressionIds?.includes(exercise.id) ?? false;
         const set: SetLog = {
           id: newId(),
           sessionId: session.id,
@@ -155,7 +158,7 @@ export function useSessionController(session: SessionLog, data: AppData, lookups
           exerciseId: exercise.id,
           setIndex: 0,
           value: exercise.measure === 'none' ? null : draft.value,
-          bandId: draft.bandId,
+          bandId: lower ? null : draft.bandId,
           rpe: draft.rpe,
           quality: draft.quality,
           kind: draft.kind,
@@ -171,7 +174,8 @@ export function useSessionController(session: SessionLog, data: AppData, lookups
           {
             ...setDrafts(r, item.id, drafts),
             activeItemId: item.id,
-            chosenExercise: { ...r.chosenExercise, [item.id]: exercise.id },
+            // Une progression inférieure ne devient pas l'exercice de la ligne.
+            chosenExercise: lower ? r.chosenExercise : { ...r.chosenExercise, [item.id]: exercise.id },
             rest: rest ? { itemId: item.id, startedAt: now, minSec: rest.minSec, maxSec: rest.maxSec, extraSec: 0 } : null,
           },
           (next) => logSet(db, set, next),
@@ -253,7 +257,7 @@ export function useSessionController(session: SessionLog, data: AppData, lookups
         update((r) => ({ ...r, rest: null }));
       },
     };
-  }, [commit, lines, plan, session.id, sessionSets, update]);
+  }, [commit, lines, lookups.exercises, plan, session.id, sessionSets, update]);
 
   return { resume, plan, sessionSets, lines, progress, proposed, completeCount, actions };
 }

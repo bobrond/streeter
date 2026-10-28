@@ -169,6 +169,7 @@ describe('programStore', () => {
       programs: [october],
       templates: [tpl, unused],
       usedTemplateIds: new Set(),
+      today: '2026-10-13',
       currentWeek: 2,
       newId: () => crypto.randomUUID(),
       now: 1,

@@ -1,7 +1,7 @@
 // Mode séance : enchaînement des lignes (alternance planche / FL, superset), série proposée,
 // exercice par défaut, dernière performance et pré-remplissage de la saisie.
 import type { DayInfo } from './cycle';
-import { deloadTemplate } from './deload';
+import { practicedTemplate } from './deload';
 import type {
   BlockType,
   Element,
@@ -123,9 +123,19 @@ export function progressOf(sets: readonly SetLog[], closedItems: readonly ID[]):
   return progress;
 }
 
-/** Séries prévues dans le tableau : le minimum de la ligne, plus les lignes ajoutées (ou moins les retirées). */
-export function rowTarget(item: Pick<PrescriptionItem, 'setsMin'>, extraRows: number | undefined): number {
-  return Math.max(0, item.setsMin + (extraRows ?? 0));
+/**
+ * Séries prévues dans le tableau : le minimum de la ligne, plus les lignes ajoutées (ou moins les retirées). Ligne sans
+ * minimum (`setsMin` à 0, le maximum est un plafond) : une série de plus que celles faites, jusqu'au plafond ; on
+ * l'arrête quand on veut (« Terminer cet exercice », ou retirer la série à faire).
+ */
+export function rowTarget(item: Pick<PrescriptionItem, 'setsMin' | 'setsMax'>, extraRows: number | undefined, done = 0): number {
+  const base = item.setsMin === 0 ? Math.min(item.setsMax, done + 1) : item.setsMin;
+  return Math.max(0, base + (extraRows ?? 0));
+}
+
+/** Ligne sans minimum dont le plafond est atteint. */
+export function capReached(item: Pick<PrescriptionItem, 'setsMin' | 'setsMax'>, done: number): boolean {
+  return item.setsMin === 0 && done >= item.setsMax;
 }
 
 /**
@@ -137,7 +147,7 @@ export function tableProgress(plan: SessionPlan, sets: readonly SetLog[], closed
   const progress = new Map<ID, ItemProgress>();
   for (const item of plan.items) {
     const p = base.get(item.id) ?? { done: 0, closed: false };
-    progress.set(item.id, { done: p.done, closed: p.closed || p.done >= rowTarget(item, extraRows[item.id]) });
+    progress.set(item.id, { done: p.done, closed: p.closed || p.done >= rowTarget(item, extraRows[item.id], p.done) });
   }
   return progress;
 }
@@ -343,6 +353,11 @@ export function prefillDraft(args: {
   const { item, exercise, itemSets, last } = args;
   const measured = exercise.measure !== 'none';
   const quality = args.isSkill ? 'clean' : null;
+  // Une série faite sur une progression inférieure de la ligne : la suivante aussi, avec ses valeurs.
+  const lower = itemSets.filter((s) => s.kind !== 'warmup').at(-1);
+  if (lower && item.lowerProgressionIds?.includes(lower.exerciseId)) {
+    return { value: lower.value, bandId: null, rpe: lower.rpe, quality, kind: 'normal', note: '', exerciseId: lower.exerciseId };
+  }
   const previous = itemSets.filter((s) => s.exerciseId === exercise.id && s.kind !== 'warmup').at(-1);
   if (previous) return { value: measured ? previous.value : null, bandId: previous.bandId, rpe: previous.rpe, quality, kind: 'normal', note: '' };
   const ref = last?.sets.find((s) => s.kind !== 'warmup') ?? last?.sets[0];
@@ -407,7 +422,7 @@ export function newSessionLog(args: {
   express?: { minutes: number; replacedId: ID };
 }): SessionLog {
   const { template, info, express } = args;
-  const practiced = info.isDeload && !express ? deloadTemplate(template, args.blocksById, args.settings) : template;
+  const practiced = express ? template : practicedTemplate(template, info, args.blocksById, args.settings);
   const snapshot: SessionTemplate = structuredClone({ ...practiced, items: sortItemsByBlock(practiced.items, args.blocksById) });
   return {
     id: args.id,

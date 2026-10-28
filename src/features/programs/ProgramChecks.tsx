@@ -39,7 +39,7 @@ export function ProgramChecks({
           <span>
             {compact || sticky
               ? 'Programme conforme.'
-              : `Programme conforme : composantes entre ${settings.volumeMin} et ${settings.volumeMax} séries par semaine, planche et FL à chaque soir, matins sous ${settings.morningMaxMinutes} min.`}
+              : `Programme conforme : composantes dans leurs bornes (${settings.volumeMin} à ${settings.volumeMax} séries par ${settings.schedule === 'sequence' ? 'tranche' : 'semaine'} par défaut), planche et FL à chaque soir, matins sous ${settings.morningMaxMinutes} min.`}
           </span>
         </div>
       </div>

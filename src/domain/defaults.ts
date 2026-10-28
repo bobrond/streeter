@@ -2,6 +2,9 @@ import type { Settings, WeekPlan } from './types';
 
 export const DEFAULT_SETTINGS: Omit<Settings, 'cycleStartDate' | 'weekPlan' | 'programId' | 'programStartWeek'> = {
   id: 'settings',
+  schedule: 'week',
+  startDate: null,
+  componentVolumes: [],
   cycleLengthWeeks: 4,
   deloadWeek: 4,
   deloadReductionPct: 40,

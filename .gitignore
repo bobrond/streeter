@@ -11,6 +11,8 @@ coverage
 *.xlsx
 *.xls
 *.csv
+# Programmes de l'utilisateur, conçus par son agent : privés eux aussi.
+docs/programme_*.json
 
 # Vault de suivi (second cerveau) : privé, il reste sur ce PC et ne doit jamais être publié.
 vault/

@@ -24,12 +24,15 @@ export function SlotPickerSheet({ slot, onClose, context, lookups }: { slot: Slo
     if (slot) void setWeekSlot(db, context.program.id, slot.day, slot.moment, templateId);
     onClose();
   };
+  const sequence = context.program.schedule === 'sequence';
+  const none = sequence ? 'Retirer de la séquence' : slot?.moment === 'evening' ? 'Repos' : 'Pas de séance';
+  const title = !slot ? '' : sequence ? (slot.moment === 'evening' ? `Séance ${slot.day} de la séquence` : `Matin ${slot.day}`) : `${seqDayLabel(slot.day)} · ${MOMENT_LABEL[slot.moment].toLowerCase()}`;
   const options = [
-    { id: null as ID | null, name: slot?.moment === 'evening' ? 'Repos' : 'Pas de séance', color: undefined as string | undefined, optional: false },
+    { id: null as ID | null, name: none, color: undefined as string | undefined, optional: false },
     ...choices.map((t) => ({ id: t.id as ID | null, name: t.name, color: lookups.sessionTypes.get(t.sessionTypeId)?.color, optional: t.optional })),
   ];
   return (
-    <Sheet open={slot !== null} onClose={onClose} title={slot ? `${seqDayLabel(slot.day)} · ${MOMENT_LABEL[slot.moment].toLowerCase()}` : ''}>
+    <Sheet open={slot !== null} onClose={onClose} title={title}>
       <ul className="flex flex-col gap-1">
         {options.map((choice) => (
           <li key={choice.id ?? 'none'}>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { element, exercise, item, setLog } from '../test/builders';
-import type { LastPerformance } from './session';
+import { capReached, rowTarget, type LastPerformance } from './session';
 import { firstPending, lineRows, type PendingRow } from './sessionTable';
 import type { SetDraft } from './types';
 
@@ -77,5 +77,47 @@ describe('lineRows', () => {
 
   it('n’a pas de série à faire sans exercice', () => {
     expect(rows({ exercise: null })).toEqual([]);
+  });
+});
+
+describe('ligne sans minimum (plafond)', () => {
+  const free = item({ blockTypeId: 'skill', elementId: planche.id, setsMin: 0, setsMax: 3 });
+  const freeRows = (sets: ReturnType<typeof done>[], extra = 0) => lineRows({ item: free, exercise: hold, isSkill: true, sets, last: null, pendingDrafts: [], extraRows: extra, closed: false });
+
+  it('propose une série de plus que celles faites, jusqu’au plafond', () => {
+    expect(freeRows([]).map((r) => r.status)).toEqual(['pending']);
+    expect(freeRows([done(1), done(2)]).map((r) => r.status)).toEqual(['done', 'done', 'pending']);
+    expect(freeRows([done(1), done(2), done(1)]).map((r) => r.status)).toEqual(['done', 'done', 'done']);
+    expect(capReached(free, 3)).toBe(true);
+    expect(capReached(free, 2)).toBe(false);
+    expect(capReached(line, 9)).toBe(false);
+  });
+
+  it('s’arrête quand on retire la série à faire, repart au-delà du plafond si on en ajoute une', () => {
+    expect(freeRows([done(1)], -1).map((r) => r.status)).toEqual(['done']);
+    expect(freeRows([done(1), done(2), done(1)], 1).map((r) => r.status)).toEqual(['done', 'done', 'done', 'pending']);
+  });
+
+  it('reste proposée par la séance jusqu’au plafond, sans minimum', () => {
+    expect(rowTarget(free, 0, 0)).toBe(1);
+    expect(rowTarget(free, 0, 3)).toBe(3);
+    expect(rowTarget(line, 0, 2)).toBe(3);
+  });
+
+  it('une progression inférieure se garde d’une série à la suivante', () => {
+    const lower = exercise('Straddle planche hold', planche.id, { measure: 'seconds' });
+    const withLower = item({ ...line, lowerProgressionIds: [lower.id] });
+    const list = lineRows({
+      item: withLower,
+      exercise: hold,
+      isSkill: true,
+      sets: [setLog({ sessionId: 'now', exerciseId: lower.id, itemId: withLower.id, value: 7 })],
+      last,
+      pendingDrafts: [],
+      extraRows: 0,
+      closed: false,
+    });
+    expect((list[1] as PendingRow).draft).toMatchObject({ value: 7, bandId: null, exerciseId: lower.id });
+    expect((list[2] as PendingRow).draft).toMatchObject({ value: 7, exerciseId: lower.id });
   });
 });

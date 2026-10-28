@@ -1,17 +1,21 @@
 // Programmes datés : un programme commence en S1 de son cycle à sa semaine de début et dure jusqu'au début du
 // suivant. Les réglages effectifs d'une date sont ceux de l'appli et ceux du programme en vigueur cette semaine-là.
 import { dateOf, dayInfo, firstTestSeqDay, nextObjectiveTestDate } from './cycle';
-import type { AppSettings, ID, Objective, Program, ProgramConfig, SessionTemplate, SessionType, Settings, WeekPlan } from './types';
+import { firstTestPosition, nextSequenceTest, sequenceDayInfo, sessionsBetween } from './sequence';
+import type { AppSettings, ID, Objective, Program, ProgramConfig, SessionLog, SessionTemplate, SessionType, Settings, WeekPlan } from './types';
 import { SEQ_DAYS } from './types';
 
 /** Champs d'un programme qui font partie des réglages effectifs. */
 export const PROGRAM_CONFIG_KEYS = [
+  'schedule',
+  'startDate',
   'cycleLengthWeeks',
   'deloadWeek',
   'deloadReductionPct',
   'hideMorningsInDeload',
   'volumeMin',
   'volumeMax',
+  'componentVolumes',
   'morningMaxMinutes',
   'weekPlan',
 ] as const satisfies readonly (keyof ProgramConfig)[];
@@ -58,20 +62,39 @@ export function settingsAtWeek(app: AppSettings, programs: readonly Program[], w
 }
 
 export function settingsAtDate(app: AppSettings, programs: readonly Program[], date: string): Settings | null {
-  const week = dayInfo(date, { cycleStartDate: app.cycleStartDate, cycleLengthWeeks: 1, deloadWeek: 0 }).week;
-  return settingsAtWeek(app, programs, week);
+  const program = programAtDate(programs, app, date);
+  return program ? effectiveSettings(app, program) : null;
 }
 
-/** Date du J1 de la semaine de début d'un programme. */
-export function programStartDate(app: Pick<AppSettings, 'cycleStartDate'>, program: Pick<Program, 'startWeek'>): string {
-  return dateOf(program.startWeek, 1, app);
+/** Date de début d'un programme : le J1 de sa semaine de début, ou sa date en séquence. */
+export function programStartDate(app: Pick<AppSettings, 'cycleStartDate'>, program: Pick<Program, 'startWeek'> & Partial<Pick<Program, 'schedule' | 'startDate'>>): string {
+  return program.schedule === 'sequence' && program.startDate ? program.startDate : dateOf(program.startWeek, 1, app);
+}
+
+/** Semaine absolue d'une date. */
+export function weekOfDate(app: Pick<AppSettings, 'cycleStartDate'>, date: string): number {
+  return dayInfo(date, { cycleStartDate: app.cycleStartDate, cycleLengthWeeks: 1, deloadWeek: 0 }).week;
+}
+
+/** Programme en vigueur à une date : le dernier commencé ; avant le premier, le premier. */
+export function programAtDate(programs: readonly Program[], app: Pick<AppSettings, 'cycleStartDate'>, date: string): Program | undefined {
+  const sorted = sortPrograms(programs);
+  let current = sorted[0];
+  for (const program of sorted) if (programStartDate(app, program) <= date) current = program;
+  return current;
+}
+
+/** Dates d'un programme : de son début au début du suivant (exclu ; `null` : pas de suivant). */
+export function programDateWindow(programs: readonly Program[], app: Pick<AppSettings, 'cycleStartDate'>, program: Program): { start: string; end: string | null } {
+  const next = sortPrograms(programs).find((p) => p.startWeek > program.startWeek);
+  return { start: programStartDate(app, program), end: next ? programStartDate(app, next) : null };
 }
 
 export type ProgramPhase = 'past' | 'current' | 'upcoming';
 
-export function programPhase(programs: readonly Program[], program: Program, currentWeek: number): ProgramPhase {
-  if (program.startWeek > currentWeek) return 'upcoming';
-  return programAtWeek(programs, currentWeek)?.id === program.id ? 'current' : 'past';
+export function programPhase(programs: readonly Program[], program: Program, at: { app: Pick<AppSettings, 'cycleStartDate'>; today: string }): ProgramPhase {
+  if (programStartDate(at.app, program) > at.today) return 'upcoming';
+  return programAtDate(programs, at.app, at.today)?.id === program.id ? 'current' : 'past';
 }
 
 const MONTH = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
@@ -162,7 +185,8 @@ export function programObjectives(objectives: readonly Objective[], program: Pic
 
 /**
  * Prochain jour de test des objectifs, aujourd'hui compris, en suivant les programmes à venir : début de chaque
- * cycle d'un programme, au premier jour de test de sa semaine type. `null` si aucun programme n'en a.
+ * cycle d'un programme, au premier jour de test de sa semaine type (en séquence : à la première séance d'un type
+ * « jour de test » de la première tranche, date indicative). `null` si aucun programme n'en a.
  */
 export function nextTestDate(
   today: string,
@@ -170,13 +194,23 @@ export function nextTestDate(
   programs: readonly Program[],
   templatesById: ReadonlyMap<ID, SessionTemplate>,
   sessionTypesById: ReadonlyMap<ID, SessionType>,
+  sessions: readonly SessionLog[] = [],
 ): { date: string; week: number; programId: ID } | null {
   const todayWeek = dayInfo(today, { cycleStartDate: app.cycleStartDate, cycleLengthWeeks: 1, deloadWeek: 0 }).week;
   const sorted = sortPrograms(programs);
   for (const program of sorted) {
     const { endWeek } = programWeeks(sorted, program);
-    if (endWeek !== null && endWeek < todayWeek) continue;
+    const window = programDateWindow(sorted, app, program);
+    if (window.end !== null && window.end <= today) continue;
     const s = effectiveSettings(app, program);
+    if (program.schedule === 'sequence') {
+      const from = today > window.start ? today : window.start;
+      const info = sequenceDayInfo(from, { ...s, startDate: window.start }, sessionsBetween(sessions, window.start, window.end));
+      const next = nextSequenceTest(info, s, firstTestPosition(program.weekPlan, templatesById, sessionTypesById));
+      if (next && (window.end === null || next.date < window.end)) return { date: next.date, week: weekOfDate(app, next.date), programId: program.id };
+      continue;
+    }
+    if (endWeek !== null && endWeek < todayWeek) continue;
     const from = today > programStartDate(app, program) ? today : programStartDate(app, program);
     const next = nextObjectiveTestDate(from, s, firstTestSeqDay(program.weekPlan, templatesById, sessionTypesById));
     if (next && (endWeek === null || next.week <= endWeek)) return { ...next, programId: program.id };
@@ -196,6 +230,9 @@ export function programFromLegacySettings(
   const config = Object.fromEntries(PROGRAM_CONFIG_KEYS.map((key) => [key, legacy[key]])) as unknown as ProgramConfig;
   const program: Program = {
     ...config,
+    schedule: 'week',
+    startDate: null,
+    componentVolumes: [],
     id: args.id,
     name: programNameFor(app.cycleStartDate),
     startWeek: 1,

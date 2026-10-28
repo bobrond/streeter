@@ -125,6 +125,21 @@ export class StreeterDB extends Dexie {
             if (session.templateSnapshot) session.templateSnapshot.programId ??= program.id;
           });
       });
+    // 6 (28/10/2026) : programmes en séquence (`schedule`, `startDate`) et volume par type de travail
+    // (`componentVolumes`), sans nouvel index ; les programmes existants restent en semaine type, sans volume propre.
+    // Les nouveautés des lignes (`byTranche`, `lowerProgressionIds`, minimum à 0) sont facultatives : rien à convertir.
+    this.version(6)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table('programs')
+          .toCollection()
+          .modify((program: Partial<Program>) => {
+            program.schedule ??= 'week';
+            program.startDate ??= null;
+            program.componentVolumes ??= [];
+          }),
+      );
   }
 }
 

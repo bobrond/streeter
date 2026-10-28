@@ -2,10 +2,10 @@
 import { useEffect, useState } from 'react';
 import type { AppData } from '../../db/hooks';
 import { useLookups } from '../../db/lookups';
-import { dayInfo, localISODate } from '../../domain/cycle';
+import { localISODate } from '../../domain/cycle';
 import { estimateDuration } from '../../domain/duration';
 import { sessionDurationSec } from '../../domain/journal';
-import { MOMENT_LABEL, formatDateLong, formatDuration, seqDayLabel } from '../../domain/labels';
+import { MOMENT_LABEL, formatDateLong, formatDuration } from '../../domain/labels';
 import type { SessionTemplate } from '../../domain/types';
 import { useNow } from '../../lib/device';
 import { navigate } from '../../lib/router';
@@ -14,13 +14,13 @@ import { Button } from '../../ui/Button';
 import { NextIcon, PlayIcon } from '../../ui/icons';
 import { Screen } from '../../ui/Screen';
 import { ChooseSessionSheet } from '../today/ChooseSessionSheet';
-import { pendingPlanned, plannedFor } from '../today/planned';
+import { dayLabel, infoFor, pendingPlanned, plannedFor } from '../today/planned';
 import { startTemplate } from '../today/startTemplate';
 
 export function SessionLauncher({ data }: { data: AppData }) {
   const lookups = useLookups(data);
   const today = localISODate(new Date(useNow(60_000)));
-  const info = dayInfo(today, data.settings);
+  const info = infoFor(today, data);
   const active = data.sessions.find((s) => s.status === 'in_progress');
   const pending = pendingPlanned(plannedFor(info, data, lookups));
   const last = data.sessions.find((s) => s.status !== 'in_progress');
@@ -52,7 +52,7 @@ export function SessionLauncher({ data }: { data: AppData }) {
         {pending ? (
           <>
             <div className="mt-3 font-semibold text-accent">
-              Prévue aujourd’hui · {seqDayLabel(info.seqDay)} · {MOMENT_LABEL[pending.moment]}
+              Prévue aujourd’hui · {dayLabel(info, pending.moment)} · {MOMENT_LABEL[pending.moment]}
             </div>
             <h2 className="font-display text-3xl tracking-wide">{pending.template.name}</h2>
             {estimate && (

@@ -4,7 +4,7 @@ import { estimateDuration } from './duration';
 import { blockRoles, buildExpress, componentNeeds, expressToStart, setExpressSets, type ComponentNeed } from './express';
 import type { PrescriptionItem, SessionTemplate } from './types';
 import type { PlanContext } from './volume';
-import { weekProgress } from './week';
+import { weekPeriod } from './period';
 
 const planche = element('Planche', 'skill', 0);
 const fl = element('Touch FL', 'skill', 1);
@@ -86,7 +86,7 @@ const satisfied = [need(dentele.id, { done: 6, deficit: 0 }), need(rhomboide.id,
 
 let n = 0;
 function express(minutes: number, replaced: SessionTemplate = max, needs: ComponentNeed[] = satisfied, isDeload = false) {
-  return buildExpress({ minutes, replaced, name: `Express ${minutes} min`, isDeload, program, settings: s, needs, newId: () => `new-${++n}` });
+  return buildExpress({ minutes, replaced, name: `Express ${minutes} min`, isDeload, cycleWeek: isDeload ? 4 : 1, program, settings: s, needs, newId: () => `new-${++n}` });
 }
 const structure = { blocks, elements: new Map(elements.map((e) => [e.id, e])), exercises: new Map() };
 const sets = (t: SessionTemplate, id: string) => t.items.find((i) => i.id === id)?.setsMin;
@@ -218,7 +218,7 @@ describe('buildExpress : composantes', () => {
     const fromEvening = express(45, max, [need(dentele.id, { deficit: 1, done: 3 })]);
     expect(fromEvening.template.items.find((i) => i.elementId === dentele.id)?.restText).toBe('90 s (Combo)');
     const morningOnly: PlanContext = { ...program, weekPlan: weekPlan({ 1: { evening: max.id }, 4: { morning: morningA.id } }) };
-    const fromMorning = buildExpress({ minutes: 45, replaced: max, name: 'x', isDeload: false, program: morningOnly, settings: s, needs: [need(dentele.id, { deficit: 1, done: 3 })], newId: () => `m-${++n}` });
+    const fromMorning = buildExpress({ minutes: 45, replaced: max, name: 'x', isDeload: false, cycleWeek: 1, program: morningOnly, settings: s, needs: [need(dentele.id, { deficit: 1, done: 3 })], newId: () => `m-${++n}` });
     expect(fromMorning.template.items.find((i) => i.elementId === dentele.id)).toMatchObject({ restText: 'Superset (matin)', optional: false, superset: false });
   });
 
@@ -235,8 +235,8 @@ describe('componentNeeds', () => {
 
   it('retard = minimum − faites − séries du soir encore prévues, sans compter la séance remplacée', () => {
     // Le J2 (Combo) au soir : rien de fait ; le Combo du J6 reste prévu, celui du jour est remplacé.
-    const days = weekProgress(1, '2026-10-06', withPlan, program.templates, []);
-    const needs = componentNeeds({ program, settings: s, week: 1, isDeload: false, days, sets: [], sessions: new Map(), replaced: { date: '2026-10-06', moment: 'evening' } });
+    const period = weekPeriod(1, '2026-10-06', withPlan, program.templates, []);
+    const needs = componentNeeds({ program, settings: s, period, cycleWeek: 1, sets: [], sessions: new Map(), replaced: { date: '2026-10-06', moment: 'evening' } });
     expect(needs.find((x) => x.elementId === dentele.id)).toMatchObject({ done: 0, remaining: 2, min: 4, max: 6, deficit: 2 });
     // Le rhomboïde du J1 est passé (manqué) : tout le minimum manque.
     expect(needs.find((x) => x.elementId === rhomboide.id)).toMatchObject({ done: 0, remaining: 0, deficit: 4 });
@@ -249,14 +249,14 @@ describe('componentNeeds', () => {
       setLog({ sessionId: j1.id, exerciseId: 'x', elementId: rhomboide.id }),
       setLog({ sessionId: j1.id, exerciseId: 'x', elementId: rhomboide.id, kind: 'warmup' }),
     ];
-    const days = weekProgress(1, '2026-10-08', withPlan, program.templates, [j1]);
-    const needs = componentNeeds({ program, settings: s, week: 1, isDeload: false, days, sets: done, sessions: sessions([j1]), replaced: { date: '2026-10-08', moment: 'morning' } });
+    const period = weekPeriod(1, '2026-10-08', withPlan, program.templates, [j1]);
+    const needs = componentNeeds({ program, settings: s, period, cycleWeek: 1, sets: done, sessions: sessions([j1]), replaced: { date: '2026-10-08', moment: 'morning' } });
     expect(needs.find((x) => x.elementId === rhomboide.id)).toMatchObject({ done: 2, deficit: 2 });
   });
 
   it('en semaine allégée, le minimum est celui des soirs allégés et il n’y a pas de bonus', () => {
-    const days = weekProgress(4, '2026-10-26', withPlan, program.templates, []);
-    const needs = componentNeeds({ program, settings: s, week: 4, isDeload: true, days, sets: [], sessions: new Map(), replaced: { date: '2026-10-26', moment: 'evening' } });
+    const period = weekPeriod(4, '2026-10-26', withPlan, program.templates, []);
+    const needs = componentNeeds({ program, settings: s, period, cycleWeek: 4, sets: [], sessions: new Map(), replaced: { date: '2026-10-26', moment: 'evening' } });
     // Dentelé : 2 Combo × (2 séries → 1) = 2, tous deux encore prévus ; rhomboïde : le Max du jour est remplacé.
     expect(needs.find((x) => x.elementId === dentele.id)).toMatchObject({ min: 2, max: null, remaining: 2, deficit: 0 });
     expect(needs.find((x) => x.elementId === rhomboide.id)).toMatchObject({ min: 1, remaining: 0, deficit: 1 });

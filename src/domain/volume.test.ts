@@ -5,6 +5,7 @@ import {
   editorIssues,
   plannedComponentVolume,
   realizedSkillSets,
+  weekSessionIds,
   programIssues,
   rangeStatus,
   realizedComponentVolume,
@@ -132,13 +133,13 @@ describe('realizedComponentVolume', () => {
 
   it('compte les séries de la semaine, soir et matin séparés', () => {
     const sets = [set('s1', dentele.id), set('s1', dentele.id), set('s1', dentele.id), set('s1', dentele.id), set('s2', dentele.id), set('s3', dentele.id), set('s1', planche.id)];
-    const [d, r] = realizedComponentVolume(sets, sessions, elements, s, { week: 1, isDeload: false });
+    const [d, r] = realizedComponentVolume(sets, sessions, elements, s, { sessionIds: weekSessionIds(sessions.values(), 1), isDeload: false });
     expect(d).toMatchObject({ evening: 4, morning: 1, total: 5, status: 'ok' });
     expect(r).toMatchObject({ evening: 0, total: 0, status: 'under_min' });
   });
 
   it('affiche « Semaine allégée » en semaine allégée', () => {
-    const [d] = realizedComponentVolume([set('s1', dentele.id)], sessions, elements, s, { week: 1, isDeload: true });
+    const [d] = realizedComponentVolume([set('s1', dentele.id)], sessions, elements, s, { sessionIds: weekSessionIds(sessions.values(), 1), isDeload: true });
     expect(d.status).toBe('deload');
   });
 
@@ -148,7 +149,7 @@ describe('realizedComponentVolume', () => {
       { ...set('s1', dentele.id), kind: 'normal' },
       { ...set('s1', dentele.id), kind: 'failure' },
     ];
-    const [d] = realizedComponentVolume(sets, sessions, elements, s, { week: 1, isDeload: false });
+    const [d] = realizedComponentVolume(sets, sessions, elements, s, { sessionIds: weekSessionIds(sessions.values(), 1), isDeload: false });
     expect(d).toMatchObject({ evening: 2, total: 2 });
   });
 });
@@ -195,7 +196,7 @@ describe('realizedSkillSets', () => {
       { sessionId: 'w1', blockTypeId: renfo.id, elementId: dentele.id },
       { sessionId: 'w2', blockTypeId: skill.id, elementId: fl.id },
     ] as SetLog[];
-    const counts = realizedSkillSets(sets, sessions, elements, 1);
+    const counts = realizedSkillSets(sets, weekSessionIds(sessions.values(), 1), elements);
     expect([...counts]).toEqual([[`${skill.id}|${planche.id}`, 2]]);
   });
 
@@ -205,7 +206,7 @@ describe('realizedSkillSets', () => {
       { sessionId: 'w1', blockTypeId: skill.id, elementId: planche.id, kind: 'warmup' },
       { sessionId: 'w1', blockTypeId: skill.id, elementId: planche.id, kind: 'failure' },
     ] as SetLog[];
-    expect([...realizedSkillSets(sets, sessions, elements, 1)]).toEqual([[`${skill.id}|${planche.id}`, 1]]);
+    expect([...realizedSkillSets(sets, weekSessionIds(sessions.values(), 1), elements)]).toEqual([[`${skill.id}|${planche.id}`, 1]]);
   });
 });
 
@@ -233,7 +234,7 @@ describe('remainingEveningSets', () => {
 
   it('compte les séries min des soirs obligatoires à venir, sans matins ni lignes optionnelles', () => {
     const days = weekProgress(1, '2026-10-05', plan, templates, []);
-    const remaining = remainingEveningSets(days, [], blocks, plan, false);
+    const remaining = remainingEveningSets(days, [], blocks, plan, { isDeload: false, cycleWeek: 1 });
     expect(remaining.byElement.get(dentele.id)).toBe(4);
     expect(remaining.byElement.get(planche.id)).toBe(8);
     expect(remaining.byBlockElement.get(keyOf(skill.id, fl.id))).toBe(8);
@@ -242,9 +243,9 @@ describe('remainingEveningSets', () => {
   it('ne compte plus une séance faite ou manquée', () => {
     const done = sessionLog('2026-10-05', { status: 'done' });
     const days = weekProgress(1, '2026-10-07', plan, templates, [done]);
-    expect(remainingEveningSets(days, [], blocks, plan, false).byElement.get(dentele.id)).toBe(2);
+    expect(remainingEveningSets(days, [], blocks, plan, { isDeload: false, cycleWeek: 1 }).byElement.get(dentele.id)).toBe(2);
     const later = weekProgress(1, '2026-10-10', plan, templates, []);
-    expect(remainingEveningSets(later, [], blocks, plan, false).byElement.size).toBe(0);
+    expect(remainingEveningSets(later, [], blocks, plan, { isDeload: false, cycleWeek: 1 }).byElement.size).toBe(0);
   });
 
   it('retire les séries déjà faites de la séance du soir en cours', () => {
@@ -261,14 +262,14 @@ describe('remainingEveningSets', () => {
       setLog({ sessionId: running.id, exerciseId: 'x', itemId: snapshot.items[0].id }),
     ];
     const days = weekProgress(1, '2026-10-05', plan, templates, [running]);
-    const remaining = remainingEveningSets(days, sets, blocks, plan, false);
+    const remaining = remainingEveningSets(days, sets, blocks, plan, { isDeload: false, cycleWeek: 1 });
     expect(remaining.byElement.get(dentele.id)).toBe(1 + 2);
     expect(remaining.byElement.get(planche.id)).toBe(0 + 4);
   });
 
   it('applique la semaine allégée aux séances à venir', () => {
     const days = weekProgress(4, '2026-10-26', plan, templates, []);
-    const remaining = remainingEveningSets(days, [], blocks, plan, true);
+    const remaining = remainingEveningSets(days, [], blocks, plan, { isDeload: true, cycleWeek: 4 });
     // 4 séries → 2 ; 2 séries → 1.
     expect(remaining.byElement.get(planche.id)).toBe(4);
     expect(remaining.byElement.get(dentele.id)).toBe(2);

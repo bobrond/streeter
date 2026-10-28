@@ -82,7 +82,9 @@ export function restParts(minSec: number | null, maxSec: number | null): string[
   return [bound(minSec), bound(maxSec)];
 }
 
+/** « 4-5 », « 3 » ; « ≤ 8 » pour une ligne sans minimum (le maximum est un plafond). */
 export function formatSets(min: number, max: number): string {
+  if (min === 0 && max > 0) return `≤ ${max}`;
   return min === max ? `${min}` : `${min}-${max}`;
 }
 

@@ -5,7 +5,7 @@ import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
 import { setCycleStartDate, shiftSequence } from '../../db/sessionStore';
-import { addDays, dayInfo, diffDays, firstTestSeqDay, isObjectiveTestDay, localISODate, type DayInfo } from '../../domain/cycle';
+import { addDays, diffDays, firstTestSeqDay, isObjectiveTestDay, localISODate, type DayInfo } from '../../domain/cycle';
 import { estimateDuration } from '../../domain/duration';
 import { EXPRESS_MINUTES, blockRoles } from '../../domain/express';
 import { sessionDurationSec } from '../../domain/journal';
@@ -20,9 +20,9 @@ import {
   seqDayLabel,
 } from '../../domain/labels';
 import { objectiveState, recordsBeaten } from '../../domain/objectives';
+import { firstTestPosition, projectedCycleEnd, type SequenceInfo } from '../../domain/sequence';
 import type { Moment, SeqDay, SessionLog, SessionTemplate } from '../../domain/types';
-import { rangeStatus, realizedComponentVolume, remainingEveningSets } from '../../domain/volume';
-import { weekProgress } from '../../domain/week';
+import { componentBounds, rangeStatus, realizedComponentVolume, remainingEveningSets } from '../../domain/volume';
 import { useNow } from '../../lib/device';
 import { navigate } from '../../lib/router';
 import { readLocal, writeLocal } from '../../lib/storage';
@@ -39,7 +39,7 @@ import { TemplateItems } from '../week/TemplateItems';
 import { ChooseSessionSheet } from './ChooseSessionSheet';
 import { ExpressSheet } from './ExpressSheet';
 import { lineExerciseName } from './lineNames';
-import { nextPlanned, pendingPlanned, plannedFor, replaceablePlanned, type Planned } from './planned';
+import { dayLabel, infoFor, nextPlanned, pendingPlanned, periodFor, plannedFor, replaceablePlanned, type Planned } from './planned';
 import { BackupReminder, InstallCard } from './Reminders';
 import { startExpress, startTemplate } from './startTemplate';
 
@@ -58,6 +58,11 @@ function nameOfDay(day: SeqDay, data: AppData, lookups: Lookups): string {
   const evening = lookups.templates.get(slot.evening ?? '');
   const morning = lookups.templates.get(slot.morning ?? '');
   return [morning?.name, evening?.name ?? 'Repos'].filter(Boolean).join(' + ');
+}
+
+/** « semaine allégée », ou « tranche allégée » en séquence. */
+function deloadLabel(info: DayInfo): string {
+  return info.sequence ? 'tranche allégée' : 'semaine allégée';
 }
 
 /** « demain », sinon le jour de la semaine. */
@@ -101,7 +106,7 @@ function PlannedCard({
     <article className="flex flex-col gap-3 rounded-2xl border border-line bg-card p-4">
       <div className="flex items-baseline justify-between gap-3">
         <div className={`${LABEL} ${doneSession ? 'text-ok' : 'text-accent'}`}>
-          {doneSession ? 'Séance du jour' : 'Séance prévue'} · {seqDayLabel(info.seqDay)} · {MOMENT_LABEL[planned.moment]}
+          {doneSession ? 'Séance du jour' : 'Séance prévue'} · {dayLabel(info, planned.moment)} · {MOMENT_LABEL[planned.moment]}
         </div>
         <div className="shrink-0 text-sm text-ink-2">{formatDurationRange(minSec, maxSec)}</div>
       </div>
@@ -118,7 +123,7 @@ function PlannedCard({
             </Badge>
           )}
           {template.optional && <Badge>optionnelle</Badge>}
-          {info.isDeload && <Badge tone="accent">semaine allégée</Badge>}
+          {info.isDeload && <Badge tone="accent">{deloadLabel(info)}</Badge>}
         </div>
       )}
       <button type="button" onClick={onDetail} aria-label="Contenu de la séance" className="-m-1 flex min-h-11 items-center gap-1.5 rounded-xl p-1 text-left active:bg-card-2">
@@ -173,7 +178,7 @@ function OtherPlannedRow({
       : planned.done.length > 0
         ? 'abandonnée'
         : planned.hidden
-          ? 'masquée (semaine allégée)'
+          ? 'masquée (allégé)'
           : formatDurationRange(minSec, maxSec);
   return (
     <div className={`flex items-center gap-3 rounded-2xl border border-line bg-card py-2 pr-2 pl-4 ${planned.hidden ? 'opacity-60' : ''}`}>
@@ -189,6 +194,17 @@ function OtherPlannedRow({
         </button>
       )}
     </div>
+  );
+}
+
+/** Programme en séquence, séance du soir faite aujourd'hui : la suivante, quel que soit le jour. */
+function NextInSequence({ info, data, lookups, today }: { info: DayInfo; data: AppData; lookups: Lookups; today: string }) {
+  const next = nextPlanned(info, data, lookups);
+  if (!next) return null;
+  return (
+    <p className="-mt-1 px-1 text-ink-2">
+      Prochaine séance ({upcomingDay(next.date, today)} ou plus tard) : <b className="text-ink">{next.template.name}</b>
+    </p>
   );
 }
 
@@ -210,13 +226,25 @@ function RestCard({ info, data, lookups, today }: { info: DayInfo; data: AppData
   );
 }
 
-function ExpressCard({ minutes, onMinutes, replaceable, onGenerate }: { minutes: number; onMinutes: (m: number) => void; replaceable: readonly Planned[]; onGenerate: () => void }) {
+function ExpressCard({
+  minutes,
+  onMinutes,
+  replaceable,
+  onGenerate,
+  period,
+}: {
+  minutes: number;
+  onMinutes: (m: number) => void;
+  replaceable: readonly Planned[];
+  onGenerate: () => void;
+  period: string;
+}) {
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-line bg-card p-4">
       <div className="flex flex-col gap-1">
         <h2 className={`${LABEL} text-ink-2`}>Séance express</h2>
         {replaceable.length > 0 ? (
-          <p className="leading-snug text-ink-2">À la place de la séance du jour : ses lignes planche et FL, puis les composantes en retard cette semaine.</p>
+          <p className="leading-snug text-ink-2">À la place de la séance du jour : ses lignes planche et FL, puis les composantes en retard {period}.</p>
         ) : (
           <p className="leading-snug text-ink-3">Rien à remplacer aujourd’hui : pas de séance prévue, ou elle est déjà faite.</p>
         )}
@@ -236,21 +264,23 @@ function ExpressCard({ minutes, onMinutes, replaceable, onGenerate }: { minutes:
 }
 
 /** Jauges compactes des composantes ; un toucher ouvre Progression › Volume. */
-function WeekVolume({ info, today, data, lookups }: { info: DayInfo; today: string; data: AppData; lookups: Lookups }) {
-  const { volumeMin: min, volumeMax: max } = data.settings;
-  const realized = realizedComponentVolume(data.sets, lookups.sessions, data.elements, data.settings, { week: info.week, isDeload: info.isDeload });
+function WeekVolume({ info, data, lookups }: { info: DayInfo; data: AppData; lookups: Lookups }) {
+  const { volumeMin, volumeMax } = data.settings;
+  const period = periodFor(info, data, lookups);
+  const realized = realizedComponentVolume(data.sets, lookups.sessions, data.elements, data.settings, period);
   if (realized.length === 0) return null;
-  const days = weekProgress(info.week, today, data.settings, lookups.templates, data.sessions);
-  const remaining = remainingEveningSets(days, data.sets, lookups.blocks, data.settings, info.isDeload);
+  const remaining = remainingEveningSets(period.days, data.sets, lookups.blocks, data.settings, info);
+  const perComponent = data.settings.componentVolumes.length > 0;
   return (
     <button type="button" onClick={() => navigate('/week')} className="-mx-2 flex flex-col gap-2.5 rounded-2xl px-2 py-2 text-left active:bg-card">
       <span className="flex w-full items-baseline justify-between gap-2">
         <span className="font-display text-2xl leading-none tracking-wide">
-          Volume de la <span className="text-accent">semaine</span>
+          Volume de la <span className="text-accent">{info.sequence ? 'tranche' : 'semaine'}</span>
         </span>
-        <span className="text-sm text-ink-2">{info.isDeload ? 'semaine allégée' : `cible ${min}–${max} séries`}</span>
+        <span className="text-sm text-ink-2">{info.isDeload ? deloadLabel(info) : perComponent ? 'cible par composante' : `cible ${volumeMin}–${volumeMax} séries`}</span>
       </span>
       {realized.map((row) => {
+        const { min, max } = componentBounds(data.settings, row.elementId);
         const tone: GaugeTone = info.isDeload ? 'neutral' : rangeStatus(row.total, min, max);
         const planned = remaining.byElement.get(row.elementId) ?? 0;
         return (
@@ -327,13 +357,18 @@ export function TodayScreen({ data }: { data: AppData }) {
   const lookups = useLookups(data);
   const now = useNow(60_000);
   const today = localISODate(new Date(now));
-  const info = dayInfo(today, data.settings);
+  const info = infoFor(today, data);
   const active = data.sessions.find((s) => s.status === 'in_progress');
   const planned = plannedFor(info, data, lookups);
   const pending = pendingPlanned(planned);
   const main = pending ?? planned.find((p) => !p.hidden) ?? null;
   const replaceable = replaceablePlanned(planned);
-  const testDay = isObjectiveTestDay(info, firstTestSeqDay(data.settings.weekPlan, lookups.templates, lookups.sessionTypes));
+  const testDay = isObjectiveTestDay(
+    info,
+    info.sequence
+      ? (firstTestPosition(data.settings.weekPlan, lookups.templates, lookups.sessionTypes) as SeqDay | null)
+      : firstTestSeqDay(data.settings.weekPlan, lookups.templates, lookups.sessionTypes),
+  );
   const [sheet, setSheet] = useState<'choose' | 'next' | 'postpone' | 'express' | null>(null);
   const [detail, setDetail] = useState<Planned | null>(null);
   const [minutes, setMinutes] = useState(readExpressMinutes);
@@ -360,7 +395,15 @@ export function TodayScreen({ data }: { data: AppData }) {
       kicker={formatDateLong(today)}
       title="Aujourd’hui"
       subtitle={
-        info.beforeStart ? undefined : (
+        info.beforeStart ? undefined : info.sequence ? (
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>
+              <b className="text-ink">{dayLabel(info)}</b> · tranche {info.cycleWeek}/{data.settings.cycleLengthWeeks} · {data.program.name}
+              {info.cycle > 1 ? ` cycle ${info.cycle}` : ''} · fin prévue {formatDateLong(projectedCycleEnd(info as SequenceInfo, data.settings)).replace(/^\S+ /, '')}
+            </span>
+            {info.isDeload && <Badge tone="accent">Tranche allégée</Badge>}
+          </span>
+        ) : (
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>
               <b className="text-ink">{seqDayLabel(info.seqDay)}</b> · semaine {info.week} · {data.program.name}{info.cycle > 1 ? ` cycle ${info.cycle}` : ''} · S{info.cycleWeek}/{data.settings.cycleLengthWeeks}
@@ -370,7 +413,11 @@ export function TodayScreen({ data }: { data: AppData }) {
         )
       }
     >
-      {info.beforeStart && <p className="rounded-2xl border border-line bg-card p-4 text-lg">Le programme commence le {formatDateLong(data.settings.cycleStartDate)}.</p>}
+      {info.beforeStart && (
+        <p className="rounded-2xl border border-line bg-card p-4 text-lg">
+          Le programme commence le {formatDateLong(data.settings.schedule === 'sequence' && data.settings.startDate ? data.settings.startDate : data.settings.cycleStartDate)}.
+        </p>
+      )}
 
       {testDay && <TestDayBanner data={data} />}
 
@@ -379,6 +426,7 @@ export function TodayScreen({ data }: { data: AppData }) {
       ) : (
         !info.beforeStart && <RestCard info={info} data={data} lookups={lookups} today={today} />
       )}
+      {info.sequence && main?.moment === 'evening' && main.done.length > 0 && <NextInSequence info={info} data={data} lookups={lookups} today={today} />}
       {planned
         .filter((p) => p !== main)
         .map((p) => (
@@ -396,6 +444,7 @@ export function TodayScreen({ data }: { data: AppData }) {
           minutes={minutes}
           onMinutes={chooseMinutes}
           replaceable={replaceable}
+          period={info.sequence ? 'dans la tranche' : 'cette semaine'}
           onGenerate={() => {
             setExpressMoment(pending && replaceable.includes(pending) ? pending.moment : (replaceable[0]?.moment ?? null));
             setSheet('express');
@@ -403,7 +452,7 @@ export function TodayScreen({ data }: { data: AppData }) {
         />
       )}
 
-      {!info.beforeStart && <WeekVolume info={info} today={today} data={data} lookups={lookups} />}
+      {!info.beforeStart && <WeekVolume info={info} data={data} lookups={lookups} />}
       <LastSession data={data} lookups={lookups} today={today} />
 
       <BackupReminder data={data} now={now} />
@@ -414,7 +463,7 @@ export function TodayScreen({ data }: { data: AppData }) {
         <Button variant="secondary" onClick={() => setSheet('choose')}>
           Choisir une autre séance
         </Button>
-        {!info.beforeStart && (
+        {!info.beforeStart && !info.sequence && (
           <div className="grid grid-cols-2 gap-2">
             <Button variant="secondary" className="text-base" onClick={() => setSheet('next')}>
               Passer au jour suivant

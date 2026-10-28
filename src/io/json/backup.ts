@@ -9,8 +9,9 @@ export const BACKUP_APP = 'streeter';
  * 4 (17/10/2026) : séance express (`expressMinutes`) sur chaque séance.
  * 5 (27/10/2026) : programmes datés (table `programs`) ; cycle, volume, matins et semaine type passent des réglages
  * au programme ; `programId` sur chaque modèle et chaque copie figée.
+ * 6 (28/10/2026) : déroulé du programme (`schedule`, `startDate`) et volume par type de travail (`componentVolumes`).
  */
-export const BACKUP_FORMAT_VERSION = 5;
+export const BACKUP_FORMAT_VERSION = 6;
 
 export const BACKUP_TABLES = [
   'settings',
@@ -101,6 +102,11 @@ function migrate(backup: Backup, newId: () => string): Backup {
       return isObject(session.templateSnapshot) ? { ...session, templateSnapshot: attached(session.templateSnapshot) } : session;
     });
     current = { ...current, formatVersion: 5, tables: { ...current.tables, settings: [app], programs: [program], templates, sessions } };
+  }
+  if (current.formatVersion < 6) {
+    // Format 5 → 6 : les programmes restent en semaine type, sans volume propre à une composante.
+    const programs = current.tables.programs.map((program) => ({ schedule: 'week', startDate: null, componentVolumes: [], ...(program as Record<string, unknown>) }));
+    current = { ...current, formatVersion: 6, tables: { ...current.tables, programs } };
   }
   return current;
 }

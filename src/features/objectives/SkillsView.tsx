@@ -63,7 +63,7 @@ function SkillCard({ skill, objectives, data, lookups }: { skill: Element; objec
 
 /** Prochain test des objectifs (début de cycle, premier jour Max). */
 function NextTest({ data, lookups, today }: { data: AppData; lookups: Lookups; today: string }) {
-  const next = nextTestDate(today, data.appSettings, data.programs, lookups.templates, lookups.sessionTypes);
+  const next = nextTestDate(today, data.appSettings, data.programs, lookups.templates, lookups.sessionTypes, data.sessions);
   if (!next) return null;
   if (next.date === today) {
     return (

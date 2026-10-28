@@ -47,9 +47,10 @@ function SessionClock({ startedAt }: { startedAt: number | null }) {
 /** Bouton du bas : valide la série proposée, avec ce qui sera enregistré. */
 function ValidateBar({ proposed, lookups, onValidate }: { proposed: ProposedRow; lookups: Lookups; onValidate: () => void }) {
   const { line, row } = proposed;
-  const measure = line.exercise?.measure ?? 'reps';
-  const band = row.draft.bandId ? lookups.bands.get(row.draft.bandId)?.name : undefined;
-  const what = [lookups.elements.get(line.item.elementId)?.name, measure === 'none' ? null : formatSetValue(row.draft.value, measure), band ? `élastique ${band}` : null]
+  const lower = row.draft.exerciseId && row.draft.exerciseId !== line.exercise?.id ? lookups.exercises.get(row.draft.exerciseId) : undefined;
+  const measure = (lower ?? line.exercise)?.measure ?? 'reps';
+  const band = row.draft.bandId && !lower ? lookups.bands.get(row.draft.bandId)?.name : undefined;
+  const what = [lower?.name ?? lookups.elements.get(line.item.elementId)?.name, measure === 'none' ? null : formatSetValue(row.draft.value, measure), band ? `élastique ${band}` : null]
     .filter(Boolean)
     .join(' · ');
   return (

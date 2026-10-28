@@ -122,6 +122,9 @@ export interface ItemForm {
   superset: boolean;
   optional: boolean;
   notes: string;
+  /** Repères par tranche et progressions inférieures : venus du fichier programme, gardés tels quels. */
+  byTranche?: PrescriptionItem['byTranche'];
+  lowerProgressionIds?: ID[];
 }
 
 export function itemToForm(item: PrescriptionItem): ItemForm {
@@ -137,6 +140,8 @@ export function itemToForm(item: PrescriptionItem): ItemForm {
     superset: item.superset,
     optional: item.optional,
     notes: item.notes,
+    ...(item.byTranche ? { byTranche: structuredClone(item.byTranche) } : {}),
+    ...(item.lowerProgressionIds ? { lowerProgressionIds: [...item.lowerProgressionIds] } : {}),
   };
 }
 
@@ -174,6 +179,8 @@ export function formToItem(id: ID, form: ItemForm, exercisesById: ReadonlyMap<ID
     superset: form.superset || rest.superset,
     optional: form.optional,
     notes: form.notes.trim(),
+    ...(form.byTranche && Object.keys(form.byTranche).length > 0 ? { byTranche: form.byTranche } : {}),
+    ...(form.lowerProgressionIds && form.lowerProgressionIds.length > 0 ? { lowerProgressionIds: form.lowerProgressionIds } : {}),
   };
 }
 

@@ -1,10 +1,11 @@
 // Séance express de 20, 30 ou 45 min : elle remplace une séance du jour, matin ou soir. Règles décidées avec
 // l'utilisateur (CLAUDE.md, « Aujourd'hui et séance express ») ; la fatigue de la veille n'entre pas en compte.
-import { deloadTemplate } from './deload';
+import { practicedTemplate } from './deload';
 import { estimateDuration, type PlanStructure } from './duration';
 import { buildPlan, sortItemsByBlock } from './session';
 import type { BlockType, ID, Moment, PrescriptionItem, SessionLog, SessionTemplate, SetLog, Settings } from './types';
 import {
+  componentBounds,
   componentElements,
   plannedComponentVolume,
   plannedSlots,
@@ -13,6 +14,7 @@ import {
   type PlanContext,
   type VolumeSettings,
 } from './volume';
+import type { PeriodView } from './period';
 import type { DayProgress } from './week';
 
 export const EXPRESS_MINUTES = [20, 30, 45] as const;
@@ -55,32 +57,37 @@ export interface ComponentNeed {
 export function componentNeeds(args: {
   program: PlanContext;
   settings: VolumeSettings;
-  week: number;
-  isDeload: boolean;
-  days: readonly DayProgress[];
+  /** Semaine, ou tranche en séquence. */
+  period: Pick<PeriodView, 'kind' | 'sessionIds' | 'isDeload' | 'days'>;
+  cycleWeek: number;
   sets: readonly SetLog[];
   sessions: ReadonlyMap<ID, SessionLog>;
   replaced: { date: string; moment: Moment };
 }): ComponentNeed[] {
-  const { program, settings, isDeload, replaced } = args;
-  const realized = realizedComponentVolume(args.sets, args.sessions, program.elements, settings, { week: args.week, isDeload });
+  const { program, settings, replaced } = args;
+  const { isDeload } = args.period;
+  const realized = realizedComponentVolume(args.sets, args.sessions, program.elements, settings, args.period);
   const doneOf = new Map(realized.map((r) => [r.elementId, r.total]));
-  const days = args.days.map((day) =>
-    day.date === replaced.date ? { ...day, slots: { ...day.slots, [replaced.moment]: { ...day.slots[replaced.moment], status: 'none' as const } } } : day,
+  // En séquence, la séance remplacée est la prochaine à faire, quelle que soit sa date indicative.
+  const isReplaced = (day: DayProgress) =>
+    args.period.kind === 'tranche' ? replaced.moment === 'evening' && day.slots.evening.status === 'today' : day.date === replaced.date;
+  const days = args.period.days.map((day) =>
+    isReplaced(day) ? { ...day, slots: { ...day.slots, [replaced.moment]: { ...day.slots[replaced.moment], status: 'none' as const } } } : day,
   );
-  const remaining = remainingEveningSets(days, args.sets, program.blocks, settings, isDeload).byElement;
+  const remaining = remainingEveningSets(days, args.sets, program.blocks, settings, { isDeload, cycleWeek: args.cycleWeek }).byElement;
   const planned = new Map(plannedComponentVolume(program, settings).map((p) => [p.elementId, p]));
   return componentElements(program.elements).map((element) => {
     const done = doneOf.get(element.id) ?? 0;
     const left = remaining.get(element.id) ?? 0;
-    const min = isDeload ? (planned.get(element.id)?.deloadEveningGuaranteed ?? 0) : settings.volumeMin;
+    const bounds = componentBounds(settings, element.id);
+    const min = isDeload ? (planned.get(element.id)?.deloadEveningGuaranteed ?? 0) : bounds.min;
     return {
       elementId: element.id,
       name: element.name,
       done,
       remaining: left,
       min,
-      max: isDeload ? null : settings.volumeMax,
+      max: isDeload ? null : bounds.max,
       deficit: Math.max(0, min - done - left),
     };
   });
@@ -114,6 +121,9 @@ export interface ExpressPlan {
 export type ExpressSettings = Pick<Settings, 'avgWorkSecPerSet' | 'freeRestSec' | 'deloadReductionPct'>;
 
 const fixed = (item: PrescriptionItem, sets: number): PrescriptionItem => ({ ...item, setsMin: sets, setsMax: sets });
+
+/** Séries reprises d'une ligne : son minimum ; pour une ligne sans minimum (plafond seul), 2 séries, sous le plafond. */
+const baseSets = (item: PrescriptionItem): number => (item.setsMin > 0 ? item.setsMin : Math.min(2, item.setsMax));
 
 /**
  * Ligne du programme qui sert de modèle à une composante (exercices, cible, intensité, repos) : celle de la séance
@@ -150,6 +160,8 @@ export function buildExpress(args: {
   replaced: SessionTemplate;
   name: string;
   isDeload: boolean;
+  /** Tranche (ou semaine) du cycle : valeurs de la tranche. */
+  cycleWeek: number;
   program: PlanContext;
   settings: ExpressSettings;
   needs: readonly ComponentNeed[];
@@ -164,7 +176,7 @@ export function buildExpress(args: {
   const roleOf = (item: PrescriptionItem) => roles.get(item.blockTypeId) ?? 'other';
   const isSkill = (item: PrescriptionItem) => elements.get(item.elementId)?.kind === 'skill';
 
-  const practiced = args.isDeload ? deloadTemplate(args.replaced, program.blocks, settings) : args.replaced;
+  const practiced = practicedTemplate(args.replaced, { isDeload: args.isDeload, cycleWeek: args.cycleWeek }, program.blocks, settings);
   const plan = buildPlan(practiced, program.blocks, elements);
   const chosen: PrescriptionItem[] = [];
   const reasons: Record<ID, ExpressReason> = {};
@@ -180,29 +192,29 @@ export function buildExpress(args: {
 
   // 1. Échauffement.
   take(
-    plan.items.filter((i) => roleOf(i) === 'warmup' && i.setsMin > 0).map((i) => fixed(i, i.setsMin)),
+    plan.items.filter((i) => roleOf(i) === 'warmup' && baseSets(i) > 0).map((i) => fixed(i, baseSets(i))),
     'warmup',
   );
 
   // 2. Paires du Skill.
   let shortened = false;
   const skillUnits = plan.units
-    .map((unit) => unit.itemIds.map((id) => plan.itemsById.get(id)!).filter((i) => roleOf(i) === 'skill' && isSkill(i) && i.setsMin > 0))
+    .map((unit) => unit.itemIds.map((id) => plan.itemsById.get(id)!).filter((i) => roleOf(i) === 'skill' && isSkill(i) && baseSets(i) > 0))
     .filter((items) => items.length > 0);
   skillUnits.forEach((items, index) => {
     if (shortened) {
       leftOut.push(...items.map((item) => ({ item, why: 'time' as const })));
       return;
     }
-    const full = items.map((i) => fixed(i, i.setsMin));
+    const full = items.map((i) => fixed(i, baseSets(i)));
     if (used + cost(full) <= budget) {
       take(full, 'skill');
       return;
     }
     shortened = true;
-    const rounds = Math.max(...items.map((i) => i.setsMin));
+    const rounds = Math.max(...items.map(baseSets));
     const floor = Math.min(2, rounds);
-    const cut = (r: number) => items.map((i) => fixed(i, Math.min(i.setsMin, r)));
+    const cut = (r: number) => items.map((i) => fixed(i, Math.min(baseSets(i), r)));
     let fitted: PrescriptionItem[] | null = null;
     for (let r = rounds - 1; r >= floor && !fitted; r--) if (used + cost(cut(r)) <= budget) fitted = cut(r);
     if (!fitted && index === 0) fitted = cut(floor);
@@ -211,7 +223,7 @@ export function buildExpress(args: {
   });
 
   // 3. Renfo spé, 4. Skill assisté.
-  const specific = plan.items.filter((i) => roleOf(i) === 'other' && isSkill(i) && i.setsMin > 0).map((i) => fixed(i, i.setsMin));
+  const specific = plan.items.filter((i) => roleOf(i) === 'other' && isSkill(i) && baseSets(i) > 0).map((i) => fixed(i, baseSets(i)));
   if (specific.length > 0 && !shortened && used + cost(specific) <= budget) take(specific, 'specific');
   else leftOut.push(...specific.map((item) => ({ item, why: 'time' as const })));
   leftOut.push(...plan.items.filter((i) => roleOf(i) === 'assisted' && isSkill(i)).map((item) => ({ item, why: 'assisted' as const })));

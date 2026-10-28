@@ -2,6 +2,7 @@
 import { shiftedStartDate } from '../domain/cycle';
 import type { ID, SessionLog, SessionResume, SetLog } from '../domain/types';
 import type { StreeterDB } from './db';
+import { refreshSequenceStartWeeks } from './programStore';
 
 export class SessionInProgressError extends Error {
   readonly session: SessionLog;
@@ -89,14 +90,19 @@ export async function abandonSession(db: StreeterDB, sessionId: ID, now: number)
  * Renvoie l'ancienne date de début (pour annuler).
  */
 export async function shiftSequence(db: StreeterDB, deltaDays: number): Promise<string | null> {
-  return db.transaction('rw', db.settings, async () => {
+  return db.transaction('rw', [db.settings, db.programs], async () => {
     const settings = await db.settings.get('settings');
     if (!settings) return null;
-    await db.settings.update('settings', { cycleStartDate: shiftedStartDate(settings, deltaDays) });
+    const date = shiftedStartDate(settings, deltaDays);
+    await db.settings.update('settings', { cycleStartDate: date });
+    await refreshSequenceStartWeeks(db, date);
     return settings.cycleStartDate;
   });
 }
 
 export async function setCycleStartDate(db: StreeterDB, date: string): Promise<void> {
-  await db.settings.update('settings', { cycleStartDate: date });
+  await db.transaction('rw', [db.settings, db.programs], async () => {
+    await db.settings.update('settings', { cycleStartDate: date });
+    await refreshSequenceStartWeeks(db, date);
+  });
 }

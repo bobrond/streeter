@@ -43,6 +43,7 @@ describe.skipIf(!existsSync(FILE))('fichier programme du vrai tableur', () => {
       exercises: result.exercises,
       objectives: result.objectives,
       usedTemplateIds: new Set(),
+      today: '2026-10-07',
       currentWeek: 1,
       newId: () => `new-${++n}`,
       now: 0,

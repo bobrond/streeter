@@ -59,6 +59,7 @@ function context(overrides: Partial<ProgramImportContext> = {}): ProgramImportCo
     exercises,
     objectives: [objective],
     usedTemplateIds: new Set(),
+    today: '2026-10-28',
     currentWeek: 4,
     newId: () => `new-${++n}`,
     now: 1000,
@@ -99,8 +100,8 @@ describe('export d’un programme', () => {
   it('écrit le programme par noms, avec le catalogue', () => {
     const file = programToFile(october, [maxTpl, morningTpl], catalog, appSettings());
     expect(file.programme).toMatchObject({ nom: 'Octobre 2026', debut: '2026-10-05', cycle: { semaines: 4, semaineAllegee: 4, reductionAllegeePct: 40, masquerMatinsAllegee: true } });
-    expect(file.semaineType.J1).toEqual({ matin: null, soir: 'Max J1' });
-    expect(file.semaineType.J4).toEqual({ matin: 'Matin A', soir: null });
+    expect(file.semaineType!.J1).toEqual({ matin: null, soir: 'Max J1' });
+    expect(file.semaineType!.J4).toEqual({ matin: 'Matin A', soir: null });
     expect(file.seances.map((s) => s.nom)).toEqual(['Max J1', 'Matin A']);
     expect(file.seances[0].lignes[0]).toEqual({
       bloc: 'Skill',
@@ -113,6 +114,8 @@ describe('export d’un programme', () => {
       superset: false,
       optionnelle: false,
       notes: '',
+      parTranche: {},
+      progressionsInferieures: [],
     });
     expect(file.seances[1].lignes[0]).toMatchObject({ cible: '—', intensite: '—', superset: true });
     expect(file.objectifs).toEqual([{ nom: 'Planche hold', critere: 'Grand dentelé', cible: 10, unite: 's', exercice: 'Planche Hold' }]);
@@ -149,7 +152,7 @@ describe('import d’un fichier programme', () => {
   it('montre les changements de réglages, de semaine type, de séances et de lignes', () => {
     const file = novemberFile();
     file.programme.volume.max = 7;
-    file.semaineType.J5.soir = null;
+    file.semaineType!.J5.soir = null;
     const ligne = file.seances[0].lignes[0];
     ligne.series = { min: 3, max: 4 };
     ligne.cible = '4-8 s';
@@ -175,7 +178,7 @@ describe('import d’un fichier programme', () => {
     file.seances[0].lignes[0].exercices = ['Planche hold court'];
     (file.seances[0].lignes[1] as unknown as Record<string, unknown>).tempo = '3-1-1';
     file.seances[0].lignes[2].series = { min: '4', max: 4 } as unknown as { min: number; max: number };
-    file.semaineType.J4.matin = 'Max J1';
+    file.semaineType!.J4.matin = 'Max J1';
     expect(errorsOf(file)).toEqual([
       'séance « Max J1 », ligne 1 › exercices : Exercice « Planche hold court » introuvable',
       'séance « Max J1 », ligne 2 : clé inconnue « tempo »',
@@ -183,7 +186,7 @@ describe('import d’un fichier programme', () => {
       'semaineType.J4.matin : « Max J1 » est une séance du soir',
     ]);
     expect(errorsOf('Voici le programme : à venir')[0]).toMatch(/^Ce n'est pas du JSON valide/);
-    expect(errorsOf({ ...novemberFile(), version: 2 })).toEqual(["Fichier au format version 2, plus récent que celui de l'appli (version 1) : mets l'appli à jour."]);
+    expect(errorsOf({ ...novemberFile(), version: 3 })).toEqual(["Fichier au format version 3, plus récent que celui de l'appli (version 2) : mets l'appli à jour."]);
   });
 
   it('refuse une date qui n’est pas un J1, ou un nouveau programme qui commencerait cette semaine', () => {
@@ -274,7 +277,7 @@ describe('import d’un fichier programme', () => {
     const ctx = context({ programs: [october, november], templates: [maxTpl, morningTpl, copy, unused, used], usedTemplateIds: new Set(['nov-tech']) });
     const file = novemberFile();
     file.seances = file.seances.filter((s) => s.nom === 'Max J1');
-    file.semaineType.J4.matin = null;
+    file.semaineType!.J4.matin = null;
     const imported = read(file, ctx);
     expect(imported.replaces?.id).toBe('nov');
     expect(imported.program).toMatchObject({ id: 'nov', startWeek: 5, createdAt: 50, name: 'Novembre 2026' });
@@ -291,7 +294,7 @@ describe('import d’un fichier programme', () => {
     file.programme.debut = '2026-10-05';
     expect(read(file).replaces?.id).toBe('prog');
     const november = program({ id: 'nov', name: 'Novembre 2026', startWeek: 5 });
-    expect(errorsOf(file, context({ programs: [october, november], currentWeek: 6 }))).toEqual([
+    expect(errorsOf(file, context({ programs: [october, november], currentWeek: 6, today: '2026-11-09' }))).toEqual([
       'programme.debut : le programme « Octobre 2026 » commence déjà le lundi 5 octobre et il est terminé',
     ]);
   });
@@ -322,3 +325,108 @@ describe('import d’un fichier programme', () => {
   });
 });
 
+
+describe('format version 2', () => {
+  /** Programme en séquence qui commence un jeudi, demain : deux fois Max J1, un matin par tranche. */
+  function sequenceFile(): ProgramFile {
+    const file = novemberFile();
+    delete file.semaineType;
+    file.programme.debut = '2026-10-29';
+    file.programme.cycle = { tranches: 4, trancheAllegee: 4, reductionAllegeePct: 40, masquerMatinsAllegee: true };
+    file.programme.matins = { dureeMaxMin: 20, seances: ['Matin A'] };
+    file.sequence = ['Max J1', 'Max J1'];
+    return file;
+  }
+
+  it('lit un programme en séquence : date libre, séances du soir dans l’ordre, matins à part', () => {
+    const imported = read(sequenceFile());
+    const max = imported.templates.find((t) => t.name === 'Max J1')!;
+    const morning = imported.templates.find((t) => t.name === 'Matin A')!;
+    expect(imported.program).toMatchObject({ schedule: 'sequence', startDate: '2026-10-29', startWeek: 4, cycleLengthWeeks: 4, deloadWeek: 4, morningMaxMinutes: 20 });
+    expect(imported.program.weekPlan[1]).toEqual({ evening: max.id, morning: morning.id });
+    expect(imported.program.weekPlan[2]).toEqual({ evening: max.id, morning: null });
+    expect(imported.program.weekPlan[3]).toEqual({ evening: null, morning: null });
+  });
+
+  it('refuse une séquence mal écrite', () => {
+    const today = sequenceFile();
+    today.programme.debut = '2026-10-28';
+    expect(errorsOf(today)).toEqual(['programme.debut : un nouveau programme commence au plus tôt demain']);
+    const both = { ...sequenceFile(), semaineType: novemberFile().semaineType };
+    expect(errorsOf(both)).toEqual(['« sequence » et « semaineType » ensemble : un seul des deux']);
+    const wrong = sequenceFile();
+    wrong.sequence = ['Matin A'];
+    wrong.programme.matins.seances = ['Max J1'];
+    expect(errorsOf(wrong)).toEqual(['sequence[1] : « Matin A » est une séance du matin', 'programme.matins.seances[1] : « Max J1 » est une séance du soir']);
+    const weeks = sequenceFile();
+    weeks.programme.cycle = { semaines: 4, semaineAllegee: 4, reductionAllegeePct: 40, masquerMatinsAllegee: true };
+    expect(errorsOf(weeks)).toEqual([
+      'programme.cycle : clé inconnue « semaines »',
+      'programme.cycle : clé inconnue « semaineAllegee »',
+      'programme.cycle : clé « tranches » absente',
+      'programme.cycle : clé « trancheAllegee » absente',
+    ]);
+  });
+
+  it('remplace le programme qui commence le même jour, refuse un autre programme la même semaine', () => {
+    const november = program({ id: 'nov', name: 'Novembre 2026', startWeek: 4, schedule: 'sequence', startDate: '2026-10-29' });
+    const ctx = context({ programs: [october, november] });
+    expect(read(sequenceFile(), ctx).replaces?.id).toBe('nov');
+    const friday = sequenceFile();
+    friday.programme.debut = '2026-10-30';
+    expect(errorsOf(friday, ctx)).toEqual([
+      'programme.debut : le programme « Novembre 2026 » commence la même semaine (le jeudi 29 octobre) : un seul programme par semaine',
+    ]);
+    // Un programme en semaine type qui commence ce jour-là (J1 = jeudi) est remplacé aussi : conversion en séquence.
+    const weekly = program({ id: 'nov', name: 'Novembre 2026', startWeek: 5 });
+    expect(read(sequenceFile(), context({ app: appSettings({ cycleStartDate: '2026-10-01' }), programs: [october, weekly] })).replaces?.id).toBe('nov');
+  });
+
+  it('lit les volumes par type de travail, refusés pour un élément qui n’est pas une composante', () => {
+    const file = sequenceFile();
+    file.programme.volumes = [{ element: 'Grand dentelé', travail: 'endurance', min: 8, max: 10 }];
+    expect(read(file).program.componentVolumes).toEqual([{ elementId: dentele.id, work: 'endurance', min: 8, max: 10 }]);
+    file.programme.volumes.push({ element: 'Planche', travail: 'force', min: 4, max: 6 });
+    expect(errorsOf(file)).toEqual(['programme.volumes[2].element : « Planche » n\'est pas une composante (seules les composantes ont un volume)']);
+  });
+
+  it('lit les séries sans minimum, les repères par tranche et les progressions inférieures', () => {
+    const file = sequenceFile();
+    const line = file.seances[0].lignes[0];
+    line.series = { min: 0, max: 8 };
+    line.parTranche = { '2': { cible: '3 s' }, '4': { series: { min: 3, max: 3 }, cible: '4 s', intensite: 'RPE 7' } };
+    line.progressionsInferieures = ['Touch FL one leg'];
+    const item = read(file).templates.find((t) => t.name === 'Max J1')!.items.find((i) => i.blockTypeId === skill.id)!;
+    expect(item).toMatchObject({ setsMin: 0, setsMax: 8, lowerProgressionIds: [flHold.id] });
+    expect(item.byTranche).toEqual({
+      2: { targetText: '3 s', targets: [{ unit: 'seconds', min: 3, max: 3 }] },
+      4: { setsMin: 3, setsMax: 3, targetText: '4 s', targets: [{ unit: 'seconds', min: 4, max: 4 }], intensityText: 'RPE 7', intensity: { kind: 'rpe', min: 7, max: 7 } },
+    });
+    line.parTranche = { '5': { cible: '3 s' } };
+    expect(errorsOf(file)).toEqual(['séance « Max J1 », ligne 1 › parTranche : « 5 » : un numéro de tranche de 1 à 4 est attendu']);
+    const v1 = { ...novemberFile(), version: 1 };
+    v1.seances[0].lignes[0].series = { min: 0, max: 8 };
+    // La version 1 ne connaît ni le minimum à 0, ni les clés de la version 2.
+    expect(errorsOf(v1)).toContain('séance « Max J1 », ligne 1 › series.min : au moins 1');
+    expect(errorsOf(v1)).toContain('programme : clé inconnue « volumes »');
+  });
+
+  it('exporte un programme en séquence et le relit à l’identique', () => {
+    const imported = read(sequenceFile());
+    const exported = programToFile(imported.program, imported.templates, { ...catalog }, appSettings());
+    expect(exported.version).toBe(2);
+    expect(exported.semaineType).toBeUndefined();
+    expect(exported.sequence).toEqual(['Max J1', 'Max J1']);
+    expect(exported.programme.matins).toEqual({ dureeMaxMin: 20, seances: ['Matin A'] });
+    expect(exported.programme.cycle).toEqual({ tranches: 4, trancheAllegee: 4, reductionAllegeePct: 40, masquerMatinsAllegee: true });
+    delete exported.catalogue;
+    const again = read(exported, context({ programs: [october, imported.program], templates: [maxTpl, morningTpl, ...imported.templates] }));
+    expect(again.replaces?.id).toBe(imported.program.id);
+    expect(again.program.weekPlan).toEqual(imported.program.weekPlan);
+    expect(diffPrograms({ program: imported.program, templates: imported.templates }, { program: again.program, templates: again.templates }, names)).toMatchObject({
+      settings: [],
+      weekPlan: [],
+      changed: [],
+    });
+  });
+});

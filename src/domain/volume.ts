@@ -1,5 +1,5 @@
 // Volume hebdomadaire : composantes de renfo (prévu / réalisé / statut) et totaux par skill.
-import { deloadSets, deloadTemplate } from './deload';
+import { deloadSets, practicedTemplate } from './deload';
 import { estimateDuration } from './duration';
 import type {
   BlockType,
@@ -24,12 +24,34 @@ export interface PlanContext {
   blocks: ReadonlyMap<ID, BlockType>;
   /** Catalogue : temps par série des exercices, pour la durée des matins. */
   exercises: ReadonlyMap<ID, Exercise>;
+  /** Programme en séquence : chaque séance compte à part dans le nombre de séances d'un skill. */
+  sequence?: boolean;
 }
 
 export type VolumeSettings = Pick<
   Settings,
   'volumeMin' | 'volumeMax' | 'deloadReductionPct' | 'hideMorningsInDeload'
->;
+> &
+  Partial<Pick<Settings, 'componentVolumes'>>;
+
+/** Bornes d'une composante : celles de son type de travail dans le programme, sinon les bornes par défaut. */
+export function componentBounds(settings: VolumeSettings, elementId: ID): { min: number; max: number; work: string | null } {
+  const own = settings.componentVolumes?.find((v) => v.elementId === elementId);
+  return own ? { min: own.min, max: own.max, work: own.work } : { min: settings.volumeMin, max: settings.volumeMax, work: null };
+}
+
+/** Séances d'une semaine absolue. */
+export function weekSessionIds(sessions: Iterable<SessionLog>, week: number): Set<ID> {
+  const ids = new Set<ID>();
+  for (const session of sessions) if (session.week === week) ids.add(session.id);
+  return ids;
+}
+
+/** Période du volume : une semaine en semaine type, une tranche en séquence. */
+export interface VolumePeriod {
+  sessionIds: ReadonlySet<ID>;
+  isDeload: boolean;
+}
 
 export type VolumeStatus = 'ok' | 'under_min' | 'over_max' | 'deload';
 
@@ -115,10 +137,11 @@ export function plannedComponentVolume(program: PlanContext, settings: VolumeSet
   }
   return [...rows.values()].map((row) => {
     const totalMax = row.eveningMax + row.morningMax;
+    const bounds = componentBounds(settings, row.elementId);
     return {
       ...row,
       totalMax,
-      status: volumeStatus(row.eveningGuaranteed, totalMax, settings.volumeMin, settings.volumeMax),
+      status: volumeStatus(row.eveningGuaranteed, totalMax, bounds.min, bounds.max),
     };
   });
 }
@@ -137,18 +160,18 @@ export function countsInVolume(set: Pick<SetLog, 'kind'>): boolean {
   return set.kind !== 'warmup';
 }
 
-/** Séries réellement faites dans la semaine `week` (numéro absolu), hors échauffement. */
+/** Séries réellement faites dans la période (semaine ou tranche), hors échauffement. */
 export function realizedComponentVolume(
   sets: readonly SetLog[],
   sessions: ReadonlyMap<ID, SessionLog>,
   elements: readonly Element[],
   settings: VolumeSettings,
-  week: { week: number; isDeload: boolean },
+  period: VolumePeriod,
 ): RealizedComponentVolume[] {
   const counts = new Map<ID, { evening: number; morning: number }>();
   for (const set of sets) {
     const session = sessions.get(set.sessionId);
-    if (!session || session.week !== week.week || !set.elementId || !countsInVolume(set)) continue;
+    if (!session || !period.sessionIds.has(session.id) || !set.elementId || !countsInVolume(set)) continue;
     const count = counts.get(set.elementId) ?? { evening: 0, morning: 0 };
     count[session.moment] += 1;
     counts.set(set.elementId, count);
@@ -156,13 +179,14 @@ export function realizedComponentVolume(
   return componentElements(elements).map((element) => {
     const { evening, morning } = counts.get(element.id) ?? { evening: 0, morning: 0 };
     const total = evening + morning;
+    const bounds = componentBounds(settings, element.id);
     return {
       elementId: element.id,
       name: element.name,
       evening,
       morning,
       total,
-      status: week.isDeload ? 'deload' : volumeStatus(evening, total, settings.volumeMin, settings.volumeMax),
+      status: period.isDeload ? 'deload' : volumeStatus(evening, total, bounds.min, bounds.max),
     };
   });
 }
@@ -180,7 +204,7 @@ export interface SkillTotal {
 
 export function skillTotals(program: PlanContext, settings: VolumeSettings): SkillTotal[] {
   const skills = new Map(program.elements.filter((e) => e.kind === 'skill').map((e) => [e.id, e]));
-  const totals = new Map<string, SkillTotal & { days: Set<SeqDay> }>();
+  const totals = new Map<string, SkillTotal & { days: Set<string> }>();
   for (const { seqDay, moment, template } of plannedSlots(program.weekPlan, program.templates)) {
     for (const item of template.items) {
       if (!skills.has(item.elementId)) continue;
@@ -192,11 +216,11 @@ export function skillTotals(program: PlanContext, settings: VolumeSettings): Ski
         setsMax: 0,
         sessions: 0,
         deloadMax: 0,
-        days: new Set<SeqDay>(),
+        days: new Set<string>(),
       };
       total.setsMin += item.setsMin;
       total.setsMax += item.setsMax;
-      total.days.add(seqDay);
+      total.days.add(program.sequence ? `${moment}${seqDay}` : String(seqDay));
       if (moment === 'evening') {
         const reduced = program.blocks.get(item.blockTypeId)?.reducedInDeload ?? true;
         total.deloadMax += reduced ? deloadSets(item.setsMax, settings.deloadReductionPct) : item.setsMax;
@@ -264,17 +288,12 @@ export function editorIssues(program: PlanContext, settings: CheckSettings, temp
   return inWeek ? issues : [...issues, ...templateIssues(template, program, settings)];
 }
 
-/** Séries de skill réellement faites dans la semaine `week`, hors échauffement, par (bloc, skill) : clé « blocId|elementId ». */
-export function realizedSkillSets(
-  sets: readonly SetLog[],
-  sessions: ReadonlyMap<ID, SessionLog>,
-  elements: readonly Element[],
-  week: number,
-): Map<string, number> {
+/** Séries de skill réellement faites dans la période, hors échauffement, par (bloc, skill) : clé « blocId|elementId ». */
+export function realizedSkillSets(sets: readonly SetLog[], sessionIds: ReadonlySet<ID>, elements: readonly Element[]): Map<string, number> {
   const skills = new Set(elements.filter((e) => e.kind === 'skill').map((e) => e.id));
   const counts = new Map<string, number>();
   for (const set of sets) {
-    if (!set.elementId || !skills.has(set.elementId) || sessions.get(set.sessionId)?.week !== week || !countsInVolume(set)) continue;
+    if (!set.elementId || !skills.has(set.elementId) || !sessionIds.has(set.sessionId) || !countsInVolume(set)) continue;
     const key = `${set.blockTypeId ?? ''}|${set.elementId}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
@@ -309,7 +328,7 @@ export function remainingEveningSets(
   sets: readonly SetLog[],
   blocks: ReadonlyMap<ID, BlockType>,
   settings: Pick<Settings, 'deloadReductionPct'>,
-  isDeload: boolean,
+  at: { isDeload: boolean; cycleWeek: number },
 ): RemainingPlanned {
   const byElement = new Map<ID, number>();
   const byBlockElement = new Map<string, number>();
@@ -324,7 +343,7 @@ export function remainingEveningSets(
     if (slot.status === 'today' || slot.status === 'upcoming') {
       const planned = slot.planned;
       if (!planned || planned.optional) continue;
-      const practiced = isDeload ? deloadTemplate(planned, blocks, settings) : planned;
+      const practiced = practicedTemplate(planned, at, blocks, settings);
       for (const item of practiced.items) if (!item.optional) add(item.blockTypeId, item.elementId, item.setsMin);
     } else if (slot.status === 'in_progress') {
       const session = slot.sessions.find((s) => s.status === 'in_progress');

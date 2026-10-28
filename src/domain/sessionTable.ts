@@ -28,7 +28,8 @@ export type TableRow = DoneRow | PendingRow;
 
 /** Série suivante pré-remplie en recopiant la précédente (la qualité et le type repartent par défaut). */
 function copyRow(from: SetDraft, isSkill: boolean): SetDraft {
-  return { value: from.value, bandId: from.bandId, rpe: from.rpe, quality: isSkill ? 'clean' : null, kind: 'normal', note: '' };
+  const copy: SetDraft = { value: from.value, bandId: from.bandId, rpe: from.rpe, quality: isSkill ? 'clean' : null, kind: 'normal', note: '' };
+  return from.exerciseId ? { ...copy, exerciseId: from.exerciseId } : copy;
 }
 
 /**
@@ -55,7 +56,8 @@ export function lineRows(args: {
   for (const set of sets) rows.push({ status: 'done', set, label: labelOf(set.kind), previous: last?.sets[rows.length] ?? null });
   if (args.closed || !exercise) return rows;
 
-  let workLeft = Math.max(0, rowTarget(item, args.extraRows) - sets.filter((s) => s.kind !== 'warmup').length);
+  const workDone = sets.filter((s) => s.kind !== 'warmup').length;
+  let workLeft = Math.max(0, rowTarget(item, args.extraRows, workDone) - workDone);
   let lastWork: SetDraft | null = null;
   for (let index = 0; workLeft > 0; index++) {
     const stored = args.pendingDrafts[index] ?? null;

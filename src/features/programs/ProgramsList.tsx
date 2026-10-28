@@ -92,7 +92,10 @@ export function DuplicateProgramSheet({ source, data, today, onClose }: { source
   };
   const save = async () => {
     if (error || weekError) return;
-    const { program, templates } = duplicateProgram(source, data.templates, { newId, name: cleanSpaces(name), startWeek: week, now: Date.now() });
+    const copy = duplicateProgram(source, data.templates, { newId, name: cleanSpaces(name), startWeek: week, now: Date.now() });
+    // En séquence, la copie commence le J1 de la semaine choisie.
+    const program = source.schedule === 'sequence' ? { ...copy.program, startDate: dateOf(week, 1, data.appSettings) } : copy.program;
+    const { templates } = copy;
     await addProgram(db, program, templates);
     onClose();
     showToast(`« ${program.name} » créé : il commence le ${formatDateLong(programStartDate(data.appSettings, program))}.`);
@@ -134,7 +137,7 @@ function StartWeekSheet({ program, data, today, onClose }: { program: Program; d
   const error = startWeekError(data.programs, program.id, week, currentWeek);
   const save = async () => {
     if (error) return;
-    await updateProgram(db, program.id, { startWeek: week });
+    await updateProgram(db, program.id, program.schedule === 'sequence' ? { startWeek: week, startDate: dateOf(week, 1, data.appSettings) } : { startWeek: week });
     onClose();
   };
   return (
@@ -166,7 +169,7 @@ export function ProgramsList({ data, today }: { data: AppData; today: string }) 
     <Screen title="Programmes" subtitle="Un programme commence en S1 de son cycle et dure jusqu’au début du suivant." onBack={() => goBack('/programs')}>
       <ul className="flex flex-col gap-2">
         {[...data.programs].reverse().map((program) => {
-          const phase = programPhase(data.programs, program, currentWeek);
+          const phase = programPhase(data.programs, program, { app: data.appSettings, today });
           const count = templatesOf(data.templates, program.id).filter((t) => !t.archived).length;
           return (
             <li key={program.id} className={`flex items-center rounded-2xl border bg-card pl-1 ${phase === 'current' ? 'border-accent' : 'border-line'}`}>

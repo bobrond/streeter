@@ -29,6 +29,8 @@ export interface SlotChange {
   moment: Moment;
   before: string | null;
   after: string | null;
+  /** Programme en séquence : J1… désigne la k-ième séance du soir (ou du matin). */
+  sequence: boolean;
 }
 
 export interface TemplateChange {
@@ -45,15 +47,36 @@ export interface ProgramDiff {
   unchanged: string[];
 }
 
-function settingsRows(p: Program): [string, string][] {
+function settingsRows(p: Program, names: DiffNames): [string, string][] {
+  const sequence = p.schedule === 'sequence';
+  const unit = sequence ? 'tranche' : 'semaine';
+  const volumes = [...p.componentVolumes]
+    .sort((a, b) => (names.elements.get(a.elementId)?.order ?? 0) - (names.elements.get(b.elementId)?.order ?? 0))
+    .map((v) => `${names.elements.get(v.elementId)?.name ?? '?'} (${v.work}) ${v.min}-${v.max}`)
+    .join(' ; ');
   return [
-    ['Cycle', `${p.cycleLengthWeeks} semaine${p.cycleLengthWeeks > 1 ? 's' : ''}`],
-    ['Semaine allégée', p.deloadWeek > 0 ? `S${p.deloadWeek}` : 'aucune'],
-    ['Réduction en semaine allégée', `−${p.deloadReductionPct} %`],
-    ['Matins en semaine allégée', p.hideMorningsInDeload ? 'masqués' : 'gardés'],
+    ['Déroulé', sequence ? 'séquence de séances' : 'semaine type'],
+    ['Cycle', `${p.cycleLengthWeeks} ${unit}${p.cycleLengthWeeks > 1 ? 's' : ''}`],
+    [sequence ? 'Tranche allégée' : 'Semaine allégée', p.deloadWeek > 0 ? `${sequence ? 'T' : 'S'}${p.deloadWeek}` : 'aucune'],
+    ['Réduction en allégé', `−${p.deloadReductionPct} %`],
+    ['Matins en allégé', p.hideMorningsInDeload ? 'masqués' : 'gardés'],
     ['Volume par composante', `${p.volumeMin} à ${p.volumeMax} séries`],
+    ['Volume par type de travail', volumes || 'aucun'],
     ['Durée maximum des matins', `${p.morningMaxMinutes} min`],
   ];
+}
+
+function trancheText(item: PrescriptionItem): string {
+  return Object.entries(item.byTranche ?? {})
+    .map(([tranche, o]) => {
+      const parts = [
+        o.setsMin !== undefined || o.setsMax !== undefined ? `${formatSets(o.setsMin ?? item.setsMin, o.setsMax ?? item.setsMax)} séries` : '',
+        o.targetText !== undefined ? o.targetText : '',
+        o.intensityText !== undefined ? o.intensityText : '',
+      ].filter(Boolean);
+      return `T${tranche} ${parts.join(', ')}`;
+    })
+    .join(' ; ');
 }
 
 /** Texte comparé sans espaces superflus ; « — » vaut vide. */
@@ -100,6 +123,9 @@ function itemChanges(before: PrescriptionItem, after: PrescriptionItem, names: D
     ['repos', before.restText, after.restText],
   ];
   for (const [label, a, b] of texts) if (norm(a) !== norm(b)) changes.push(`${label} ${shown(a)} → ${shown(b)}`);
+  if (trancheText(before) !== trancheText(after)) changes.push(`par tranche ${trancheText(before) || '—'} → ${trancheText(after) || '—'}`);
+  const lower = (item: PrescriptionItem) => exerciseList(item.lowerProgressionIds ?? [], names);
+  if (lower(before) !== lower(after)) changes.push(`progressions inférieures ${lower(before) || '—'} → ${lower(after) || '—'}`);
   if (before.superset !== after.superset) changes.push(after.superset ? 'en superset' : 'plus en superset');
   if (before.optional !== after.optional) changes.push(after.optional ? 'optionnelle' : 'obligatoire');
   if (norm(before.notes) !== norm(after.notes)) changes.push('notes modifiées');
@@ -143,18 +169,19 @@ export function diffPrograms(before: ProgramSide | null, after: ProgramSide, nam
   if (!before) return { settings: [], weekPlan: [], added: afterTemplates, removed: [], changed: [], unchanged: [] };
   const beforeTemplates = live(before);
 
-  const beforeRows = settingsRows(before.program);
-  const settings = settingsRows(after.program)
+  const beforeRows = settingsRows(before.program, names);
+  const settings = settingsRows(after.program, names)
     .map(([label, value], i) => ({ label, before: beforeRows[i][1], after: value }))
     .filter((row) => row.before !== row.after);
 
   const nameOf = (side: ProgramSide, id: ID | null) => (id ? (side.templates.find((t) => t.id === id)?.name ?? null) : null);
+  const sequence = after.program.schedule === 'sequence';
   const weekPlan: SlotChange[] = [];
   for (const day of SEQ_DAYS) {
     for (const moment of MOMENTS) {
       const a = nameOf(before, before.program.weekPlan[day][moment]);
       const b = nameOf(after, after.program.weekPlan[day][moment]);
-      if (nameKey(a ?? '') !== nameKey(b ?? '')) weekPlan.push({ day, moment, before: a, after: b });
+      if (nameKey(a ?? '') !== nameKey(b ?? '')) weekPlan.push({ day, moment, before: a, after: b, sequence });
     }
   }
 
@@ -179,8 +206,12 @@ export function isEmptyDiff(diff: ProgramDiff): boolean {
   return diff.settings.length + diff.weekPlan.length + diff.added.length + diff.removed.length + diff.changed.length === 0;
 }
 
-/** « J4 matin : Matin A → Matin endurance ». */
+/** « J4 matin : Matin A → Matin endurance » ; en séquence, « Séance 2 : Combo → Combo libre ». */
 export function slotChangeText(change: SlotChange): string {
+  if (change.sequence) {
+    const label = change.moment === 'evening' ? `Séance ${change.day}` : `Matin ${change.day}`;
+    return `${label} : ${change.before ?? '—'} → ${change.after ?? '—'}`;
+  }
   const empty = change.moment === 'evening' ? 'Repos' : 'rien';
   return `${seqDayLabel(change.day)} ${MOMENT_LABEL[change.moment].toLowerCase()} : ${change.before ?? empty} → ${change.after ?? empty}`;
 }

@@ -143,6 +143,27 @@ function LineCard({
           ))}
         </Cell>
       </div>
+      {(Object.keys(item.byTranche ?? {}).length > 0 || (item.lowerProgressionIds ?? []).length > 0) && (
+        <div className="-mt-1 flex flex-col gap-0.5 px-3 pb-2 text-sm text-ink-2">
+          {Object.entries(item.byTranche ?? {}).map(([tranche, o]) => (
+            <span key={tranche}>
+              <b className="text-ink">T{tranche}</b> :{' '}
+              {[
+                o.setsMin !== undefined || o.setsMax !== undefined ? `${formatSets(o.setsMin ?? item.setsMin, o.setsMax ?? item.setsMax)} séries` : '',
+                o.targetText ?? '',
+                o.intensityText ?? '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+          ))}
+          {(item.lowerProgressionIds ?? []).length > 0 && (
+            <span>
+              Progressions inférieures : {(item.lowerProgressionIds ?? []).map((id) => lookups.exercises.get(id)?.name ?? '?').join(' → ')}
+            </span>
+          )}
+        </div>
+      )}
       {item.notes && (
         <button type="button" onClick={() => onCell('notes')} className="-mt-1 block w-full px-3 pb-3 text-left text-sm text-ink-2 active:text-ink">
           <span className="line-clamp-2">Note : {item.notes}</span>

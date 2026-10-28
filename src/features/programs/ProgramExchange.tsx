@@ -6,10 +6,11 @@ import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { useLookups } from '../../db/lookups';
 import { InUseError, applyProgramImport } from '../../db/programStore';
-import { localISODate } from '../../domain/cycle';
+import { addDays, localISODate } from '../../domain/cycle';
 import { formatDateLong, formatSets } from '../../domain/labels';
 import { diffPrograms, objectiveChanges, slotChangeText, type ObjectiveChange } from '../../domain/programDiff';
-import { effectiveSettings, programAtWeek, programPhase, programStartDate, templatesOf } from '../../domain/programs';
+import { effectiveSettings, programAtDate, programPhase, programStartDate, templatesOf } from '../../domain/programs';
+import { sequenceIds } from '../../domain/sequence';
 import type { Program } from '../../domain/types';
 import {
   PROGRAM_FILE_ACCEPT,
@@ -109,6 +110,7 @@ export function ProgramImportScreen({ data }: { data: AppData }) {
       exercises: data.exercises,
       objectives: data.objectives,
       usedTemplateIds: new Set(data.sessions.flatMap((s) => (s.templateId ? [s.templateId] : []))),
+      today,
       currentWeek: currentWeekOf(data, today),
       newId,
       now: Date.now(),
@@ -212,7 +214,7 @@ function ImportPreview({ data, today, imported, onCancel }: { data: AppData; tod
   const settings = effectiveSettings(data.appSettings, program);
 
   // Référence : le programme remplacé, sinon celui en vigueur la semaine d'avant.
-  const base = replaces ?? programAtWeek(data.programs, program.startWeek - 1) ?? null;
+  const base = replaces ?? programAtDate(data.programs, data.appSettings, addDays(programStartDate(data.appSettings, program), -1)) ?? null;
   const diff = diffPrograms(base && { program: base, templates: templatesOf(data.templates, base.id) }, { program, templates: imported.templates }, names);
   const objectives = objectiveChanges(
     base?.objectiveIds ?? [],
@@ -220,8 +222,7 @@ function ImportPreview({ data, today, imported, onCancel }: { data: AppData; tod
     lookups.objectives,
     exercises,
   );
-  const currentWeek = currentWeekOf(data, today);
-  const replacesCurrent = replaces !== null && programPhase(data.programs, replaces, currentWeek) === 'current';
+  const replacesCurrent = replaces !== null && programPhase(data.programs, replaces, { app: data.appSettings, today }) === 'current';
   const removed = new Map(imported.removedTemplates.map((r) => [r.template.id, r.archive]));
   const catalogue = [
     ...imported.newElements.map((e) => `Élément : ${e.name}`),
@@ -258,7 +259,9 @@ function ImportPreview({ data, today, imported, onCancel }: { data: AppData; tod
         <div className="font-display text-lg leading-none tracking-wider text-accent">{replaces ? 'Remplace un programme' : 'Nouveau programme'}</div>
         <h2 className="font-display text-3xl leading-tight tracking-wide">{program.name}</h2>
         <p className="text-ink-2">
-          Commence le {formatDateLong(programStartDate(data.appSettings, program))} (semaine {program.startWeek}), en S1 de son cycle de {program.cycleLengthWeeks} semaines.
+          {program.schedule === 'sequence'
+            ? `Commence le ${formatDateLong(programStartDate(data.appSettings, program))}, en séquence : ${sequenceIds(program.weekPlan, 'evening').length} séances par tranche, cycle de ${program.cycleLengthWeeks} tranches.`
+            : `Commence le ${formatDateLong(programStartDate(data.appSettings, program))} (semaine ${program.startWeek}), en S1 de son cycle de ${program.cycleLengthWeeks} semaines.`}
         </p>
         {replaces && (
           <p className="text-ink-2">

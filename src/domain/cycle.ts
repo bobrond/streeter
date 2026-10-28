@@ -1,6 +1,7 @@
 // Calendrier : jours de séquence J1…J7, semaines, cycles, semaine allégée, jour de test.
 // Les dates sont des chaînes locales YYYY-MM-DD ; l'arithmétique se fait sur des numéros de jour
 // (insensible aux changements d'heure).
+import type { SequenceDay } from './sequence';
 import type { ID, SeqDay, SessionTemplate, SessionType, Settings, WeekPlan } from './types';
 import { SEQ_DAYS } from './types';
 
@@ -57,6 +58,11 @@ export interface DayInfo {
   isDeload: boolean;
   /** Date antérieure au début du programme. */
   beforeStart: boolean;
+  /**
+   * Programme en séquence : position du jour dans la séquence ; `seqDay` est alors la position dans la tranche (1…n),
+   * `cycleWeek` la tranche dans le cycle, `week` la semaine du calendrier.
+   */
+  sequence?: SequenceDay;
 }
 
 export function dayInfo(date: string, s: CycleSettings): DayInfo {

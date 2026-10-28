@@ -111,7 +111,7 @@ Phases :
 - **G1, programmes datés** (livrée le 27/10/2026, v1.7.0) : schéma Dexie v5, format de sauvegarde 5. Voir « Programmes datés (depuis la phase G1) ».
 - **G2, format programme JSON** (livrée le 28/10/2026, v1.8.0) : format version 1 fixé par la consigne donnée à l'agent, [docs/consigne_agent_programmation.md](docs/consigne_agent_programmation.md), implémenté tel quel. Pas de changement de schéma ni de format de sauvegarde. Tout changement du format passe par une nouvelle version de la consigne. Voir « Format programme JSON (depuis la phase G2) ».
 - **G3, bilan du programme** : export Markdown pour l'agent, contenu promis dans la consigne (volume réalisé par semaine, records, tests, séances sautées ou dégradées, notes, séances express).
-- **Novembre** : ce que demande le programme de novembre (force / endurance par composante, bonus = matins + lignes optionnelles du soir, nouveaux types de séance, etc.), après les réponses de l'utilisateur aux questions du journal du 27/10/2026.
+- **Novembre, format version 2** (livrée le 28/10/2026, v1.9.0) : les 5 `demandesAppli` du programme de novembre. Schéma Dexie v6, format de sauvegarde 6, format programme JSON version 2. Voir « Séquence et format version 2 ».
 
 ## Programmes datés (depuis la phase G1)
 
@@ -130,6 +130,24 @@ Phases :
   - début proposé pour la copie (fin du cycle en cours du dernier programme) ;
   - un programme commencé ne se supprime pas et ne change pas de date ;
   - « Dans le programme » de la fiche exercice et « Choisir une séance » : programme en cours seulement.
+
+## Séquence et format version 2 (depuis le 28/10/2026)
+
+Demandé par l'utilisateur le 28/10/2026 (les 5 `demandesAppli` du programme de novembre) ; principe : le programme d'abord, l'appli s'adapte. Consigne version 2 : [docs/consigne_agent_programmation.md](docs/consigne_agent_programmation.md). Les fichiers version 1 restent lus (semaine type).
+
+- **Déroulé** (`Program.schedule`) : `week` (semaine type J1-J7, comme avant) ou `sequence`. En séquence ([src/domain/sequence.ts](src/domain/sequence.ts)) :
+  - les séances du soir d'une **tranche** sont rangées sur J1…Jn (soirs) du `weekPlan`, les matins disponibles sur J1…Jm (matins), tassés à chaque écriture (`editWeekPlan`) ; au plus 7 de chaque ;
+  - le programme commence à `startDate` (n'importe quel jour ; `startWeek` = la semaine qui la contient, recalculée quand la date de la semaine 1 change ; un seul programme par semaine) ; `programAtDate` donne le programme en vigueur ;
+  - **position** déduite des séances, rien n'est stocké (`sequenceState`) : chaque séance du soir **faite** de la période du programme prend la position suivante, quelle qu'elle soit (séance express ou autre séance comprises) ; une séance abandonnée ne compte pas ; la tranche d'une séance = séances du soir faites avant elle / n. Une séance ratée n'est ni décomptée ni sautée (décidé avec l'utilisateur) ;
+  - `sequenceDayInfo` : un `DayInfo` dont `seqDay` = position dans la tranche, `cycleWeek` = tranche dans le cycle, `week` = semaine du calendrier, et `sequence` (créneau du jour, position, tranche). Le jour d'une séance du soir faite, en cours ou abandonnée garde sa position ;
+  - matins hors séquence, facultatifs : le suivant de la liste tant que la tranche n'a pas fait tous les siens ; masqués en tranche allégée selon le réglage ; ils ne font pas avancer la séquence ;
+  - volume, allégement, test des objectifs (1re séance d'un type « jour de test » de la tranche 1 de chaque cycle) **par tranche** ; dates indicatives : une tranche par semaine (`projectedDate`, fin prévue du cycle) ;
+  - écrans : Aujourd'hui (« Séance 3/5 · tranche 1/4 · fin prévue », la séance du soir d'abord, le matin en « Aussi aujourd'hui », puis « Prochaine séance » une fois faite ; plus de « Passer au jour suivant / Reporter à demain »), Séance, Programmes (séquence numérotée, « prochaine », matins hors séquence, glisser = échanger deux places), Progression › Volume par tranche (`?tranche=N`, « Par semaine » pour la vue calendrier), Réglages › Cycle (déroulé séquence ↔ semaine type, conversion dans l'appli).
+- **Volume par type de travail** (`Program.componentVolumes` : élément, travail, min, max ; `componentBounds`) : bornes propres à une composante, sinon `volumeMin` / `volumeMax`. Contrôles, jauges, tableau des périodes, séance express. Réglable dans Réglages › Cycle.
+- **Repères par tranche** (`PrescriptionItem.byTranche`, facultatif) : séries, cible, intensité d'une tranche (une semaine du cycle en semaine type). `practicedTemplate` les applique (Aujourd'hui, copie figée de la séance, séries encore prévues, séance express) ; des séries données pour la tranche allégée ne sont pas réduites (choix sans l'utilisateur, écrit dans la consigne). Le volume prévu et les contrôles restent sur les valeurs de base. Affichés dans l'éditeur, modifiables par le fichier seulement.
+- **Progressions inférieures** (`PrescriptionItem.lowerProgressionIds`, facultatif) : dans le pavé, « Ou progression inférieure » à côté des élastiques ; la série est enregistrée sur l'exercice de la progression, sans élastique, donc suivie à part et jamais record de la figure ; la série suivante la garde. Le pavé propose aussi les autres candidats de la ligne pour la série (changer de combo d'une série à l'autre).
+- **Ligne sans minimum** (`setsMin` = 0, affiché « ≤ 8 ») : une série à faire de plus que celles faites, jusqu'au plafond (`rowTarget`) ; « Plafond atteint » ; « Terminer cet exercice » ou retirer la série à faire pour arrêter. Séance express : 2 séries (choix sans l'utilisateur).
+- Choix sans l'utilisateur, à valider à l'usage : séance abandonnée non comptée ; toute séance du soir faite prend une position (même une autre séance) ; une tranche ≈ une semaine pour les dates indicatives ; matins proposés dans l'ordre de la liste ; un programme par semaine ; progression inférieure listée du plus difficile au plus facile.
 
 ## Format programme JSON (depuis la phase G2)
 
@@ -431,10 +449,14 @@ Band             { id, name, color, order /* 0 = le plus assistant */, active }
 SessionTemplate  { id, name, sessionTypeId, moment, optional, notes, items: PrescriptionItem[], archived, programId }
 PrescriptionItem { id, blockTypeId, elementId, candidateExerciseIds, candidatesText, setsMin, setsMax,
                    targetText, targets: { unit, min, max }[], intensityText, intensity: { kind: 'rpe' | 'rir', min, max },
-                   restText, restMinSec, restMaxSec, superset, optional, notes }
+                   restText, restMinSec, restMaxSec, superset, optional, notes,
+                   byTranche? /* { [tranche]: { setsMin?, setsMax?, targetText?, targets?, intensityText?, intensity? } } */,
+                   lowerProgressionIds? }
 AppSettings      { id: 'settings', cycleStartDate, avgWorkSecPerSet, freeRestSec, lastBackupAt }
-Program          { id, name, startWeek, notes, objectiveIds, createdAt, cycleLengthWeeks, deloadWeek,
-                   deloadReductionPct, hideMorningsInDeload, volumeMin, volumeMax, morningMaxMinutes,
+Program          { id, name, startWeek, notes, objectiveIds, createdAt, schedule: 'week' | 'sequence',
+                   startDate /* séquence */, cycleLengthWeeks /* semaines ou tranches */, deloadWeek,
+                   deloadReductionPct, hideMorningsInDeload, volumeMin, volumeMax,
+                   componentVolumes: { elementId, work, min, max }[], morningMaxMinutes,
                    weekPlan: { 1…7: { morning: templateId | null, evening: templateId | null } } }
 Settings         = AppSettings + réglages du programme en vigueur + { programId, programStartWeek } (calculé, non stocké)
 SessionLog       { id, date, week, cycleWeek, seqDay, moment, templateId, templateSnapshot, sessionTypeId,
@@ -445,7 +467,8 @@ SetLog           { id, sessionId, itemId, blockTypeId, elementId, exerciseId, se
 Objective        { id, name, criterion, target, unit, exerciseId, order, tests: { id, date, value, note }[] }
 ```
 
-- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`) ; 4 (17/10/2026) ajoute `SessionLog.expressMinutes` (`null` sur les séances existantes) ; 5 (27/10/2026) ajoute la table `programs` (index `startWeek`) et l'index `templates.programId` : un premier programme (semaine 1, nommé d'après le mois de `cycleStartDate`, tous les objectifs) reprend les réglages du cycle, du volume, des matins et la semaine type, retirés de `settings` ; modèles et copies figées reçoivent son `programId`.
+- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`) ; 4 (17/10/2026) ajoute `SessionLog.expressMinutes` (`null` sur les séances existantes) ; 5 (27/10/2026) ajoute la table `programs` (index `startWeek`) et l'index `templates.programId` : un premier programme (semaine 1, nommé d'après le mois de `cycleStartDate`, tous les objectifs) reprend les réglages du cycle, du volume, des matins et la semaine type, retirés de `settings` ; modèles et copies figées reçoivent son `programId` ; 6 (28/10/2026) ajoute `Program.schedule` (`week`), `startDate` (`null`) et `componentVolumes` (`[]`).
+- `SetDraft.exerciseId` (dans `resume`) : exercice choisi dans le pavé pour une série à faire (autre candidat, progression inférieure).
 - Dans `weekPlan`, `null` signifie « rien » : Repos le soir, pas de séance le matin.
 - `SessionLog.resume` contient l'état d'interface de la séance en cours :
   - ligne où l'on vient d'agir, exercice choisi par ligne, lignes terminées ;
@@ -474,7 +497,7 @@ Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en do
 
 ## Sauvegarde et exports
 
-- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices ; format 4 : `expressMinutes` sur les séances, `null` avant ; format 5 : table `programs`, même conversion que la version 5 du schéma). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
+- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices ; format 4 : `expressMinutes` sur les séances, `null` avant ; format 5 : table `programs`, même conversion que la version 5 du schéma ; format 6 : `schedule`, `startDate`, `componentVolumes` sur les programmes). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
 - Rappel de sauvegarde sur Aujourd'hui : dernière sauvegarde de plus de 7 jours, ou aucune alors qu'au moins une séance a été faite dans l'appli. Sur Android, « Envoyer une sauvegarde » ouvre le menu de partage (Drive, e-mail). Le fichier envoyé est en `.txt` (`text/plain`) : Chrome ne partage qu'une liste fermée de types, sans le JSON, et `navigator.canShare` ne vérifie pas le type. La restauration accepte `.json` et `.txt`. Une annulation ne dit rien ; un refus s'affiche avec « Enregistrer » (téléchargement) à la place.
 - Export du journal ([src/io/journal/exportJournal.ts](src/io/journal/exportJournal.ts)) : .xlsx (onglet « Journal », vraies dates Excel) et .csv pour Excel en français (« ; », CRLF, marque UTF-8). Les notes de ligne reprennent « Séance express (N min) », « Séance abandonnée » et la note de séance (1re ligne), les notes de série et les numéros des séries dégradées.
 - Version affichée dans Réglages → Sauvegarde et données → Appli : `version` du package.json et date du build.

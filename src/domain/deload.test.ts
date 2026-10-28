@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { block, item, template } from '../test/builders';
-import { deloadSets, deloadTemplate, excelRound, morningsHidden } from './deload';
+import { deloadSets, deloadTemplate, excelRound, morningsHidden, practicedTemplate, trancheItem } from './deload';
 
 describe('excelRound', () => {
   it('arrondit le demi vers le haut, comme ROUND d’Excel', () => {
@@ -66,5 +66,52 @@ describe('deloadTemplate', () => {
     expect(morningsHidden(true, { hideMorningsInDeload: true })).toBe(true);
     expect(morningsHidden(true, { hideMorningsInDeload: false })).toBe(false);
     expect(morningsHidden(false, { hideMorningsInDeload: true })).toBe(false);
+  });
+});
+
+describe('practicedTemplate (repères par tranche)', () => {
+  const warmUp = block('Échauffement', 0, { reducedInDeload: false });
+  const skill = block('Travail prioritaire', 1);
+  const blocks = new Map([warmUp, skill].map((b) => [b.id, b]));
+  const leanUp = item({
+    blockTypeId: skill.id,
+    elementId: 'planche',
+    setsMin: 5,
+    setsMax: 5,
+    targetText: '2-4 s',
+    targets: [{ unit: 'seconds', min: 2, max: 4 }],
+    byTranche: {
+      2: { targetText: '3 s', targets: [{ unit: 'seconds', min: 3, max: 3 }] },
+      4: { setsMin: 3, setsMax: 3, targetText: '4 s', targets: [{ unit: 'seconds', min: 4, max: 4 }] },
+    },
+  });
+  const negative = item({ blockTypeId: skill.id, elementId: 'planche', setsMin: 4, setsMax: 4 });
+  const tpl = template('Séance type', 'evening', [leanUp, negative]);
+
+  it('garde la ligne telle quelle sans repère pour la tranche', () => {
+    expect(practicedTemplate(tpl, { cycleWeek: 1, isDeload: false }, blocks, { deloadReductionPct: 40 }).items[0]).toMatchObject({ setsMin: 5, targetText: '2-4 s' });
+  });
+
+  it('prend la cible de la tranche', () => {
+    expect(practicedTemplate(tpl, { cycleWeek: 2, isDeload: false }, blocks, { deloadReductionPct: 40 }).items[0]).toMatchObject({
+      setsMin: 5,
+      targetText: '3 s',
+      targets: [{ unit: 'seconds', min: 3, max: 3 }],
+    });
+  });
+
+  it('en tranche allégée, les séries données pour la tranche ne sont pas réduites ; les autres lignes le sont', () => {
+    const items = practicedTemplate(tpl, { cycleWeek: 4, isDeload: true }, blocks, { deloadReductionPct: 40 }).items;
+    expect(items[0]).toMatchObject({ setsMin: 3, setsMax: 3, targetText: '4 s' });
+    expect(items[1]).toMatchObject({ setsMin: 2, setsMax: 2 });
+  });
+
+  it('sans repère, revient à l’allègement habituel', () => {
+    const plain = template('Combo', 'evening', [negative]);
+    expect(practicedTemplate(plain, { cycleWeek: 4, isDeload: true }, blocks, { deloadReductionPct: 40 })).toEqual(deloadTemplate(plain, blocks, { deloadReductionPct: 40 }));
+  });
+
+  it('applique aussi les repères à une ligne sans minimum (plafond seul)', () => {
+    expect(trancheItem(item({ blockTypeId: skill.id, elementId: 'p', setsMin: 0, setsMax: 8 }), 1)).toMatchObject({ setsMin: 0, setsMax: 8 });
   });
 });

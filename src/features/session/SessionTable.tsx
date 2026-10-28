@@ -2,7 +2,7 @@
 // (numéro ou type, précédent, valeur, ✓). Lignes de 56 px ; glisser une ligne à gauche révèle « Supprimer ».
 import type { Lookups } from '../../db/lookups';
 import { UNIT_SHORT, formatDateShort, formatIntensity, formatRest, formatSetValue, formatSets, formatTarget } from '../../domain/labels';
-import { targetFor, type SessionPlan } from '../../domain/session';
+import { capReached, targetFor, type SessionPlan } from '../../domain/session';
 import type { PendingRow, TableRow } from '../../domain/sessionTable';
 import type { ID, Moment, SetKind } from '../../domain/types';
 import { Badge } from '../../ui/Badge';
@@ -41,7 +41,10 @@ function Row({ line, row, proposed, lookups, handlers }: { line: LineView; row: 
   const swipe = useSwipeReveal(104);
   const done = row.status === 'done';
   const values = done ? row.set : row.draft;
-  const measure = line.exercise?.measure ?? 'reps';
+  // Série sur un autre exercice que celui de la ligne (autre candidat, progression inférieure) : son nom et sa mesure.
+  const own = lookups.exercises.get(done ? row.set.exerciseId : (row.draft.exerciseId ?? '')) ?? line.exercise;
+  const other = own && own.id !== line.exercise?.id ? own : null;
+  const measure = own?.measure ?? 'reps';
   const band = values.bandId ? (lookups.bands.get(values.bandId) ?? null) : null;
   const previous = row.previous;
   const previousBand = previous?.bandId ? (lookups.bands.get(previous.bandId) ?? null) : null;
@@ -101,6 +104,12 @@ function Row({ line, row, proposed, lookups, handlers }: { line: LineView; row: 
           <span className={`text-xl font-bold tabular-nums ${values.value === null && measure !== 'none' ? 'text-ink-3' : ''}`}>
             {measure === 'none' ? (done ? 'fait' : '–') : (values.value ?? '–')}
           </span>
+          {other && (
+            <span className="max-w-full truncate text-xs text-accent">
+              {other.measure !== line.exercise?.measure && other.measure !== 'none' ? `${UNIT_SHORT[other.measure]} · ` : ''}
+              {other.name}
+            </span>
+          )}
           {(band || values.rpe !== null || values.quality === 'degraded') && (
             <span className="flex items-center gap-1 text-xs font-semibold text-ink-2">
               {band && <BandSwatch band={band} />}
@@ -210,13 +219,18 @@ function Line({ line, lookups, proposed, moment, handlers }: { line: LineView; l
           </div>
         ) : (
           <div className="p-3 pt-1">
+            {capReached(item, done) && (
+              <p className="mb-2 rounded-xl border border-warn/70 bg-warn/10 px-3 py-2 font-semibold text-warn">
+                Plafond atteint : {item.setsMax} série{item.setsMax > 1 ? 's' : ''}.
+              </p>
+            )}
             <button
               type="button"
               onClick={() => handlers.addRow(line)}
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line font-semibold text-ink-2 active:bg-card-2"
             >
-              <PlusIcon className="size-5" /> Ajouter une série
-              {workRows < item.setsMax && <span className="font-normal text-ink-3">(jusqu’à {item.setsMax})</span>}
+              <PlusIcon className="size-5" /> {capReached(item, done) ? 'Une série au-delà du plafond' : 'Ajouter une série'}
+              {workRows < item.setsMax && <span className="font-normal text-ink-3">({item.setsMin === 0 ? 'plafond' : 'jusqu’à'} {item.setsMax})</span>}
             </button>
           </div>
         ))}

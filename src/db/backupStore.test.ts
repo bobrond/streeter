@@ -60,7 +60,7 @@ describe('sauvegarde JSON', () => {
       tables: { settings: [{ id: 'settings', weekPlan: {} }], sets: [oldSet, { ...oldSet, id: 's2', kind: 'warmup' }] },
     });
     const backup = parseBackup(text, 2);
-    expect(backup.formatVersion).toBe(5);
+    expect(backup.formatVersion).toBe(6);
     expect(backup.tables.sets).toEqual([
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', kind: 'warmup' },
@@ -90,7 +90,7 @@ describe('sauvegarde JSON', () => {
       },
     });
     const backup = parseBackup(text, 3, () => 'p1');
-    expect(backup.formatVersion).toBe(5);
+    expect(backup.formatVersion).toBe(6);
     expect(backup.tables.templates).toEqual([
       { ...oldTemplate, archived: false, programId: 'p1' },
       { ...oldTemplate, id: 'old', archived: true, programId: 'p1' },
@@ -125,7 +125,7 @@ describe('sauvegarde JSON', () => {
       },
     });
     const backup = parseBackup(text, 4);
-    expect(backup.formatVersion).toBe(5);
+    expect(backup.formatVersion).toBe(6);
     expect(backup.tables.sessions).toEqual([
       { id: 'ses', date: '2026-10-16', status: 'done', expressMinutes: null },
       { id: 'new', date: '2026-10-17', status: 'done', expressMinutes: 30 },
@@ -167,7 +167,7 @@ describe('sauvegarde JSON', () => {
       },
     });
     const backup = parseBackup(text, 5, () => 'p1');
-    expect(backup.formatVersion).toBe(5);
+    expect(backup.formatVersion).toBe(6);
     expect(backup.tables.settings).toEqual([{ id: 'settings', cycleStartDate: '2026-10-05', avgWorkSecPerSet: 30, freeRestSec: 30, lastBackupAt: 7 }]);
     expect(backup.tables.programs).toEqual([
       {
@@ -185,6 +185,9 @@ describe('sauvegarde JSON', () => {
         volumeMax: 6,
         morningMaxMinutes: 30,
         weekPlan,
+        schedule: 'week',
+        startDate: null,
+        componentVolumes: [],
       },
     ]);
     expect(backup.tables.templates).toEqual([{ ...oldTemplate, programId: 'p1' }]);
@@ -193,6 +196,14 @@ describe('sauvegarde JSON', () => {
     const target = freshDb();
     await restoreBackup(target, backup);
     expect(await target.programs.get('p1')).toMatchObject({ startWeek: 1, weekPlan });
+  });
+
+  it('convertit une sauvegarde du format 5 : programmes en semaine type, sans volume propre', () => {
+    const program = { id: 'p1', name: 'Octobre 2026', startWeek: 1, weekPlan: {}, volumeMin: 4, volumeMax: 6 };
+    const text = JSON.stringify({ app: 'streeter', formatVersion: 5, dbVersion: 5, exportedAt: 0, tables: { settings: [{ id: 'settings' }], programs: [program] } });
+    const backup = parseBackup(text, 6);
+    expect(backup.formatVersion).toBe(6);
+    expect(backup.tables.programs).toEqual([{ ...program, schedule: 'week', startDate: null, componentVolumes: [] }]);
   });
 
   it('refuse une sauvegarde du format 5 sans programme', () => {

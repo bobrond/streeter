@@ -44,6 +44,43 @@ export function deloadTemplate(
   };
 }
 
+/** Valeurs d'une ligne propres à la tranche (ou semaine) `cycleWeek` du cycle. */
+export function trancheItem(item: PrescriptionItem, cycleWeek: number): PrescriptionItem {
+  const o = item.byTranche?.[cycleWeek];
+  if (!o) return item;
+  const { setsMin, setsMax, targetText, targets, intensityText, intensity } = o;
+  return {
+    ...item,
+    ...(setsMin !== undefined ? { setsMin } : {}),
+    ...(setsMax !== undefined ? { setsMax } : {}),
+    ...(targetText !== undefined ? { targetText, targets: targets ?? [] } : {}),
+    ...(intensityText !== undefined ? { intensityText, intensity: intensity ?? null } : {}),
+  };
+}
+
+/**
+ * Modèle tel qu'il se pratique un jour donné : valeurs de la tranche du cycle, puis allègement en semaine (tranche)
+ * allégée. Des séries données pour la tranche allégée sont celles à faire : elles ne sont pas réduites.
+ */
+export function practicedTemplate(
+  template: SessionTemplate,
+  at: { cycleWeek: number; isDeload: boolean },
+  blocksById: ReadonlyMap<ID, BlockType>,
+  settings: Pick<Settings, 'deloadReductionPct'>,
+): SessionTemplate {
+  const hasTranche = template.items.some((item) => item.byTranche?.[at.cycleWeek]);
+  if (!hasTranche) return at.isDeload ? deloadTemplate(template, blocksById, settings) : template;
+  return {
+    ...template,
+    items: template.items.map((item) => {
+      const o = item.byTranche?.[at.cycleWeek];
+      const own = trancheItem(item, at.cycleWeek);
+      const keepsSets = o !== undefined && (o.setsMin !== undefined || o.setsMax !== undefined);
+      return at.isDeload && template.moment === 'evening' && !keepsSets ? deloadItem(own, blocksById.get(item.blockTypeId), settings.deloadReductionPct) : own;
+    }),
+  };
+}
+
 export function morningsHidden(isDeload: boolean, settings: Pick<Settings, 'hideMorningsInDeload'>): boolean {
   return isDeload && settings.hideMorningsInDeload;
 }

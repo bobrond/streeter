@@ -7,7 +7,6 @@ import { estimateDuration } from '../../domain/duration';
 import { EXPRESS_MINUTES, buildExpress, componentNeeds, expressToStart, setExpressSets, type ExpressComponent, type ExpressPlan } from '../../domain/express';
 import { MOMENT_LABEL, expressName, formatDurationRange, formatTarget, restParts } from '../../domain/labels';
 import type { Moment, PrescriptionItem, SessionTemplate } from '../../domain/types';
-import { weekProgress } from '../../domain/week';
 import { newId } from '../../lib/id';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
@@ -15,17 +14,15 @@ import { MinusIcon, PlayIcon, PlusIcon } from '../../ui/icons';
 import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
 import { lineExerciseName } from './lineNames';
-import type { Planned } from './planned';
+import { periodFor, type Planned } from './planned';
 
 /** Séance express générée pour aujourd'hui à la place de `planned`. */
 function generate(minutes: number, planned: Planned, info: DayInfo, data: AppData, lookups: Lookups): ExpressPlan {
-  const days = weekProgress(info.week, info.date, data.settings, lookups.templates, data.sessions);
   const needs = componentNeeds({
     program: lookups.program,
     settings: data.settings,
-    week: info.week,
-    isDeload: info.isDeload,
-    days,
+    period: periodFor(info, data, lookups),
+    cycleWeek: info.cycleWeek,
     sets: data.sets,
     sessions: lookups.sessions,
     replaced: { date: info.date, moment: planned.moment },
@@ -36,6 +33,7 @@ function generate(minutes: number, planned: Planned, info: DayInfo, data: AppDat
     replaced: planned.template,
     name: expressName(minutes, label),
     isDeload: info.isDeload,
+    cycleWeek: info.cycleWeek,
     program: lookups.program,
     settings: data.settings,
     needs,

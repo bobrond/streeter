@@ -105,6 +105,26 @@ export interface PrescriptionItem {
   superset: boolean;
   optional: boolean;
   notes: string;
+  /**
+   * Valeurs propres à une tranche du cycle (une semaine en semaine type), par numéro de tranche (1 = la première) :
+   * elles remplacent celles de la ligne. Absent : aucune.
+   */
+  byTranche?: Record<number, TrancheOverride>;
+  /**
+   * Progressions inférieures de la figure, à faire à la place de l'élastique (du plus difficile au plus facile) :
+   * une série faite sur l'une d'elles est enregistrée sur cet exercice, jamais sur la figure. Absent : aucune.
+   */
+  lowerProgressionIds?: ID[];
+}
+
+/** Séries, cible ou intensité d'une ligne pour une tranche donnée ; un champ absent garde la valeur de la ligne. */
+export interface TrancheOverride {
+  setsMin?: number;
+  setsMax?: number;
+  targetText?: string;
+  targets?: Target[];
+  intensityText?: string;
+  intensity?: Intensity | null;
 }
 
 export interface SessionTemplate {
@@ -141,15 +161,39 @@ export interface AppSettings {
   lastBackupAt: number | null;
 }
 
-/** Réglages propres à un programme : cycle, semaine allégée, volume, matins, semaine type. */
+/**
+ * Déroulé d'un programme. `week` : semaine type J1-J7, les séances tiennent aux jours. `sequence` : liste ordonnée
+ * des séances du soir d'une tranche (J1…Jn du `weekPlan`, soirs), faites dans l'ordre quel que soit le jour ; une
+ * séance ratée n'est ni décomptée ni sautée. Les matins (J1…Jm du `weekPlan`, matins) sont alors disponibles
+ * n'importe quel jour, hors séquence.
+ */
+export type ProgramSchedule = 'week' | 'sequence';
+
+/** Bornes de volume d'une composante pour un programme, selon son type de travail (force, endurance…). */
+export interface ComponentVolume {
+  elementId: ID;
+  work: string;
+  min: number;
+  max: number;
+}
+
+/** Réglages propres à un programme : cycle, semaine allégée, volume, matins, semaine type ou séquence. */
 export interface ProgramConfig {
+  schedule: ProgramSchedule;
+  /** Séquence : date de début, n'importe quel jour (YYYY-MM-DD) ; `null` en semaine type (début = J1 de `startWeek`). */
+  startDate: string | null;
+  /** Semaine type : semaines du cycle ; séquence : tranches du cycle. */
   cycleLengthWeeks: number;
+  /** Semaine (ou tranche) allégée du cycle, 0 = aucune. */
   deloadWeek: number;
   /** Pourcentage entier (40 = −40 %). */
   deloadReductionPct: number;
   hideMorningsInDeload: boolean;
+  /** Bornes par défaut, par semaine (ou tranche) et par composante. */
   volumeMin: number;
   volumeMax: number;
+  /** Bornes propres à certaines composantes (type de travail) ; les autres gardent `volumeMin` / `volumeMax`. */
+  componentVolumes: ComponentVolume[];
   morningMaxMinutes: number;
   weekPlan: WeekPlan;
 }
@@ -161,7 +205,10 @@ export interface ProgramConfig {
 export interface Program extends ProgramConfig {
   id: ID;
   name: string;
-  /** Semaine absolue de début (sa date se déduit de `AppSettings.cycleStartDate`). */
+  /**
+   * Semaine absolue de début : sa date se déduit de `AppSettings.cycleStartDate` en semaine type ; en séquence, la
+   * semaine qui contient `startDate` (pour l'ordre des programmes, un seul programme par semaine).
+   */
   startWeek: number;
   notes: string;
   /** Objectifs suivis pendant ce programme ; les autres sont d'anciens objectifs. */
@@ -186,6 +233,8 @@ export interface SetDraft {
   quality: Quality | null;
   kind: SetKind;
   note: string;
+  /** Progression inférieure choisie à la place de l'élastique : la série est enregistrée sur cet exercice. */
+  exerciseId?: ID | null;
 }
 
 /** Minuteur de repos, lancé à la validation d'une série. */

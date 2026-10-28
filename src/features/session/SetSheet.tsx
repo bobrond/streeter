@@ -1,5 +1,6 @@
-// Feuille de saisie d'une série : valeur au pavé numérique (aucun clavier du téléphone), type de série,
-// élastique, RPE, qualité, note. Série à faire : valider ou garder les valeurs ; série faite : corriger ou supprimer.
+// Feuille de saisie d'une série : valeur au pavé numérique (aucun clavier du téléphone), exercice (un autre candidat
+// de la ligne, ou une progression inférieure à la place de l'élastique), type de série, élastique, RPE, qualité, note.
+// Série à faire : valider ou garder les valeurs ; série faite : corriger ou supprimer.
 import { useState } from 'react';
 import type { Lookups } from '../../db/lookups';
 import { UNIT_SHORT, formatSetValue } from '../../domain/labels';
@@ -62,7 +63,7 @@ export function SetSheet({
     : row.draft;
   const [draft, setDraft] = useState<SetDraft>(initial);
   const [fresh, setFresh] = useState(true);
-  const [exerciseId, setExerciseId] = useState<ID>(done ? row.set.exerciseId : (line.exercise?.id ?? ''));
+  const [exerciseId, setExerciseId] = useState<ID>(done ? row.set.exerciseId : (row.draft.exerciseId ?? line.exercise?.id ?? ''));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const exercise = lookups.exercises.get(exerciseId) ?? line.exercise;
   const measure = exercise?.measure ?? 'reps';
@@ -76,7 +77,16 @@ export function SetSheet({
     patch({ value: Math.max(0, (draft.value ?? 0) + delta) });
     setFresh(false);
   };
-  const choices = done && line.candidates.length > 0 && !line.candidates.some((c) => c.id === row.set.exerciseId) && exercise ? [exercise, ...line.candidates] : line.candidates;
+  const lowers = (line.item.lowerProgressionIds ?? []).map((id) => lookups.exercises.get(id)).filter((e): e is NonNullable<typeof e> => e !== undefined);
+  const isLower = lowers.some((e) => e.id === exerciseId);
+  const candidates = line.candidates.filter((c) => !lowers.some((e) => e.id === c.id));
+  const choices = done && candidates.length > 0 && !isLower && !candidates.some((c) => c.id === row.set.exerciseId) && exercise ? [exercise, ...candidates] : candidates;
+  /** Valeurs à enregistrer : l'exercice choisi s'il n'est pas celui de la ligne, sans élastique sur une progression inférieure. */
+  const result = (): SetDraft => {
+    const own = { exerciseId: exerciseId && exerciseId !== line.exercise?.id ? exerciseId : null };
+    const { value, bandId, rpe, quality, kind, note } = draft;
+    return { value, bandId: isLower ? null : bandId, rpe, quality, kind, note, ...own };
+  };
   const rowName = draft.kind === 'warmup' ? 'Échauffement' : `Série ${row.label === 'E' ? '' : row.label}`.trim();
 
   return (
@@ -89,7 +99,7 @@ export function SetSheet({
           <>
             <Button
               onClick={() => {
-                onSaveDone(draft, exerciseId);
+                onSaveDone(result(), exerciseId);
                 onClose();
               }}
             >
@@ -115,7 +125,7 @@ export function SetSheet({
           <>
             <Button
               onClick={() => {
-                onValidate(draft);
+                onValidate(result());
                 onClose();
               }}
             >
@@ -124,7 +134,7 @@ export function SetSheet({
             <Button
               variant="secondary"
               onClick={() => {
-                onKeep(draft);
+                onKeep(result());
                 onClose();
               }}
             >
@@ -135,7 +145,7 @@ export function SetSheet({
       }
     >
       <div className="flex flex-col gap-4">
-        {done && choices.length > 1 && (
+        {choices.length > 1 ? (
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Exercice">
             {choices.map((c) => (
               <button key={c.id} type="button" aria-pressed={c.id === exerciseId} onClick={() => setExerciseId(c.id)} className={chipClass(c.id === exerciseId, 'text-left', 'text-base')}>
@@ -143,8 +153,9 @@ export function SetSheet({
               </button>
             ))}
           </div>
+        ) : (
+          exercise && !isLower && <p className="-mt-1 text-ink-2">{exercise.name}</p>
         )}
-        {!done && exercise && <p className="-mt-1 text-ink-2">{exercise.name}</p>}
 
         {measure !== 'none' && (
           <section className="flex flex-col gap-2" aria-label="Valeur">
@@ -195,7 +206,34 @@ export function SetSheet({
           <Segmented label="Type de série" options={KINDS} value={draft.kind} onChange={(kind) => patch({ kind })} />
           {draft.kind === 'warmup' && <p className="text-sm text-ink-2">Ne compte ni dans le volume ni dans les records.</p>}
         </section>
-        <BandPicker bands={bands} value={draft.bandId} onChange={(bandId) => patch({ bandId })} />
+        <BandPicker
+          bands={bands}
+          value={isLower ? null : draft.bandId}
+          onChange={(bandId) => {
+            patch({ bandId });
+            // Un élastique à la place d'une progression inférieure : retour à la figure.
+            if (isLower) setExerciseId(line.exercise?.id ?? exerciseId);
+          }}
+        />
+        {lowers.length > 0 && (
+          <section className="flex flex-col gap-1.5">
+            <h3 className="text-sm font-bold tracking-wide text-ink-3 uppercase">Ou progression inférieure</h3>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Progression inférieure">
+              {lowers.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  aria-pressed={e.id === exerciseId}
+                  onClick={() => setExerciseId(e.id === exerciseId ? (line.exercise?.id ?? e.id) : e.id)}
+                  className={chipClass(e.id === exerciseId, 'text-left', 'text-base')}
+                >
+                  {e.name}
+                </button>
+              ))}
+            </div>
+            {isLower && <p className="text-sm text-ink-2">Sans élastique ; suivie à part, jamais un record de la figure.</p>}
+          </section>
+        )}
         <RpePicker value={draft.rpe} onChange={(rpe) => patch({ rpe })} />
         <QualityToggle value={draft.quality} onChange={(quality) => patch({ quality })} />
         <textarea

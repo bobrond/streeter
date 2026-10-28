@@ -10,7 +10,8 @@ import {
   swapWeekSlots,
   withoutExercise,
 } from '../domain/editing';
-import { splitSettingsPatch } from '../domain/programs';
+import { splitSettingsPatch, weekOfDate } from '../domain/programs';
+import { sequenceIds, sequenceWeekPlan } from '../domain/sequence';
 import type { AppSettings, Band, BlockType, Element, Exercise, ID, Moment, Program, SeqDay, SessionTemplate, SessionType, Settings, WeekPlan } from '../domain/types';
 import type { ProgramImport } from '../io/program/programFile';
 import type { StreeterDB } from './db';
@@ -100,10 +101,29 @@ export async function saveTemplate(db: StreeterDB, template: SessionTemplate): P
   await db.templates.put(template);
 }
 
-/** Modifie la semaine type d'un programme dans la transaction en cours. */
+/**
+ * Modifie la semaine type d'un programme dans la transaction en cours. En séquence, les séances restent tassées sur
+ * J1…Jn (soirs) et J1…Jm (matins) : une séance retirée rend sa place à la suivante.
+ */
 async function editWeekPlan(db: StreeterDB, programId: ID, edit: (weekPlan: WeekPlan) => WeekPlan): Promise<void> {
   const program = await db.programs.get(programId);
-  if (program) await db.programs.update(programId, { weekPlan: edit(structuredClone(program.weekPlan)) });
+  if (!program) return;
+  const weekPlan = edit(structuredClone(program.weekPlan));
+  await db.programs.update(programId, {
+    weekPlan: program.schedule === 'sequence' ? sequenceWeekPlan(sequenceIds(weekPlan, 'evening'), sequenceIds(weekPlan, 'morning')) : weekPlan,
+  });
+}
+
+/**
+ * Après un changement de la date de début de la semaine 1 : la semaine de début d'un programme en séquence (dont la
+ * date ne bouge pas) se recalcule.
+ */
+export async function refreshSequenceStartWeeks(db: StreeterDB, cycleStartDate: string): Promise<void> {
+  for (const program of await db.programs.toArray()) {
+    if (program.schedule === 'sequence' && program.startDate) {
+      await db.programs.update(program.id, { startWeek: weekOfDate({ cycleStartDate }, program.startDate) });
+    }
+  }
 }
 
 /** Change le moment d'un modèle : il est retiré des créneaux de l'ancien moment dans la semaine type. */
@@ -167,6 +187,7 @@ export async function updateEffectiveSettings(db: StreeterDB, programId: ID, pat
   await db.transaction('rw', [db.settings, db.programs], async () => {
     if (Object.keys(app).length > 0) await db.settings.update('settings', app);
     if (Object.keys(program).length > 0) await db.programs.update(programId, program);
+    if (app.cycleStartDate) await refreshSequenceStartWeeks(db, app.cycleStartDate);
   });
 }
 

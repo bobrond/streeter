@@ -40,7 +40,7 @@ describe('migrations du schéma', () => {
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', setIndex: 2, value: 10, createdAt: 2, kind: 'normal' },
     ]);
-    expect(db.verno).toBe(5);
+    expect(db.verno).toBe(6);
     expect(await db.sets.where('sessionId').equals('ses').count()).toBe(2);
     expect(await db.sessions.get('ses')).toMatchObject({ date: '2026-10-16', status: 'done' });
     db.close();
@@ -65,7 +65,7 @@ describe('migrations du schéma', () => {
     v2.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(5);
+    expect(db.verno).toBe(6);
     expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, archived: false });
     expect(await db.exercises.get('hold')).toEqual({ ...oldExercise, workSecPerSet: null });
     expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, archived: false });
@@ -88,7 +88,7 @@ describe('migrations du schéma', () => {
     v3.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(5);
+    expect(db.verno).toBe(6);
     expect(await db.sessions.get('run')).toEqual({ ...running, expressMinutes: null });
     expect(await db.sessions.get('xlsx')).toMatchObject({ source: 'xlsx', expressMinutes: null });
     expect(await db.sessions.where('status').equals('in_progress').count()).toBe(1);
@@ -132,7 +132,7 @@ describe('migrations du schéma', () => {
     v4.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(5);
+    expect(db.verno).toBe(6);
     const programs = await db.programs.toArray();
     expect(programs).toHaveLength(1);
     const [program] = programs;
@@ -156,6 +156,22 @@ describe('migrations du schéma', () => {
     expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, programId: program.id });
     expect((await db.sessions.get('xlsx'))?.templateSnapshot).toBeNull();
     expect(await db.sets.get('s1')).toMatchObject({ sessionId: 'ses', value: 12 });
+    db.close();
+  });
+
+  it('version 6 : les programmes restent en semaine type, sans volume propre, sans perte', async () => {
+    const name = `migration-${Math.random()}`;
+    names.push(name);
+    const v5 = new Dexie(name);
+    v5.version(1).stores(SCHEMA_V1);
+    v5.version(5).stores({ programs: 'id, startWeek', templates: 'id, name, programId' });
+    await v5.open();
+    const program = { id: 'p1', name: 'Octobre 2026', startWeek: 1, weekPlan: { 1: { morning: null, evening: 'tpl' } }, volumeMin: 4, volumeMax: 6, objectiveIds: ['o1'] };
+    await v5.table('programs').add(program);
+    v5.close();
+    const db = new StreeterDB(name);
+    expect(db.verno).toBe(6);
+    expect(await db.programs.get('p1')).toEqual({ ...program, schedule: 'week', startDate: null, componentVolumes: [] });
     db.close();
   });
 

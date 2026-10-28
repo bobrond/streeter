@@ -39,9 +39,9 @@ describe('programme en vigueur', () => {
     expect(programWeeks(programs, october)).toEqual({ startWeek: 1, endWeek: 4 });
     expect(programWeeks(programs, november)).toEqual({ startWeek: 5, endWeek: null });
     expect(programStartDate(app, november)).toBe('2026-11-02');
-    expect(programPhase(programs, october, 4)).toBe('current');
-    expect(programPhase(programs, november, 4)).toBe('upcoming');
-    expect(programPhase(programs, october, 5)).toBe('past');
+    expect(programPhase(programs, october, { app, today: '2026-11-01' })).toBe('current');
+    expect(programPhase(programs, november, { app, today: '2026-11-01' })).toBe('upcoming');
+    expect(programPhase(programs, october, { app, today: '2026-11-02' })).toBe('past');
   });
 
   it('donne les réglages effectifs d’une date', () => {

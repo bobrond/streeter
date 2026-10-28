@@ -1,18 +1,23 @@
-// Fichier programme (format « streeter-programme », version 1), échangé avec l'agent de programmation de l'utilisateur.
+// Fichier programme (format « streeter-programme », version 2), échangé avec l'agent de programmation de l'utilisateur.
 // Le format est fixé par la consigne donnée à l'agent (docs/consigne_agent_programmation.md) : des noms plutôt que des
 // identifiants, les textes de cible, d'intensité et de repos lus comme à l'import du tableur. L'export ajoute un
-// `catalogue`, ignoré à l'import.
+// `catalogue`, ignoré à l'import. La version 1 (semaine type seulement) reste lue.
+// Version 2 (28/10/2026) : déroulé en séquence de séances (`sequence`, `matins.seances`, cycle en tranches), volume
+// par type de travail (`programme.volumes`), séries sans minimum (`series.min` à 0), repères par tranche
+// (`parTranche`) et progressions inférieures (`progressionsInferieures`) sur une ligne.
 import { dateOf, dayInfo } from '../../domain/cycle';
 import { DEFAULT_SESSION_TYPE_COLOR } from '../../domain/defaults';
 import { nextOrder, uniqueName } from '../../domain/editing';
 import { formatDateLong, formatIntensity, formatRest, formatTarget } from '../../domain/labels';
 import { parseIntensity, parseRest, parseTargets } from '../../domain/parse';
-import { programPhase, programStartDate, templatesOf } from '../../domain/programs';
+import { programPhase, programStartDate, templatesOf, weekOfDate } from '../../domain/programs';
+import { sequenceIds, sequenceWeekPlan } from '../../domain/sequence';
 import { cleanSpaces, fold, nameKey } from '../../domain/text';
 import type {
   AppSettings,
   Band,
   BlockType,
+  ComponentVolume,
   Element,
   ElementKind,
   Exercise,
@@ -26,12 +31,13 @@ import type {
   SessionTemplate,
   SessionType,
   TargetUnit,
+  TrancheOverride,
   WeekPlan,
 } from '../../domain/types';
 import { SEQ_DAYS } from '../../domain/types';
 
 export const PROGRAM_FILE_FORMAT = 'streeter-programme';
-export const PROGRAM_FILE_VERSION = 1;
+export const PROGRAM_FILE_VERSION = 2;
 /** Fichiers acceptés : le .json enregistré, le .txt envoyé par le menu de partage. */
 export const PROGRAM_FILE_ACCEPT = '.json,.txt,application/json,text/plain';
 
@@ -40,10 +46,18 @@ type Mesure = 'reps' | 'secondes' | 'combos' | 'aucune';
 type Unite = 's' | 'reps' | 'combos';
 type MomentFr = 'matin' | 'soir';
 
+/** Ce qui change pour une tranche du cycle : un champ absent garde la valeur de la ligne. */
+export interface TrancheFichier {
+  series?: { min: number; max: number };
+  cible?: string;
+  intensite?: string;
+}
+
 export interface LigneFichier {
   bloc: string;
   element: string;
   exercices: string[];
+  /** `min` à 0 (version 2) : pas de minimum, `max` est un plafond. */
   series: { min: number; max: number };
   cible: string;
   intensite: string;
@@ -51,6 +65,10 @@ export interface LigneFichier {
   superset: boolean;
   optionnelle: boolean;
   notes: string;
+  /** Version 2 : valeurs par numéro de tranche (« 2 », « 4 »…). */
+  parTranche?: Record<string, TrancheFichier>;
+  /** Version 2 : progressions inférieures de la figure, à la place de l'élastique. */
+  progressionsInferieures?: string[];
 }
 
 export interface SeanceFichier {
@@ -121,18 +139,35 @@ export interface CatalogueFichier {
 
 type DayKey = `J${SeqDay}`;
 
+export interface VolumeFichier {
+  element: string;
+  travail: string;
+  min: number;
+  max: number;
+}
+
+/** Cycle en tranches (séquence) ou en semaines (semaine type). */
+export type CycleFichier =
+  | { tranches: number; trancheAllegee: number; reductionAllegeePct: number; masquerMatinsAllegee: boolean }
+  | { semaines: number; semaineAllegee: number; reductionAllegeePct: number; masquerMatinsAllegee: boolean };
+
 export interface ProgramFile {
   format: typeof PROGRAM_FILE_FORMAT;
-  version: typeof PROGRAM_FILE_VERSION;
+  version: number;
   programme: {
     nom: string;
     debut: string;
     notes: string;
-    cycle: { semaines: number; semaineAllegee: number; reductionAllegeePct: number; masquerMatinsAllegee: boolean };
+    cycle: CycleFichier;
     volume: { min: number; max: number };
-    matins: { dureeMaxMin: number };
+    /** Version 2. */
+    volumes?: VolumeFichier[];
+    /** `seances` (version 2, séquence) : séances du matin d'une tranche, disponibles n'importe quel jour. */
+    matins: { dureeMaxMin: number; seances?: string[] };
   };
-  semaineType: Record<DayKey, { matin: string | null; soir: string | null }>;
+  /** Version 2 : séances du soir d'une tranche, dans l'ordre (à la place de `semaineType`). */
+  sequence?: string[];
+  semaineType?: Record<DayKey, { matin: string | null; soir: string | null }>;
   seances: SeanceFichier[];
   objectifs: ObjectifFichier[];
   nouveautes: { elements: ElementFichier[]; exercices: ExerciceFichier[]; blocs: BlocFichier[]; typesSeance: TypeSeanceFichier[] };
@@ -225,7 +260,10 @@ export function programToFile(program: Program, templates: readonly SessionTempl
   const exerciseName = (id: ID) => exercises.get(id)?.name ?? '?';
 
   const own = templatesOf(templates, program.id).filter((t) => !t.archived);
-  const planned = SEQ_DAYS.flatMap((day) => [program.weekPlan[day].evening, program.weekPlan[day].morning]);
+  const isSequence = program.schedule === 'sequence';
+  const planned = isSequence
+    ? [...sequenceIds(program.weekPlan, 'evening'), ...sequenceIds(program.weekPlan, 'morning')]
+    : SEQ_DAYS.flatMap((day) => [program.weekPlan[day].evening, program.weekPlan[day].morning]);
   const rank = (t: SessionTemplate) => {
     const i = planned.indexOf(t.id);
     return i === -1 ? Number.MAX_SAFE_INTEGER : i;
@@ -236,7 +274,18 @@ export function programToFile(program: Program, templates: readonly SessionTempl
 
   const semaineType = Object.fromEntries(
     SEQ_DAYS.map((day) => [dayKey(day), { matin: slotName(program.weekPlan[day].morning), soir: slotName(program.weekPlan[day].evening) }]),
-  ) as ProgramFile['semaineType'];
+  ) as NonNullable<ProgramFile['semaineType']>;
+  const namesOf = (ids: ID[]) => ids.map(slotName).filter((n): n is string => n !== null);
+  const tranches = (item: PrescriptionItem): Record<string, TrancheFichier> =>
+    Object.fromEntries(
+      Object.entries(item.byTranche ?? {}).map(([tranche, o]) => {
+        const entry: TrancheFichier = {};
+        if (o.setsMin !== undefined || o.setsMax !== undefined) entry.series = { min: o.setsMin ?? item.setsMin, max: o.setsMax ?? item.setsMax };
+        if (o.targetText !== undefined) entry.cible = o.targetText;
+        if (o.intensityText !== undefined) entry.intensite = o.intensityText;
+        return [tranche, entry];
+      }),
+    );
 
   const seances: SeanceFichier[] = ordered.map((template) => ({
     nom: names.get(template.id)!,
@@ -255,10 +304,13 @@ export function programToFile(program: Program, templates: readonly SessionTempl
       superset: item.superset,
       optionnelle: item.optional,
       notes: item.notes,
+      parTranche: tranches(item),
+      progressionsInferieures: (item.lowerProgressionIds ?? []).map(exerciseName),
     })),
   }));
 
-  const used = new Set(ordered.flatMap((t) => t.items.flatMap((i) => i.candidateExerciseIds)));
+  const used = new Set(ordered.flatMap((t) => t.items.flatMap((i) => [...i.candidateExerciseIds, ...(i.lowerProgressionIds ?? [])])));
+  const cycle = { reductionAllegeePct: program.deloadReductionPct, masquerMatinsAllegee: program.hideMorningsInDeload };
   return {
     format: PROGRAM_FILE_FORMAT,
     version: PROGRAM_FILE_VERSION,
@@ -266,16 +318,14 @@ export function programToFile(program: Program, templates: readonly SessionTempl
       nom: program.name,
       debut: programStartDate(app, program),
       notes: program.notes,
-      cycle: {
-        semaines: program.cycleLengthWeeks,
-        semaineAllegee: program.deloadWeek,
-        reductionAllegeePct: program.deloadReductionPct,
-        masquerMatinsAllegee: program.hideMorningsInDeload,
-      },
+      cycle: isSequence
+        ? { tranches: program.cycleLengthWeeks, trancheAllegee: program.deloadWeek, ...cycle }
+        : { semaines: program.cycleLengthWeeks, semaineAllegee: program.deloadWeek, ...cycle },
       volume: { min: program.volumeMin, max: program.volumeMax },
-      matins: { dureeMaxMin: program.morningMaxMinutes },
+      volumes: program.componentVolumes.map((v) => ({ element: elementName(v.elementId), travail: v.work, min: v.min, max: v.max })),
+      matins: { dureeMaxMin: program.morningMaxMinutes, seances: isSequence ? namesOf(sequenceIds(program.weekPlan, 'morning')) : [] },
     },
-    semaineType,
+    ...(isSequence ? { sequence: namesOf(sequenceIds(program.weekPlan, 'evening')) } : { semaineType }),
     seances,
     objectifs: catalog.objectives.filter((o) => program.objectiveIds.includes(o.id)).map((o) => objectiveToFile(o, exerciseName)),
     nouveautes: { elements: [], exercices: [], blocs: [], typesSeance: [] },
@@ -328,6 +378,8 @@ export interface ProgramImportContext {
   objectives: readonly Objective[];
   /** Modèles auxquels une séance enregistrée renvoie : ils sont archivés plutôt que supprimés. */
   usedTemplateIds: ReadonlySet<ID>;
+  /** Date du jour : un programme en séquence commence au plus tôt demain. */
+  today: string;
   currentWeek: number;
   newId: () => ID;
   now: number;
@@ -476,7 +528,43 @@ function isValidDate(iso: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso;
 }
 
-const ROOT_KEYS = ['format', 'version', 'programme', 'semaineType', 'seances', 'objectifs', 'nouveautes', 'demandesAppli'] as const;
+
+/** `parTranche` d'une ligne : numéros de tranche de 1 à la durée du cycle, séries, cible et intensité facultatives. */
+function readTranches(r: Reader, value: unknown, where: string, tranches: number): Record<number, TrancheOverride> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    r.error(where, 'un objet { "2": { … } } est attendu');
+    return {};
+  }
+  const result: Record<number, TrancheOverride> = {};
+  for (const [key, raw] of Object.entries(value as Json)) {
+    const at = `${where}.${key}`;
+    const n = Number(key);
+    if (!/^\d+$/.test(key) || n < 1 || n > tranches) {
+      r.error(where, `« ${key} » : un numéro de tranche de 1 à ${tranches} est attendu`);
+      continue;
+    }
+    const t = r.object(raw, at, [], { series: undefined, cible: undefined, intensite: undefined });
+    if (!t) continue;
+    const override: TrancheOverride = {};
+    if (t.series !== undefined) {
+      const series = r.object(t.series, `${at}.series`, ['min', 'max']);
+      if (series) {
+        override.setsMin = r.number(series.min, `${at}.series.min`, { min: 0, integer: true });
+        override.setsMax = r.number(series.max, `${at}.series.max`, { min: Math.max(1, override.setsMin), integer: true });
+      }
+    }
+    if (t.cible !== undefined) {
+      override.targetText = r.text(t.cible, `${at}.cible`);
+      override.targets = parseTargets(override.targetText);
+    }
+    if (t.intensite !== undefined) {
+      override.intensityText = r.text(t.intensite, `${at}.intensite`);
+      override.intensity = parseIntensity(override.intensityText);
+    }
+    if (Object.keys(override).length > 0) result[n] = override;
+  }
+  return result;
+}
 
 /**
  * Lit un fichier programme (ou le texte collé d'une réponse de l'agent) et prépare son import : refusé avec la liste
@@ -491,13 +579,21 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
     return { ok: false, errors: [`Ce n'est pas du JSON valide (${e instanceof Error ? e.message : String(e)}).`] };
   }
   const r = new Reader();
-  const root = r.object(raw, '', [...ROOT_KEYS], { objectifs: [], nouveautes: {}, demandesAppli: [], catalogue: null });
+  const head = typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Json) : {};
+  if (typeof head.version === 'number' && head.version > PROGRAM_FILE_VERSION) {
+    return { ok: false, errors: [`Fichier au format version ${head.version}, plus récent que celui de l'appli (version ${PROGRAM_FILE_VERSION}) : mets l'appli à jour.`] };
+  }
+  const v2 = head.version === 2;
+  // Version 2 : `sequence` ou `semaineType`, l'un des deux ; version 1 : `semaineType`.
+  const root = v2
+    ? r.object(raw, '', ['format', 'version', 'programme', 'seances'], { sequence: undefined, semaineType: undefined, objectifs: [], nouveautes: {}, demandesAppli: [], catalogue: null })
+    : r.object(raw, '', ['format', 'version', 'programme', 'semaineType', 'seances', 'objectifs', 'nouveautes', 'demandesAppli'], { objectifs: [], nouveautes: {}, demandesAppli: [], catalogue: null });
   if (!root) return { ok: false, errors: r.errors };
   if (root.format !== PROGRAM_FILE_FORMAT) return { ok: false, errors: [`« format » doit valoir « ${PROGRAM_FILE_FORMAT} ».`] };
-  if (typeof root.version === 'number' && root.version > PROGRAM_FILE_VERSION) {
-    return { ok: false, errors: [`Fichier au format version ${root.version}, plus récent que celui de l'appli (version ${PROGRAM_FILE_VERSION}) : mets l'appli à jour.`] };
-  }
-  if (root.version !== PROGRAM_FILE_VERSION) return { ok: false, errors: [`« version » doit valoir ${PROGRAM_FILE_VERSION}.`] };
+  if (root.version !== 1 && root.version !== 2) return { ok: false, errors: [`« version » doit valoir ${PROGRAM_FILE_VERSION} (ou 1 pour un ancien fichier).`] };
+  const isSequence = v2 && root.sequence !== undefined;
+  if (v2 && root.sequence !== undefined && root.semaineType !== undefined) r.error('', '« sequence » et « semaineType » ensemble : un seul des deux');
+  if (v2 && root.sequence === undefined && root.semaineType === undefined) r.error('', 'clé « sequence » absente');
 
   // Catalogue de l'appli, complété par les nouveautés au fil de la lecture.
   const elements = [...ctx.elements];
@@ -515,10 +611,11 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
   const newSessionTypes: SessionType[] = [];
   const newExercises: Exercise[] = [];
   const nouveautes = r.object(root.nouveautes, 'nouveautes', [], { elements: [], exercices: [], blocs: [], typesSeance: [] });
-  /** Une nouveauté qui existe déjà : l'appli garde la sienne. */
+  /** Une nouveauté qui existe déjà : l'appli garde la sienne (une seule remarque pour toutes). */
+  const known: string[] = [];
   const exists = (list: readonly { name: string }[], name: string, what: string): boolean => {
     const found = list.find((x) => nameKey(x.name) === nameKey(name));
-    if (found) r.warn(`${what} « ${name} » existe déjà : l'appli garde le sien.`);
+    if (found) known.push(`${what.toLowerCase()} « ${name} »`);
     return found !== undefined;
   };
   if (nouveautes) {
@@ -597,22 +694,40 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
       newExercises.push(exercise);
     });
   }
+  if (known.length === 1) r.warn(`${known[0].charAt(0).toUpperCase()}${known[0].slice(1)} existe déjà : l'appli garde le sien.`);
+  if (known.length > 1) r.warn(`Nouveautés déjà dans l'appli, gardées telles quelles : ${known.join(', ')}.`);
   blockTypes = blockTypes.map((b, order) => ({ ...b, order }));
   const blockOrder = new Map(blockTypes.map((b) => [b.id, b.order]));
 
   // Programme
-  const p = r.object(root.programme, 'programme', ['nom', 'debut', 'cycle', 'volume', 'matins'], { notes: '' });
+  const p = r.object(root.programme, 'programme', ['nom', 'debut', 'cycle', 'volume', 'matins'], v2 ? { notes: '', volumes: [] } : { notes: '' });
   let startWeek = 0;
+  let startDate: string | null = null;
   let replaces: Program | null = null;
   let programName = '';
   const config = { cycleLengthWeeks: 4, deloadWeek: 4, deloadReductionPct: 40, hideMorningsInDeload: true, volumeMin: 4, volumeMax: 6, morningMaxMinutes: 30 };
   let notes = '';
+  let volumesRaw: unknown[] = [];
+  let morningNames: unknown[] = [];
   if (p) {
     programName = r.name(p.nom, 'programme.nom');
     notes = r.text(p.notes, 'programme.notes');
     const start = r.text(p.debut, 'programme.debut');
     if (typeof p.debut === 'string' && !isValidDate(start)) r.error('programme.debut', `« ${start} » : une date AAAA-MM-JJ est attendue`);
-    else if (isValidDate(start)) {
+    else if (isValidDate(start) && isSequence) {
+      // Séquence : n'importe quel jour, au plus tôt demain ; la même date qu'un programme en cours ou à venir le remplace.
+      startWeek = weekOfDate(ctx.app, start);
+      startDate = start;
+      const same = ctx.programs.find((prog) => programStartDate(ctx.app, prog) === start) ?? null;
+      const sameWeek = ctx.programs.find((prog) => prog.startWeek === startWeek && prog.id !== same?.id) ?? null;
+      if (startWeek < 1) r.error('programme.debut', `le ${formatDateLong(start)} est avant le début de la semaine 1 (${formatDateLong(ctx.app.cycleStartDate)})`);
+      else if (same && programPhase(ctx.programs, same, { app: ctx.app, today: ctx.today }) === 'past') {
+        r.error('programme.debut', `le programme « ${same.name} » commence déjà le ${formatDateLong(start)} et il est terminé`);
+      } else if (same) replaces = same;
+      else if (sameWeek) {
+        r.error('programme.debut', `le programme « ${sameWeek.name} » commence la même semaine (le ${formatDateLong(programStartDate(ctx.app, sameWeek))}) : un seul programme par semaine`);
+      } else if (start <= ctx.today && ctx.programs.length > 0) r.error('programme.debut', 'un nouveau programme commence au plus tôt demain');
+    } else if (isValidDate(start)) {
       const info = dayInfo(start, { cycleStartDate: ctx.app.cycleStartDate, cycleLengthWeeks: 1, deloadWeek: 0 });
       if (info.beforeStart) r.error('programme.debut', `le ${formatDateLong(start)} est avant le début de la semaine 1 (${formatDateLong(ctx.app.cycleStartDate)})`);
       else if (info.seqDay !== 1) {
@@ -621,7 +736,7 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
       } else {
         startWeek = info.week;
         const same = ctx.programs.find((prog) => prog.startWeek === startWeek) ?? null;
-        if (same && programPhase(ctx.programs, same, ctx.currentWeek) === 'past') {
+        if (same && programPhase(ctx.programs, same, { app: ctx.app, today: ctx.today }) === 'past') {
           r.error('programme.debut', `le programme « ${same.name} » commence déjà le ${formatDateLong(start)} et il est terminé`);
         } else if (same) replaces = same;
         else if (startWeek <= ctx.currentWeek) {
@@ -629,10 +744,11 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
         }
       }
     }
-    const cycle = r.object(p.cycle, 'programme.cycle', ['semaines', 'semaineAllegee', 'reductionAllegeePct', 'masquerMatinsAllegee']);
+    const [length, deload] = isSequence ? ['tranches', 'trancheAllegee'] : ['semaines', 'semaineAllegee'];
+    const cycle = r.object(p.cycle, 'programme.cycle', [length, deload, 'reductionAllegeePct', 'masquerMatinsAllegee']);
     if (cycle) {
-      config.cycleLengthWeeks = r.number(cycle.semaines, 'programme.cycle.semaines', { min: 1, max: 12, integer: true });
-      config.deloadWeek = r.number(cycle.semaineAllegee, 'programme.cycle.semaineAllegee', { min: 0, max: config.cycleLengthWeeks, integer: true });
+      if (length in cycle) config.cycleLengthWeeks = r.number(cycle[length], `programme.cycle.${length}`, { min: 1, max: 12, integer: true });
+      if (deload in cycle) config.deloadWeek = r.number(cycle[deload], `programme.cycle.${deload}`, { min: 0, max: config.cycleLengthWeeks, integer: true });
       config.deloadReductionPct = r.number(cycle.reductionAllegeePct, 'programme.cycle.reductionAllegeePct', { min: 0, max: 100, integer: true });
       config.hideMorningsInDeload = r.bool(cycle.masquerMatinsAllegee, 'programme.cycle.masquerMatinsAllegee');
     }
@@ -641,8 +757,14 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
       config.volumeMin = r.number(volume.min, 'programme.volume.min', { min: 0, integer: true });
       config.volumeMax = r.number(volume.max, 'programme.volume.max', { min: config.volumeMin, integer: true });
     }
-    const mornings = r.object(p.matins, 'programme.matins', ['dureeMaxMin']);
-    if (mornings) config.morningMaxMinutes = r.number(mornings.dureeMaxMin, 'programme.matins.dureeMaxMin', { min: 1, integer: true });
+    const mornings = r.object(p.matins, 'programme.matins', ['dureeMaxMin'], v2 ? { seances: [] } : {});
+    if (mornings) {
+      config.morningMaxMinutes = r.number(mornings.dureeMaxMin, 'programme.matins.dureeMaxMin', { min: 1, integer: true });
+      if (v2) morningNames = r.list(mornings.seances, 'programme.matins.seances');
+      if (!isSequence && morningNames.length > 0) r.error('programme.matins.seances', 'réservé à un programme en séquence : en semaine type, les matins sont dans « semaineType »');
+      if (morningNames.length > 7) r.error('programme.matins.seances', 'au plus 7 séances du matin');
+    }
+    if (v2) volumesRaw = r.list(p.volumes, 'programme.volumes');
   }
   const programId = replaces?.id ?? ctx.newId();
   const previous = replaces ? templatesOf(ctx.templates, replaces.id) : [];
@@ -660,7 +782,12 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
     const items: PrescriptionItem[] = [];
     r.list(s.lignes, `${where} › lignes`).forEach((line, k) => {
       const at = `${where}, ligne ${k + 1}`;
-      const l = r.object(line, at, ['bloc', 'element', 'exercices', 'series', 'cible', 'intensite', 'repos'], { superset: false, optionnelle: false, notes: '' });
+      const l = r.object(
+        line,
+        at,
+        ['bloc', 'element', 'exercices', 'series', 'cible', 'intensite', 'repos'],
+        v2 ? { superset: false, optionnelle: false, notes: '', parTranche: {}, progressionsInferieures: [] } : { superset: false, optionnelle: false, notes: '' },
+      );
       if (!l) return;
       const block = findBlock(r.name(l.bloc, `${at} › bloc`), `${at} › bloc`);
       const element = findElement(r.name(l.element, `${at} › element`), `${at} › element`);
@@ -668,7 +795,8 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
       if (Array.isArray(l.exercices) && names.length === 0) r.error(`${at} › exercices`, 'au moins un exercice est attendu');
       const candidates = names.map((n, j) => findExercise(r.name(n, `${at} › exercices[${j + 1}]`), `${at} › exercices`)).filter((e): e is Exercise => e !== null);
       const series = r.object(l.series, `${at} › series`, ['min', 'max']);
-      const setsMin = series ? r.number(series.min, `${at} › series.min`, { min: 1, integer: true }) : 1;
+      const setsMin = series ? r.number(series.min, `${at} › series.min`, { min: v2 ? 0 : 1, integer: true }) : 1;
+      if (series && setsMin === 0 && series.max === 0) r.error(`${at} › series.max`, 'au moins 1 (le plafond d’une ligne sans minimum)');
       const setsMax = series ? r.number(series.max, `${at} › series.max`, { min: setsMin, integer: true }) : 1;
       const targetText = r.text(l.cible, `${at} › cible`);
       const intensityText = r.text(l.intensite, `${at} › intensite`);
@@ -678,6 +806,12 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
       const rest = parseRest(restText);
       // Une cible ou une intensité non lue s'affiche telle quelle ; un repos non lu n'aurait pas de minuteur.
       if (rest.minSec === null && !isEmptyText(restText) && !/\blibre\b/.test(fold(restText))) r.warn(`${at} : repos « ${restText} » non lu, compté comme libre.`);
+      const lower = v2
+        ? r.list(l.progressionsInferieures, `${at} › progressionsInferieures`)
+            .map((n, j) => findExercise(r.name(n, `${at} › progressionsInferieures[${j + 1}]`), `${at} › progressionsInferieures`))
+            .filter((e): e is Exercise => e !== null)
+        : [];
+      const byTranche = v2 ? readTranches(r, l.parTranche, `${at} › parTranche`, config.cycleLengthWeeks) : {};
       items.push({
         id: ctx.newId(),
         blockTypeId: block?.id ?? '',
@@ -696,6 +830,8 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
         superset: r.bool(l.superset, `${at} › superset`) || rest.superset,
         optional: r.bool(l.optionnelle, `${at} › optionnelle`),
         notes: r.text(l.notes, `${at} › notes`),
+        ...(Object.keys(byTranche).length > 0 ? { byTranche } : {}),
+        ...(lower.length > 0 ? { lowerProgressionIds: lower.map((e) => e.id) } : {}),
       });
     });
     // Lignes regroupées par bloc dans l'ordre des blocs ; l'ordre du fichier reste celui d'un même bloc.
@@ -714,23 +850,49 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
     });
   });
 
-  // Semaine type
-  const weekPlan = {} as WeekPlan;
-  const week = r.object(root.semaineType, 'semaineType', SEQ_DAYS.map(dayKey));
-  for (const day of SEQ_DAYS) {
+  // Séquence, ou semaine type
+  const findSession = (name: string, where: string, moment: Moment): ID | null => {
+    const template = templates.find((t) => t.name === name) ?? templates.find((t) => nameKey(t.name) === nameKey(name));
+    if (!template) r.error(where, `séance « ${name} » absente de « seances »`);
+    else if (template.moment !== moment) r.error(where, `« ${template.name} » est une séance du ${MOMENT[template.moment]}`);
+    else return template.id;
+    return null;
+  };
+  let weekPlan = {} as WeekPlan;
+  if (isSequence) {
+    const evenings = r.list(root.sequence, 'sequence');
+    if (Array.isArray(root.sequence) && (evenings.length === 0 || evenings.length > 7)) r.error('sequence', 'de 1 à 7 séances du soir');
+    const ids = (names: unknown[], where: string, moment: Moment) =>
+      names.map((n, k) => findSession(r.name(n, `${where}[${k + 1}]`), `${where}[${k + 1}]`, moment)).filter((id): id is ID => id !== null);
+    weekPlan = sequenceWeekPlan(ids(evenings.slice(0, 7), 'sequence', 'evening'), ids(morningNames.slice(0, 7), 'programme.matins.seances', 'morning'));
+  }
+  const week = isSequence ? null : r.object(root.semaineType, 'semaineType', SEQ_DAYS.map(dayKey));
+  for (const day of isSequence ? [] : SEQ_DAYS) {
     weekPlan[day] = { morning: null, evening: null };
     const slot = week && dayKey(day) in week ? r.object(week[dayKey(day)], `semaineType.${dayKey(day)}`, ['matin', 'soir']) : null;
     if (!slot) continue;
     for (const moment of ['morning', 'evening'] as const) {
       const where = `semaineType.${dayKey(day)}.${MOMENT[moment]}`;
       const name = r.optionalName(slot[MOMENT[moment]], where);
-      if (!name) continue;
-      const template = templates.find((t) => t.name === name) ?? templates.find((t) => nameKey(t.name) === nameKey(name));
-      if (!template) r.error(where, `séance « ${name} » absente de « seances »`);
-      else if (template.moment !== moment) r.error(where, `« ${template.name} » est une séance du ${MOMENT[template.moment]}`);
-      else weekPlan[day][moment] = template.id;
+      if (name) weekPlan[day][moment] = findSession(name, where, moment);
     }
   }
+
+  // Volume par type de travail
+  const componentVolumes: ComponentVolume[] = [];
+  volumesRaw.forEach((value, i) => {
+    const where = `programme.volumes[${i + 1}]`;
+    const o = r.object(value, where, ['element', 'travail', 'min', 'max']);
+    if (!o) return;
+    const element = findElement(r.name(o.element, `${where}.element`), `${where}.element`);
+    const work = r.name(o.travail, `${where}.travail`);
+    const min = r.number(o.min, `${where}.min`, { min: 0, integer: true });
+    const max = r.number(o.max, `${where}.max`, { min, integer: true });
+    if (!element) return;
+    if (element.kind !== 'component') r.error(`${where}.element`, `« ${element.name} » n'est pas une composante (seules les composantes ont un volume)`);
+    else if (componentVolumes.some((v) => v.elementId === element.id)) r.error(`${where}.element`, `« ${element.name} » a déjà un volume`);
+    else componentVolumes.push({ elementId: element.id, work, min, max });
+  });
 
   // Objectifs
   const newObjectives: Objective[] = [];
@@ -774,6 +936,9 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
   if (name !== programName) r.warn(`Un autre programme s'appelle déjà « ${programName} » : celui-ci s'appellera « ${name} ».`);
   const program: Program = {
     ...config,
+    schedule: isSequence ? 'sequence' : 'week',
+    startDate,
+    componentVolumes,
     id: programId,
     name,
     startWeek,
