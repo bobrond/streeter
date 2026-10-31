@@ -378,7 +378,7 @@ export interface ProgramImportContext {
   objectives: readonly Objective[];
   /** Modèles auxquels une séance enregistrée renvoie : ils sont archivés plutôt que supprimés. */
   usedTemplateIds: ReadonlySet<ID>;
-  /** Date du jour : un programme en séquence commence au plus tôt demain. */
+  /** Date du jour : un programme en séquence commence au plus tôt ce jour-là. */
   today: string;
   currentWeek: number;
   newId: () => ID;
@@ -715,7 +715,7 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
     const start = r.text(p.debut, 'programme.debut');
     if (typeof p.debut === 'string' && !isValidDate(start)) r.error('programme.debut', `« ${start} » : une date AAAA-MM-JJ est attendue`);
     else if (isValidDate(start) && isSequence) {
-      // Séquence : n'importe quel jour, au plus tôt demain ; la même date qu'un programme en cours ou à venir le remplace.
+      // Séquence : n'importe quel jour, au plus tôt aujourd'hui ; la même date qu'un programme en cours ou à venir le remplace.
       startWeek = weekOfDate(ctx.app, start);
       startDate = start;
       const same = ctx.programs.find((prog) => programStartDate(ctx.app, prog) === start) ?? null;
@@ -726,7 +726,7 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
       } else if (same) replaces = same;
       else if (sameWeek) {
         r.error('programme.debut', `le programme « ${sameWeek.name} » commence la même semaine (le ${formatDateLong(programStartDate(ctx.app, sameWeek))}) : un seul programme par semaine`);
-      } else if (start <= ctx.today && ctx.programs.length > 0) r.error('programme.debut', 'un nouveau programme commence au plus tôt demain');
+      } else if (start < ctx.today && ctx.programs.length > 0) r.error('programme.debut', "un nouveau programme commence au plus tôt aujourd'hui");
     } else if (isValidDate(start)) {
       const info = dayInfo(start, { cycleStartDate: ctx.app.cycleStartDate, cycleLengthWeeks: 1, deloadWeek: 0 });
       if (info.beforeStart) r.error('programme.debut', `le ${formatDateLong(start)} est avant le début de la semaine 1 (${formatDateLong(ctx.app.cycleStartDate)})`);

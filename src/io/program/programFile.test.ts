@@ -348,10 +348,17 @@ describe('format version 2', () => {
     expect(imported.program.weekPlan[3]).toEqual({ evening: null, morning: null });
   });
 
+  it('accepte une séquence qui commence le jour de l’import', () => {
+    const file = sequenceFile();
+    file.programme.debut = '2026-10-28';
+    expect(errorsOf(file)).toEqual([]);
+    expect(read(file).program).toMatchObject({ startDate: '2026-10-28', startWeek: 4 });
+  });
+
   it('refuse une séquence mal écrite', () => {
-    const today = sequenceFile();
-    today.programme.debut = '2026-10-28';
-    expect(errorsOf(today)).toEqual(['programme.debut : un nouveau programme commence au plus tôt demain']);
+    const yesterday = sequenceFile();
+    yesterday.programme.debut = '2026-10-27';
+    expect(errorsOf(yesterday)).toEqual(["programme.debut : un nouveau programme commence au plus tôt aujourd'hui"]);
     const both = { ...sequenceFile(), semaineType: novemberFile().semaineType };
     expect(errorsOf(both)).toEqual(['« sequence » et « semaineType » ensemble : un seul des deux']);
     const wrong = sequenceFile();
