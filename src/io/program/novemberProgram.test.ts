@@ -105,15 +105,17 @@ describe.skipIf(![XLSX_FILE, V1, V2].every((f) => existsSync(f)))('programme de 
     expect(result.ok ? [] : result.errors).toEqual(['programme.debut : le jeudi 29 octobre est un J4 ; un programme commence un J1 (le lundi 26 octobre ou le lundi 2 novembre)']);
   });
 
-  it('importe la version 2 le jour même, sur le programme d’octobre, que J1 soit un lundi ou un jeudi', () => {
+  it('importe la version 2 le jour même ou en retard, sur le programme d’octobre, que J1 soit un lundi ou un jeudi', () => {
     const today = readFileSync(V2, 'utf8').replace('"debut": "2026-10-29"', '"debut": "2026-10-31"');
     for (const cycleStartDate of ['2026-10-05', '2026-10-01']) {
       const result = readProgramFile(today, { ...setup(), app: appSettings({ cycleStartDate }), today: '2026-10-31', currentWeek: 4 });
       expect(result.ok ? [] : result.errors).toEqual([]);
       if (result.ok) expect(result.value).toMatchObject({ replaces: null, program: { schedule: 'sequence', startDate: '2026-10-31' } });
     }
-    const yesterday = readProgramFile(readFileSync(V2, 'utf8'), { ...setup(), today: '2026-10-31', currentWeek: 5 });
-    expect(yesterday.ok ? [] : yesterday.errors).toEqual(["programme.debut : un nouveau programme commence au plus tôt aujourd'hui"]);
+    // Le fichier d'origine (29/10) importé le 31/10 : le programme commence aujourd'hui.
+    const late = read(V2, { ...setup(), today: '2026-10-31', currentWeek: 5 });
+    expect(late.program).toMatchObject({ startDate: '2026-10-31', startWeek: 5 });
+    expect(late.warnings).toEqual(["Le jeudi 29 octobre est passé : le programme commence aujourd'hui, le samedi 31 octobre."]);
   });
 
   it('la version 2 remplace la version 1 ; les séances déjà faites restent comptées dans la séquence', () => {

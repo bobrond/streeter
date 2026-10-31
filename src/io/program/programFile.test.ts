@@ -355,10 +355,16 @@ describe('format version 2', () => {
     expect(read(file).program).toMatchObject({ startDate: '2026-10-28', startWeek: 4 });
   });
 
+  it('fait commencer aujourd’hui une séquence datée d’un jour passé, avec une remarque', () => {
+    const file = sequenceFile();
+    file.programme.debut = '2026-10-22';
+    const imported = read(file);
+    expect(imported.program).toMatchObject({ startDate: '2026-10-28', startWeek: 4 });
+    expect(imported.replaces).toBeNull();
+    expect(imported.warnings).toEqual(["Le jeudi 22 octobre est passé : le programme commence aujourd'hui, le mercredi 28 octobre."]);
+  });
+
   it('refuse une séquence mal écrite', () => {
-    const yesterday = sequenceFile();
-    yesterday.programme.debut = '2026-10-27';
-    expect(errorsOf(yesterday)).toEqual(["programme.debut : un nouveau programme commence au plus tôt aujourd'hui"]);
     const both = { ...sequenceFile(), semaineType: novemberFile().semaineType };
     expect(errorsOf(both)).toEqual(['« sequence » et « semaineType » ensemble : un seul des deux']);
     const wrong = sequenceFile();

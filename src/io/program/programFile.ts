@@ -715,18 +715,23 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
     const start = r.text(p.debut, 'programme.debut');
     if (typeof p.debut === 'string' && !isValidDate(start)) r.error('programme.debut', `« ${start} » : une date AAAA-MM-JJ est attendue`);
     else if (isValidDate(start) && isSequence) {
-      // Séquence : n'importe quel jour, au plus tôt aujourd'hui ; la même date qu'un programme en cours ou à venir le remplace.
-      startWeek = weekOfDate(ctx.app, start);
-      startDate = start;
+      // Séquence : n'importe quel jour ; la même date qu'un programme en cours ou à venir le remplace.
+      // Un nouveau programme daté d'un jour passé commence aujourd'hui : les séances déjà faites restent à l'ancien.
       const same = ctx.programs.find((prog) => programStartDate(ctx.app, prog) === start) ?? null;
+      startDate = start;
+      if (!same && start < ctx.today && ctx.programs.length > 0) {
+        startDate = ctx.today;
+        r.warn(`Le ${formatDateLong(start)} est passé : le programme commence aujourd'hui, le ${formatDateLong(ctx.today)}.`);
+      }
+      startWeek = weekOfDate(ctx.app, startDate);
       const sameWeek = ctx.programs.find((prog) => prog.startWeek === startWeek && prog.id !== same?.id) ?? null;
-      if (startWeek < 1) r.error('programme.debut', `le ${formatDateLong(start)} est avant le début de la semaine 1 (${formatDateLong(ctx.app.cycleStartDate)})`);
+      if (startWeek < 1) r.error('programme.debut', `le ${formatDateLong(startDate)} est avant le début de la semaine 1 (${formatDateLong(ctx.app.cycleStartDate)})`);
       else if (same && programPhase(ctx.programs, same, { app: ctx.app, today: ctx.today }) === 'past') {
         r.error('programme.debut', `le programme « ${same.name} » commence déjà le ${formatDateLong(start)} et il est terminé`);
       } else if (same) replaces = same;
       else if (sameWeek) {
         r.error('programme.debut', `le programme « ${sameWeek.name} » commence la même semaine (le ${formatDateLong(programStartDate(ctx.app, sameWeek))}) : un seul programme par semaine`);
-      } else if (start < ctx.today && ctx.programs.length > 0) r.error('programme.debut', "un nouveau programme commence au plus tôt aujourd'hui");
+      }
     } else if (isValidDate(start)) {
       const info = dayInfo(start, { cycleStartDate: ctx.app.cycleStartDate, cycleLengthWeeks: 1, deloadWeek: 0 });
       if (info.beforeStart) r.error('programme.debut', `le ${formatDateLong(start)} est avant le début de la semaine 1 (${formatDateLong(ctx.app.cycleStartDate)})`);

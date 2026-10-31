@@ -139,7 +139,7 @@ Si je te demande seulement une retouche, rends quand même le programme complet,
 **`programme`**
 
 - `nom` : nom affiché (par défaut le mois du début : « Décembre 2026 »).
-- `debut` : date `AAAA-MM-JJ`, n'importe quel jour, au plus tôt le jour de l'import. La même date que le programme en cours le remplace (retouche).
+- `debut` : date `AAAA-MM-JJ`, n'importe quel jour ; une date passée fait commencer le programme le jour de l'import. La même date que le programme en cours le remplace (retouche).
 - `notes` : texte libre (objectif du cycle, axes, repères qui ne tiennent pas dans `parTranche`…).
 - `cycle.tranches` : nombre de tranches du cycle (1 à 12) ; `cycle.trancheAllegee` : numéro de la tranche allégée dans le cycle (0 = aucune) ; `cycle.reductionAllegeePct` : entier (40 = −40 %) ; `cycle.masquerMatinsAllegee` : booléen.
 - `volume.min`, `volume.max` : bornes par défaut, en séries par composante et par tranche.
