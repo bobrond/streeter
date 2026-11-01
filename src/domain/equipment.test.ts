@@ -6,6 +6,7 @@ import {
   inferExerciseEquipment,
   isExerciseCompatible,
   isFloorVictorian,
+  isSkillVariant,
   normalizeEquipment,
 } from './equipment';
 import { formatEquipment } from './labels';
@@ -39,6 +40,13 @@ describe('matériel des exercices', () => {
     ]) {
       expect(inferExerciseEquipment(both, 'Planche renfo spé'), both).toEqual(['floor', 'parallettes']);
     }
+    // Seules les vraies variantes de la figure (holds non surélevés, progressions) comptent comme variantes Skill ;
+    // les exercices surélevés, pseudo FL mur et Victorienne au sol restent du renfo spé.
+    expect(isSkillVariant({ name: 'Straddle planche hold', category: 'Planche progression' })).toBe(true);
+    expect(isSkillVariant({ name: 'Adv tuck planche hold sol', category: 'Planche renfo spé' })).toBe(true);
+    expect(isSkillVariant({ name: 'Planche lean surélevé hold to press', category: 'Planche renfo spé' })).toBe(false);
+    expect(isSkillVariant({ name: 'Lean planche PU surélevé', category: 'Planche renfo spé' })).toBe(false);
+    expect(isSkillVariant({ name: 'Victorienne au sol hold', category: 'Touch FL renfo spé' })).toBe(false);
   });
 
   it('classe tout le front lever suspendu (pseudo FL mur compris) sur barre, et la Victorienne au sol sur sol', () => {
@@ -105,3 +113,4 @@ describe('matériel des exercices', () => {
     expect(ensureFloorVictorianExercises(added, [pl, fl], () => 'dup')).toHaveLength(3);
   });
 });
+

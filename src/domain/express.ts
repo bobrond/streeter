@@ -2,7 +2,7 @@
 // l'utilisateur (CLAUDE.md, « Aujourd'hui et séance express ») ; la fatigue de la veille n'entre pas en compte.
 import { practicedTemplate } from './deload';
 import { estimateDuration, type PlanStructure } from './duration';
-import { FLOOR_VICTORIAN_TARGETS, isExerciseCompatible, isFloorVictorian } from './equipment';
+import { FLOOR_VICTORIAN_TARGETS, isExerciseCompatible, isFloorVictorian, isSkillVariant } from './equipment';
 import { formatTarget } from './labels';
 import { buildPlan, sortItemsByBlock } from './session';
 import type {
@@ -165,14 +165,15 @@ function filterItemDirect(
   item: PrescriptionItem,
   exercises: ReadonlyMap<ID, Exercise>,
   available: ReadonlySet<Equipment>,
+  excludeIds?: ReadonlySet<ID>,
 ): PrescriptionItem | null {
   const direct = directCandidates(item, exercises);
   if (direct.length === 0) return available.size > 0 ? item : null;
-  const compat = direct.filter((e) => isExerciseCompatible(e, available));
+  const compat = direct.filter((e) => isExerciseCompatible(e, available) && !excludeIds?.has(e.id));
   if (compat.length === 0) return null;
   const compatIds = new Set(compat.map((e) => e.id));
   const lower = item.lowerProgressionIds?.filter((id) => {
-    if (compatIds.has(id)) return false;
+    if (compatIds.has(id) || excludeIds?.has(id)) return false;
     const ex = exercises.get(id);
     return Boolean(ex && ex.active && isExerciseCompatible(ex, available));
   });
@@ -224,50 +225,99 @@ function fallbackTargets(
 }
 
 /**
- * Repli d'une ligne Skill quand aucun de ses exercices directs n'est faisable avec le matériel coché :
- * progressions inférieures compatibles de la ligne, autres lignes non prioritaires du même élément dans la séance
- * (Renfo spé), puis exercices actifs compatibles de l'élément dans le catalogue (ex. Victorienne au sol pour Touch FL).
+ * Repli d'une ligne Skill quand aucun de ses exercices directs n'est faisable avec le matériel coché.
+ * Procède par paliers stricts (le premier palier non vide l'emporte, sans mélanger du renfo surélevé avec de vraies
+ * variantes ou progressions de la figure) :
+ * 1. variantes / progressions compatibles de la figure : `lowerProgressionIds` de la ligne, des autres lignes du même
+ *    élément dans la séance (bloc Assisté / progression compris, où figurent Straddle et Adv tuck en novembre) ou dans
+ *    le programme, complétés par les variantes de la figure au catalogue (`isSkillVariant`) ;
+ * 2. sinon, lignes Renfo spé du même élément dans la séance (`absorbedSpecific` pour ne pas les dupliquer ensuite) ;
+ * 3. sinon, exercices actifs compatibles de l'élément au catalogue (ex. Victorienne au sol pour Touch FL).
  */
 function skillFallback(
   item: PrescriptionItem,
   sessionItems: readonly PrescriptionItem[],
+  roleOf: (item: PrescriptionItem) => BlockRole,
   program: PlanContext,
   available: ReadonlySet<Equipment>,
-): PrescriptionItem | null {
+): { item: PrescriptionItem; absorbedSpecific: boolean } | null {
   const { exercises } = program;
-  const picked: { exercise: Exercise; donor: PrescriptionItem | null }[] = [];
-  const seen = new Set<ID>();
-  const add = (ex: Exercise | undefined, donor: PrescriptionItem | null) => {
-    if (!ex || !ex.active || seen.has(ex.id) || !isExerciseCompatible(ex, available)) return;
-    seen.add(ex.id);
-    picked.push({ exercise: ex, donor });
-  };
-  for (const id of item.lowerProgressionIds ?? []) add(exercises.get(id), item);
-  const sameElementSessionLines = sessionItems.filter((other) => other.id !== item.id && other.elementId === item.elementId);
-  for (const other of sameElementSessionLines) {
-    for (const ex of directCandidates(other, exercises)) add(ex, other);
-    for (const id of other.lowerProgressionIds ?? []) add(exercises.get(id), other);
-  }
+  const sameElementSession = sessionItems.filter((other) => other.id !== item.id && other.elementId === item.elementId);
+  const slotLinesWithRoles = programSlots(program).flatMap((s) => {
+    const slotRoles = blockRoles(program.blocks, new Set(s.template.items.map((i) => i.blockTypeId)));
+    return s.template.items
+      .filter((i) => i.elementId === item.elementId)
+      .map((line) => ({ line, role: slotRoles.get(line.blockTypeId) ?? ('other' as BlockRole) }));
+  });
   const catalog = [...exercises.values()]
     .filter((e) => e.active && e.elementId === item.elementId)
     .sort((a, b) => a.order - b.order);
-  for (const ex of catalog) add(ex, null);
-  if (picked.length === 0) return null;
-  const programLines = programSlots(program).flatMap((s) => {
-    const slotRoles = blockRoles(program.blocks, new Set(s.template.items.map((i) => i.blockTypeId)));
-    return s.template.items.filter((i) => {
-      const r = slotRoles.get(i.blockTypeId) ?? 'other';
-      return i.elementId === item.elementId && r !== 'priority' && r !== 'assisted';
+
+  const collect = (
+    fill: (add: (ex: Exercise | undefined, donor: PrescriptionItem | null) => void) => void,
+  ): { exercise: Exercise; donor: PrescriptionItem | null }[] => {
+    const picked: { exercise: Exercise; donor: PrescriptionItem | null }[] = [];
+    const seen = new Set<ID>();
+    fill((ex, donor) => {
+      if (!ex || !ex.active || seen.has(ex.id) || !isExerciseCompatible(ex, available)) return;
+      seen.add(ex.id);
+      picked.push({ exercise: ex, donor });
     });
+    return picked;
+  };
+
+  // Palier 1 : progressions inférieures et variantes de la figure (ex. Straddle planche hold, Adv tuck planche hold sol).
+  // `donor` reste `null` quand l'exercice vient d'un bloc Assisté, pour garder d'abord la cible non assistée du Skill (`3-6 s`).
+  const tier1 = collect((add) => {
+    for (const id of item.lowerProgressionIds ?? []) add(exercises.get(id), item);
+    for (const other of sameElementSession) {
+      const donor = roleOf(other) === 'skill' ? other : null;
+      for (const id of other.lowerProgressionIds ?? []) add(exercises.get(id), donor);
+    }
+    for (const { line, role } of slotLinesWithRoles) {
+      const donor = role === 'skill' ? line : null;
+      for (const id of line.lowerProgressionIds ?? []) add(exercises.get(id), donor);
+    }
+    for (const ex of catalog) {
+      if (isSkillVariant(ex)) add(ex, null);
+    }
   });
-  const { targets, targetText } = fallbackTargets(picked, item, [...sameElementSessionLines, ...programLines]);
+
+  // Palier 2 : exercices des lignes Renfo spé de la séance (si aucune variante de la figure n'est faisable).
+  const specificSession = sameElementSession.filter((other) => roleOf(other) === 'other');
+  const tier2 =
+    tier1.length > 0
+      ? []
+      : collect((add) => {
+          for (const other of specificSession) {
+            for (const ex of directCandidates(other, exercises)) add(ex, other);
+            for (const id of other.lowerProgressionIds ?? []) add(exercises.get(id), other);
+          }
+        });
+
+  // Palier 3 : tout exercice compatible de l'élément au catalogue (ex. Victorienne au sol hold / PU pour Touch FL).
+  const picked = tier1.length > 0 ? tier1 : tier2.length > 0 ? tier2 : collect((add) => catalog.forEach((ex) => add(ex, null)));
+  if (picked.length === 0) return null;
+
+  const donorLines = [
+    ...sameElementSession.filter((i) => roleOf(i) === 'skill'),
+    ...slotLinesWithRoles.filter((x) => x.role === 'skill').map((x) => x.line),
+    ...specificSession,
+    ...slotLinesWithRoles.filter((x) => x.role === 'other').map((x) => x.line),
+    ...sameElementSession.filter((i) => roleOf(i) === 'assisted'),
+    ...slotLinesWithRoles.filter((x) => x.role === 'assisted').map((x) => x.line),
+  ];
+  const { targets, targetText } = fallbackTargets(picked, item, donorLines);
   return {
-    ...item,
-    candidateExerciseIds: picked.map((p) => p.exercise.id),
-    candidatesText: picked.map((p) => p.exercise.name).join(' / '),
-    targets,
-    targetText,
-    lowerProgressionIds: [],
+    item: {
+      ...item,
+      candidateExerciseIds: picked.map((p) => p.exercise.id),
+      candidatesText: picked.map((p) => p.exercise.name).join(' / '),
+      targets,
+      targetText,
+      lowerProgressionIds: [],
+    },
+    absorbedSpecific: tier1.length === 0 && tier2.length > 0,
   };
 }
 
@@ -367,7 +417,7 @@ export function buildExpress(args: {
 
   const practiced = practicedTemplate(args.replaced, { isDeload: args.isDeload, cycleWeek: args.cycleWeek }, program.blocks, settings);
   const plan = buildPlan(practiced, program.blocks, elements);
-  const skillDonorItems = plan.items.filter((i) => roleOf(i) !== 'assisted' && roleOf(i) !== 'priority');
+  const nonPriorityItems = plan.items.filter((i) => roleOf(i) !== 'priority');
   const chosen: PrescriptionItem[] = [];
   const reasons: Record<ID, ExpressReason> = {};
   const adapted: Record<ID, boolean> = {};
@@ -403,7 +453,9 @@ export function buildExpress(args: {
   // 3. Paires du Skill (avec repli par élément si le matériel direct manque, au plus une ligne de repli par élément).
   let shortened = false;
   let keptSkillUnits = 0;
-  const absorbedElements = new Set<ID>();
+  const adaptedSkillElements = new Set<ID>();
+  const absorbedSpecificElements = new Set<ID>();
+  const fallbackExerciseIds = new Set<ID>();
   const rawSkillUnits = plan.units
     .map((unit) => unit.itemIds.map((id) => plan.itemsById.get(id)!).filter((i) => roleOf(i) === 'skill' && isSkill(i) && baseSets(i) > 0))
     .filter((items) => items.length > 0);
@@ -415,15 +467,17 @@ export function buildExpress(args: {
         unitItems.push(direct);
         continue;
       }
-      if (absorbedElements.has(raw.elementId)) {
+      if (adaptedSkillElements.has(raw.elementId)) {
         leftOut.push({ item: raw, why: 'equipment' });
         continue;
       }
-      const fb = skillFallback(raw, skillDonorItems, program, available);
+      const fb = skillFallback(raw, nonPriorityItems, roleOf, program, available);
       if (fb) {
-        absorbedElements.add(raw.elementId);
-        adapted[fb.id] = true;
-        unitItems.push(fb);
+        adaptedSkillElements.add(raw.elementId);
+        if (fb.absorbedSpecific) absorbedSpecificElements.add(raw.elementId);
+        for (const id of fb.item.candidateExerciseIds) fallbackExerciseIds.add(id);
+        adapted[fb.item.id] = true;
+        unitItems.push(fb.item);
       } else {
         leftOut.push({ item: raw, why: 'equipment' });
       }
@@ -451,13 +505,18 @@ export function buildExpress(args: {
     else leftOut.push(...unitItems.map((item) => ({ item, why: 'time' as const })));
   }
 
-  // 4. Renfo spé (sans dupliquer un élément déjà absorbé en repli Skill), 5. Skill assisté.
+  // 4. Renfo spé (sans dupliquer les exercices déjà passés en repli Skill), 5. Skill assisté.
   const specific: PrescriptionItem[] = [];
   for (const raw of plan.items.filter((i) => roleOf(i) === 'other' && isSkill(i) && baseSets(i) > 0)) {
-    if (absorbedElements.has(raw.elementId)) continue;
-    const filtered = filterItemDirect(raw, program.exercises, available);
-    if (filtered) specific.push(fixed(filtered, baseSets(filtered)));
-    else leftOut.push({ item: raw, why: 'equipment' });
+    if (absorbedSpecificElements.has(raw.elementId)) continue;
+    const compatCheck = filterItemDirect(raw, program.exercises, available);
+    if (!compatCheck) {
+      leftOut.push({ item: raw, why: 'equipment' });
+      continue;
+    }
+    const trimmed = fallbackExerciseIds.size > 0 ? filterItemDirect(raw, program.exercises, available, fallbackExerciseIds) : compatCheck;
+    if (!trimmed) continue;
+    specific.push(fixed(trimmed, baseSets(trimmed)));
   }
   if (specific.length > 0 && !shortened && used + cost(specific) <= budget) take(specific, 'specific');
   else leftOut.push(...specific.map((item) => ({ item, why: 'time' as const })));

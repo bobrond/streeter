@@ -462,20 +462,24 @@ describe('buildExpress : matériel disponible', () => {
     const missingIds = res.leftOut.filter((l) => l.why === 'equipment').flatMap((l) => l.item.candidateExerciseIds);
     expect(missingIds).toEqual(expect.arrayContaining([carsBar.id, leanUpEx.id, negEx.id, pnEx.id, flPuEx.id]));
 
-    // Skill : une seule ligne adaptée pour Planche et une seule pour Touch FL (la 2e paire n'est pas dupliquée).
+    // Skill : Planche retombe uniquement sur ses vraies variantes au sol (Straddle, Adv tuck), sans mélanger le renfo surélevé ;
+    // Touch FL retombe sur la Victorienne au sol ; une seule ligne adaptée par élément (la 2e paire n'est pas dupliquée).
     const skillItems = res.template.items.filter((i) => i.blockTypeId === skill.id);
     expect(skillItems).toHaveLength(2);
     const [plItem, flItem] = skillItems;
     expect(res.adapted[plItem.id]).toBe(true);
-    expect(plItem.candidateExerciseIds).toEqual([stradHold.id, leanSur.id, advTuck.id]);
-    expect(plItem.targetText).toBe('3-6 s ou 5-8 reps');
+    expect(plItem.candidateExerciseIds).toEqual([stradHold.id, advTuck.id]);
+    expect(plItem.targetText).toBe('3-6 s');
 
     expect(res.adapted[flItem.id]).toBe(true);
     expect(flItem.candidateExerciseIds).toEqual([vicHold.id, vicPu.id]);
     expect(flItem.targetText).toBe('8-15 s ou 8-10 reps');
 
-    // Renfo spé déjà absorbé : aucune ligne specific en doublon.
-    expect(res.template.items.filter((i) => i.blockTypeId === specific.id)).toEqual([]);
+    // Renfo spé : Planche garde uniquement Planche lean surélevé press (Adv tuck est déjà passé en Skill, sans doublon).
+    const specificItems = res.template.items.filter((i) => i.blockTypeId === specific.id);
+    expect(specificItems).toHaveLength(1);
+    expect(specificItems[0].candidateExerciseIds).toEqual([leanSur.id]);
+    expect(specificItems[0].targetText).toBe('5-8 reps');
 
     // Composantes : Rhomboïde garde uniquement Reverse planche PU (sol) ; Grand dentelé (élastique seul) est bloqué par matériel.
     const rhomboComp = res.components.find((c) => c.elementId === rhomboide.id)!;

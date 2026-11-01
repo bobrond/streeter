@@ -10,9 +10,10 @@ import { practicedTemplate } from '../../domain/deload';
 import { ensureFloorVictorianExercises } from '../../domain/equipment';
 import { buildExpress } from '../../domain/express';
 import { sequenceDayInfo, sequenceIds } from '../../domain/sequence';
+import { defaultExerciseId } from '../../domain/session';
 import type { Program, SessionTemplate } from '../../domain/types';
 import { plannedComponentVolume, programIssues } from '../../domain/volume';
-import { appSettings, program, sessionLog } from '../../test/builders';
+import { appSettings, program, sessionLog, setLog } from '../../test/builders';
 import { buildImport, emptyExisting } from '../xlsx/importWorkbook';
 import { readWorkbook } from '../xlsx/readWorkbook';
 import { readProgramFile, type ProgramImport, type ProgramImportContext } from './programFile';
@@ -246,14 +247,13 @@ describe.skipIf(![XLSX_FILE, V1, V2].every((f) => existsSync(f)))('programme de 
     expect(practiced.items.filter((i) => lines.includes(i.id)).map((i) => i.setsMin)).toEqual([1, 1, 1]);
   });
 
-  it('séance express sur le programme de novembre : s’adapte au sol seul (Victorienne au sol, planches sol, sans lean-up)', () => {
+  it('séance express sur le programme de novembre (Séance type et Combo libre) : remplace le Travail principal Planche par Straddle et Adv tuck au sol, jamais par planche surélevée', () => {
     const ctx = setup();
     const v2 = read(V2, { ...ctx, today: '2026-10-31', currentWeek: 5 });
     const after = applied(ctx, v2);
     const exercises = ensureFloorVictorianExercises(after.exercises, after.elements, newId);
     const exById = new Map(exercises.map((e) => [e.id, e]));
     const blockById = new Map(after.blockTypes.map((b) => [b.id, b]));
-    const st = v2.templates.find((t) => t.name === 'Séance type')!;
     const plan = {
       weekPlan: v2.program.weekPlan,
       templates: new Map(v2.templates.map((t) => [t.id, t])),
@@ -262,30 +262,46 @@ describe.skipIf(![XLSX_FILE, V1, V2].every((f) => existsSync(f)))('programme de 
       exercises: exById,
       sequence: true,
     };
-    const express = buildExpress({
-      minutes: 30,
-      replaced: st,
-      name: 'Express 30 min · Séance type',
-      isDeload: false,
-      cycleWeek: 1,
-      program: plan,
-      settings: { ...app, ...v2.program },
-      needs: [],
-      equipment: new Set(['floor']),
-      newId,
-    });
-    const blockNames = express.template.items.map((i) => blockById.get(i.blockTypeId)?.name);
-    expect(blockNames).not.toContain('Travail prioritaire');
-    const mainItems = express.template.items.filter((i) => blockById.get(i.blockTypeId)?.name === 'Travail principal');
-    expect(mainItems).toHaveLength(2);
-    const flLine = mainItems.find((i) => after.elements.find((e) => e.id === i.elementId)?.name === 'Touch FL')!;
-    expect(flLine.candidateExerciseIds.map((id) => exById.get(id)?.name)).toEqual(['Victorienne au sol hold', 'Victorienne au sol PU']);
-    expect(flLine.targetText).toBe('8-15 s ou 8-10 reps');
-    const plLine = mainItems.find((i) => after.elements.find((e) => e.id === i.elementId)?.name === 'Planche')!;
-    const plNames = plLine.candidateExerciseIds.map((id) => exById.get(id)?.name);
-    expect(plNames).toContain('Straddle planche hold');
-    expect(plNames).toContain('Adv tuck planche hold sol');
-    expect(plNames).not.toContain('Planche Hold');
-    expect(plNames).not.toContain('Planche lean-up');
+    const surEx = exercises.find((e) => e.name === 'Planche lean surélevé hold to press')!;
+    const advEx = exercises.find((e) => e.name === 'Adv tuck planche hold sol')!;
+    const renfoBlock = after.blockTypes.find((b) => b.name === 'Renfo skill')!;
+    // Même si Planche lean surélevé a été faite plus récemment dans l'historique, elle ne doit jamais apparaître en Travail principal.
+    const history = [
+      setLog({ sessionId: 's-old', itemId: 'it-adv', blockTypeId: renfoBlock.id, elementId: advEx.elementId, exerciseId: advEx.id, value: 10 }),
+      setLog({ sessionId: 's-recent', itemId: 'it-sur', blockTypeId: renfoBlock.id, elementId: surEx.elementId, exerciseId: surEx.id, value: 6 }),
+    ];
+
+    for (const templateName of ['Séance type', 'Combo libre']) {
+      const replaced = v2.templates.find((t) => t.name === templateName)!;
+      const express = buildExpress({
+        minutes: 30,
+        replaced,
+        name: `Express 30 min · ${templateName}`,
+        isDeload: false,
+        cycleWeek: 1,
+        program: plan,
+        settings: { ...app, ...v2.program },
+        needs: [],
+        equipment: new Set(['floor', 'band', 'dumbbell']),
+        newId,
+      });
+      const blockNames = express.template.items.map((i) => blockById.get(i.blockTypeId)?.name);
+      expect(blockNames, templateName).not.toContain('Travail prioritaire');
+      const mainItems = express.template.items.filter((i) => blockById.get(i.blockTypeId)?.name === 'Travail principal');
+      expect(mainItems, templateName).toHaveLength(2);
+      const flLine = mainItems.find((i) => after.elements.find((e) => e.id === i.elementId)?.name === 'Touch FL')!;
+      expect(flLine.candidateExerciseIds.map((id) => exById.get(id)?.name), templateName).toEqual([
+        'Victorienne au sol hold',
+        'Victorienne au sol PU',
+      ]);
+      expect(flLine.targetText, templateName).toBe('8-15 s ou 8-10 reps');
+
+      const plLine = mainItems.find((i) => after.elements.find((e) => e.id === i.elementId)?.name === 'Planche')!;
+      const plNames = plLine.candidateExerciseIds.map((id) => exById.get(id)?.name);
+      expect(plNames, templateName).toEqual(['Straddle planche hold', 'Adv tuck planche hold sol']);
+      expect(plLine.targetText, templateName).toBe('3-6 s');
+      const shownId = defaultExerciseId(plLine, plLine.candidateExerciseIds, [], history);
+      expect(exById.get(shownId!)?.name, templateName).toBe('Adv tuck planche hold sol');
+    }
   });
 });

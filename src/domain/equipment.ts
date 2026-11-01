@@ -124,6 +124,19 @@ export function isFloorVictorian(exercise: Pick<Exercise, 'name' | 'aliases'>): 
   return [exercise.name, ...exercise.aliases].some((n) => /\bvictorienne\b/.test(nameKey(n)));
 }
 
+/**
+ * Vrai si un exercice rattaché à un skill est une variante ou progression de la figure elle-même (ex. Straddle planche
+ * hold, Adv tuck planche hold sol), par opposition à un exercice de renforcement spécifique (lean / PU pieds surélevés,
+ * pseudo FL mur, Victorienne au sol). Sert à privilégier les vraies variantes de la figure en repli du bloc Skill.
+ */
+export function isSkillVariant(exercise: Pick<Exercise, 'name' | 'category'>): boolean {
+  const name = nameKey(exercise.name);
+  const cat = nameKey(exercise.category);
+  if (/\b(sureleve|victorienne|pseudo)\b/.test(name)) return false;
+  if (/\bplanche hold\b/.test(name) && !/\blean\b/.test(name)) return true;
+  return !/\brenfo\b/.test(cat);
+}
+
 const VICTORIAN_SPECS: readonly {
   name: string;
   measure: 'seconds' | 'reps';
