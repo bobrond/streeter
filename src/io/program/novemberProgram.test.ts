@@ -4,7 +4,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { sequenceDayInfo } from '../../domain/sequence';
+import { convertToComponents } from '../../domain/componentConversion';
+import { distributeComponents, slotKey } from '../../domain/components';
+import { practicedTemplate } from '../../domain/deload';
+import { sequenceDayInfo, sequenceIds } from '../../domain/sequence';
 import type { Program, SessionTemplate } from '../../domain/types';
 import { plannedComponentVolume, programIssues } from '../../domain/volume';
 import { appSettings, program, sessionLog } from '../../test/builders';
@@ -174,5 +177,70 @@ describe.skipIf(![XLSX_FILE, V1, V2].every((f) => existsSync(f)))('programme de 
     const warmup = (t: SessionTemplate) => t.items.filter((i) => blockName(i.blockTypeId) === 'Échauffement');
     expect(warmup(combo)).toEqual(warmup(st));
     expect(warmup(st)).toHaveLength(4);
+  });
+
+  it('H2 : novembre converti en composantes réparties, avec la répartition décidée avec l’utilisateur', () => {
+    const ctx = setup();
+    const v2 = read(V2, { ...ctx, today: '2026-10-31', currentWeek: 5 });
+    const after = applied(ctx, v2);
+    const byName = (name: string) => v2.templates.find((t) => t.name === name)!;
+    const st5 = byName('Séance type 5 (force en bonus)');
+    const conversion = convertToComponents(v2.program, v2.templates, after.elements, { newId, usedTemplateIds: new Set([st5.id]) })!;
+    const elementName = (id: string) => after.elements.find((e) => e.id === id)?.name;
+    const p = conversion.program;
+    expect(p.components.map((c) => [elementName(c.elementId), c.setsPerSession, c.restText])).toEqual([
+      ['Grand dentelé', 2, '60 s'],
+      ['Rhomboïde', 2, '60 s'],
+      ['Deltoïde ant', 2, '2-3 min'],
+      ['Extension thoracique', 2, '2-3 min'],
+    ]);
+    expect(after.blockTypes.find((b) => b.id === p.componentBlockTypeId)?.name).toBe('Renfo composante');
+    const typeName = (id: string) => after.sessionTypes.find((t) => t.id === id)?.name;
+    expect(Object.fromEntries(Object.entries(p.componentAcceptance).map(([id, a]) => [typeName(id), a]))).toEqual({ 'Séance type': 'all', 'Combo libre': 'endurance', Matin: 'endurance' });
+    // « Séance type 5 » disparaît : elle a servi, elle est archivée.
+    expect(conversion.merged.map((m) => [m.template.name, m.into.name, m.archive])).toEqual([['Séance type 5 (force en bonus)', 'Séance type', true]]);
+    const templates = new Map([...v2.templates.filter((t) => t.id !== st5.id), ...conversion.templates].map((t) => [t.id, t]));
+    expect(templates.get(st5.id)).toMatchObject({ archived: true, sharedBlocks: {} });
+    const templateName = (id: string) => templates.get(id)?.name;
+    expect(sequenceIds(p.weekPlan, 'evening').map(templateName)).toEqual(['Séance type', 'Combo libre', 'Séance type', 'Combo libre', 'Séance type']);
+    expect(sequenceIds(p.weekPlan, 'morning').map(templateName)).toEqual(['Matin', 'Matin']);
+    expect(conversion.removedLines).toBe(12);
+    const components = new Set(p.components.map((c) => c.elementId));
+    expect([...templates.values()].filter((t) => !t.archived).some((t) => t.items.some((i) => components.has(i.elementId)))).toBe(false);
+
+    const d = distributeComponents({ ...app, ...p }, templates);
+    const at = (day: 1 | 2 | 3 | 4 | 5, moment: 'evening' | 'morning' = 'evening') => (d.bySlot.get(slotKey(day, moment)) ?? []).map((c) => elementName(c.elementId));
+    expect([at(1), at(2), at(3), at(4), at(5), at(1, 'morning'), at(2, 'morning')]).toEqual([
+      ['Grand dentelé', 'Deltoïde ant', 'Extension thoracique'],
+      ['Grand dentelé', 'Rhomboïde'],
+      ['Rhomboïde', 'Deltoïde ant', 'Extension thoracique'],
+      ['Grand dentelé', 'Rhomboïde'],
+      ['Grand dentelé', 'Rhomboïde'],
+      ['Grand dentelé'],
+      ['Rhomboïde'],
+    ]);
+    // Volume prévu : 10, 10, 4, 4 ; plus aucun contrôle de volume (14 au lieu de 10 avant).
+    const plan = {
+      weekPlan: p.weekPlan,
+      templates,
+      elements: after.elements,
+      blocks: new Map(after.blockTypes.map((b) => [b.id, b])),
+      exercises: new Map(after.exercises.map((e) => [e.id, e])),
+      sequence: true,
+      componentPlan: p,
+    };
+    const settings = { ...app, ...p };
+    expect(Object.fromEntries(plannedComponentVolume(plan, settings).map((r) => [elementName(r.elementId), [r.eveningGuaranteed, r.totalMax]]))).toEqual({
+      'Grand dentelé': [8, 10],
+      Rhomboïde: [8, 10],
+      'Deltoïde ant': [4, 4],
+      'Extension thoracique': [4, 4],
+    });
+    expect(programIssues(plan, settings).filter((i) => i.kind === 'component_volume')).toEqual([]);
+    // Tranche allégée : 1 série par séance au lieu de 2.
+    const st = templates.get(p.weekPlan[1].evening!)!;
+    const lines = d.bySlot.get(slotKey(1, 'evening'))!.map((c) => c.id);
+    const practiced = practicedTemplate({ ...st, items: [...st.items, ...lines.map((id) => ({ ...st.items[0], id, blockTypeId: p.componentBlockTypeId!, setsMin: 2, setsMax: 2 }))] }, { cycleWeek: 4, isDeload: true }, plan.blocks, settings);
+    expect(practiced.items.filter((i) => lines.includes(i.id)).map((i) => i.setsMin)).toEqual([1, 1, 1]);
   });
 });

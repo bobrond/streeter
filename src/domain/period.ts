@@ -1,5 +1,6 @@
 // Période du volume : une semaine en semaine type, une tranche en séquence. Séances de la période et avancement de
 // ses séances prévues (jours J1-J7, ou positions de la tranche), pour les jauges et les séries encore prévues.
+import { slotComponentLines, type ComponentPlan } from './components';
 import { morningsHidden } from './deload';
 import { projectedDate, sequenceIds, sequenceState } from './sequence';
 import type { ID, SessionLog, SessionTemplate, Settings } from './types';
@@ -19,7 +20,7 @@ export interface PeriodView extends VolumePeriod {
 export function weekPeriod(
   week: number,
   today: string,
-  settings: CycleSettings & Pick<Settings, 'weekPlan' | 'hideMorningsInDeload'>,
+  settings: CycleSettings & Pick<Settings, 'weekPlan' | 'hideMorningsInDeload'> & Partial<ComponentPlan>,
   templatesById: ReadonlyMap<ID, SessionTemplate>,
   sessions: readonly SessionLog[],
 ): PeriodView {
@@ -36,7 +37,7 @@ export function weekPeriod(
 export function tranchePeriod(
   tranche: number,
   today: string,
-  settings: Pick<Settings, 'weekPlan' | 'hideMorningsInDeload' | 'cycleLengthWeeks' | 'deloadWeek'>,
+  settings: Pick<Settings, 'weekPlan' | 'hideMorningsInDeload' | 'cycleLengthWeeks' | 'deloadWeek'> & Partial<ComponentPlan>,
   templatesById: ReadonlyMap<ID, SessionTemplate>,
   sessions: readonly SessionLog[],
 ): PeriodView {
@@ -48,6 +49,7 @@ export function tranchePeriod(
   const isDeload = cycleWeek === settings.deloadWeek;
   const inTranche = sessions.filter((s) => state.trancheOf.get(s.id) === tranche);
   const morningSessions = inTranche.filter((s) => s.moment === 'morning').sort((a, b) => a.date.localeCompare(b.date) || (a.startedAt ?? 0) - (b.startedAt ?? 0));
+  const linesAt = (seqDay: DayProgress['seqDay'], moment: 'morning' | 'evening') => slotComponentLines(settings as ComponentPlan, templatesById, seqDay, moment);
   const days: DayProgress[] = [];
   for (let k = 0; k < Math.max(n, mornings.length, morningSessions.length); k++) {
     const index = tranche * n + k;
@@ -58,8 +60,8 @@ export function tranchePeriod(
       if (logged.some((s) => s.status === 'done')) status = 'done';
       else if (logged.some((s) => s.status === 'in_progress')) status = 'in_progress';
       else status = index === state.done ? 'today' : index > state.done ? 'upcoming' : 'missed';
-      evening = { moment: 'evening', planned: templatesById.get(evenings[k]) ?? null, sessions: logged, status };
-    } else evening = { moment: 'evening', planned: null, sessions: [], status: 'none' };
+      evening = { moment: 'evening', planned: templatesById.get(evenings[k]) ?? null, components: linesAt((k + 1) as DayProgress['seqDay'], 'evening'), sessions: logged, status };
+    } else evening = { moment: 'evening', planned: null, components: [], sessions: [], status: 'none' };
     const morningLogged = morningSessions[k] ? [morningSessions[k]] : [];
     const morningPlanned = templatesById.get(mornings[k] ?? '') ?? null;
     let morningStatus: SlotStatus = 'none';
@@ -70,7 +72,16 @@ export function tranchePeriod(
       seqDay: Math.min(7, k + 1) as DayProgress['seqDay'],
       date,
       isToday: evening.sessions.some((s) => s.date === today),
-      slots: { evening, morning: { moment: 'morning', planned: morningPlanned, sessions: morningLogged, status: morningStatus } },
+      slots: {
+        evening,
+        morning: {
+          moment: 'morning',
+          planned: morningPlanned,
+          components: morningPlanned && k < 7 ? linesAt((k + 1) as DayProgress['seqDay'], 'morning') : [],
+          sessions: morningLogged,
+          status: morningStatus,
+        },
+      },
     });
   }
   return { kind: 'tranche', number: tranche, days, sessionIds: new Set(inTranche.map((s) => s.id)), isDeload };

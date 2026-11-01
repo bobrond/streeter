@@ -179,6 +179,7 @@ export function CycleScreen({ data, programId }: { data: AppData; programId: str
           />
           <NumberSetting label={`Maximum par ${period}`} hint="Soir + matins, optionnels compris." unit="séries" value={settings.volumeMax} min={settings.volumeMin} max={50} onChange={(v) => save({ volumeMax: v })} />
           <p className="text-sm text-ink-2">Type de travail d’une composante : ses propres bornes pour ce programme (endurance 8-10, force 4-6…).</p>
+          {settings.components.length > 0 && <p className="text-sm text-ink-2">Composantes réparties par l’appli : leurs bornes se règlent aussi dans Programmes › Composantes, avec leur répartition.</p>}
           {componentElements(data.elements).map((element) => (
             <ComponentVolumeRow key={element.id} element={element} settings={settings} onChange={(next) => setVolume(element.id, next)} />
           ))}

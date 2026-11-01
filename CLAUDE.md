@@ -128,11 +128,37 @@ Décidé avec l'utilisateur :
 - Répartition fixe ; seule la séance express s'adapte à ce qui a été fait.
 - Novembre converti dès que la répartition est prête : « Séance type 5 » disparaît.
 - Agent en suspens : pas de format programme version 3, G3 attend aussi. Repères par tranche et progressions inférieures restent modifiables par le fichier seulement (pas nécessaire dans l'éditeur).
+- Une autre séance faite à une place (« Choisir une séance », autre séance de la séquence) reçoit **toutes** les composantes de cette place, force comprise, même si son type ne les accepte pas (décidé le 01/11/2026).
+- Une séance du soir optionnelle (comme Technique léger) complète jusqu'au maximum, comme un matin ; elle ne porte pas le minimum (décidé le 01/11/2026).
 
 Phases :
 
 - **H1, blocs communs** (livrée le 01/11/2026, v1.10.0) : schéma Dexie v7, format de sauvegarde 7. Voir ci-dessous.
-- **H2, composantes réparties** : composantes du programme (travail force ou endurance, volume par tranche, séries par séance, exercices et prescription), réglage par type de séance, répartition fixe et aperçu de la tranche dans Programmes, conversion de novembre ; jauges, séries encore prévues et séance express s'appuient dessus.
+- **H2, composantes réparties** (livrée le 01/11/2026, v1.11.0) : schéma Dexie v8, format de sauvegarde 8, format programme JSON inchangé (version 2). Voir « Composantes réparties ».
+
+Composantes réparties (depuis H2, [src/domain/components.ts](src/domain/components.ts), [src/domain/componentConversion.ts](src/domain/componentConversion.ts), [src/features/programs/ComponentsScreen.tsx](src/features/programs/ComponentsScreen.tsx)) :
+
+- **Données** (par programme, dans `ProgramConfig`, donc aussi dans `Settings`) : `components` (une fiche par composante : séries par séance, exercices au choix, cible, intensité, repos, note), `componentBlockTypeId` (bloc de leurs lignes) et `componentAcceptance` (par type de séance : `all`, `endurance`, `none` ; absent = toutes). Bornes et type de travail : `componentVolumes` (sinon `volumeMin` / `volumeMax`), comme avant H2. Un programme sans composante (octobre, programmes passés) garde ses lignes écrites et se calcule comme avant.
+- **Répartition** (`distributeComponents`, gardée en cache par `componentDistribution`), rien n'est stocké. Créneaux = ceux du `weekPlan` (J1-J7 matin / soir en semaine type ; positions 1…n et matins 1…m en séquence) :
+  1. les soirs obligatoires font le minimum, en séances complètes (minimum 5 et 2 séries par séance → 6), jamais au-delà du maximum ;
+  2. les matins et les soirs optionnels complètent jusqu'au maximum, en séances complètes, sans le dépasser ;
+  3. à chaque étape, la répartition la plus équilibrée (plus petite somme des carrés des séries de composantes par séance, recherche exhaustive élaguée) ; à équilibre égal, les composantes qui ont le moins de séances possibles d'abord, puis l'ordre du programme, chacune au plus tôt. On retrouve exactement la répartition de novembre ci-dessus (test d'acceptation sur le vrai fichier).
+- **Lignes** : créées au moment de pratiquer (`slotComponentLines`, `withComponents`), dans le bloc des composantes, identifiant = celui de la fiche (dernière performance et exercice par défaut comme une ligne écrite), séries min = max = séries par séance ; obligatoires le soir, optionnelles dans un matin ou un soir optionnel. Ensuite repères par tranche et allègement comme toute ligne : tranche allégée de novembre, 2 → 1 série par séance.
+- **Branchements** : `SlotProgress.components` (semaine et tranche), `Planned.slotted` (Aujourd'hui), `startTemplate` (la séance démarrée reçoit les composantes de sa place, à son moment ; matin en séquence : `SequenceDay.morningDay`), `PlanContext.componentPlan` et `programSlots` (volume prévu, totaux, contrôles, séance express). Les contrôles vérifient chaque créneau (une même séance change d'une place à l'autre). Séance express : la ligne d'une composante vient de la répartition.
+- **Conversion** (`convertToComponents`, `applyComponentConversion`, `restoreProgram`) : programme en cours ou à venir dont les composantes sont écrites. Prescription = première ligne obligatoire d'un soir obligatoire (ordre du déroulé, puis matins, puis le reste), séries par séance = son minimum ; réglage de chaque type d'après ses lignes (aucune ligne → aucune ; endurance seulement → endurance seulement ; sinon toutes) ; lignes de composantes retirées ; séances devenues identiques (type, moment, optionnelle, notes, lignes) fusionnées dans la première du déroulé, archivées si elles ont servi, supprimées sinon. Aperçu complet avant de valider, « Annuler » après. Novembre : 12 lignes retirées, Séance type 5 archivée, séquence Séance type, Combo libre, Séance type, Combo libre, Séance type ; Séance type toutes, Combo libre et Matin endurance seulement.
+- **Écrans** :
+  - Programmes : composantes de chaque séance et de chaque matin du déroulé (« Grand dentelé 2 »), durée et lignes avec elles ; « composantes : … » dans Séances ; section Composantes (résumé, « Modifier et voir la répartition ») ou carte « Répartir les composantes » ; ⋯ du programme › Composantes.
+  - `/programs/components` (`?programme=`) : une carte par composante (feuille : composante, travail, volume min / max par tranche, séries par séance, exercices, cible, RPE, repos, notes ; « Retirer de la répartition » avec « Annuler »), « Ajouter une composante », ce que chaque type accepte (puces), tableau de répartition d'une tranche (soirs, total du soir, matins, total, volume) avec ses remarques (minimum atteint, composantes sous le maximum faute de matin qui les accepte, tranche allégée).
+  - Éditeur de séance : encadré du bloc des composantes « Réparti par l'appli » (puces du type, ce que la séance reçoit à chaque place, lien vers Composantes).
+  - Export pour l'agent : signale que le format version 2 ne décrit pas les composantes réparties (seuls leurs volumes). Réglages › Cycle : renvoi vers Composantes.
+- Choix sans l'utilisateur, à valider à l'usage :
+  - réglage « accepte » par programme et par type de séance (et non sur le type, commun à tous les programmes) ;
+  - équilibre d'abord (somme des carrés), « au plus tôt » seulement à équilibre égal ;
+  - lignes de composantes optionnelles dans un matin, comme novembre avant H2 ;
+  - une ligne de composante écrite à la main dans une séance compte en plus de la répartition ;
+  - conversion à la demande, avec aperçu (pas à la migration) ; programmes passés jamais convertis ;
+  - prescription tirée de la première ligne obligatoire d'un soir obligatoire ; nouvelle composante : endurance, bornes par défaut, 2 séries par séance ;
+  - un import qui remplace un programme garde ses composantes réparties ; « Dupliquer pour la suite » les copie sous de nouveaux identifiants.
 
 Blocs communs (depuis H1, [src/domain/blocks.ts](src/domain/blocks.ts), [src/features/programs/BlockSheets.tsx](src/features/programs/BlockSheets.tsx)) :
 
@@ -245,7 +271,7 @@ Onglet Programmes ([src/features/programs/](src/features/programs/)). Un program
 
 - **Adresses** :
   - `/programs` : programme actif ; `/programs?vue=exercices` : bibliothèque (`&nature=skills|composantes|autres`, `&element=…`) ;
-  - `/programs/template/:id` : éditeur de modèle ; `/programs/week` : les 14 créneaux et le volume prévu ;
+  - `/programs/template/:id` : éditeur de modèle ; `/programs/week` : les 14 créneaux et le volume prévu ; `/programs/components` : composantes réparties (`?programme=:id`) ;
   - `/programs/exercise/:id` : fiche (celle de l'Historique, [src/features/journal/ExerciseDetail.tsx](src/features/journal/ExerciseDetail.tsx)) ; `/programs/exercise/:id/edit` et `/programs/exercise/new` : éditeur ;
   - les anciennes adresses `/settings/templates…`, `/settings/exercises…` et `/settings/week` redirigent.
 - **Programme actif** : J1 à J7 en cartes ; aujourd'hui en orange (bordure, case du jour pleine, « auj. »).
@@ -325,7 +351,7 @@ Onglet Progression : Skills ([src/features/objectives/](src/features/objectives/
 - Quand ça ne tient pas : le Renfo spé est retiré d'abord, puis les dernières paires du Skill. La dernière paire qui rentre peut perdre des séries, au moins 2 ; la première paire est toujours là, à 2 séries s'il le faut (ces deux bornes : choix sans l'utilisateur).
 - Semaine allégée : lignes reprises allégées ; minimum des composantes = séries min allégées des soirs obligatoires de la semaine type (`deloadEveningGuaranteed`, 2 par composante aujourd'hui) ; pas de bonus.
 - Durée : la borne haute de l'estimation (repos maximum, exercice le plus long) tient dans la durée choisie, comme pour le contrôle des matins.
-- Lignes : prescription de la séance remplacée (exercices, cible, intensité, repos), séries fixes (min = max). Une composante reprend la ligne de la séance remplacée, sinon celle d'un soir de la semaine type, sinon celle d'un matin, sans superset ni option (choix sans l'utilisateur).
+- Lignes : prescription de la séance remplacée (exercices, cible, intensité, repos), séries fixes (min = max). Une composante reprend la ligne de la séance remplacée, sinon celle d'un soir de la semaine type, sinon celle d'un matin, sans superset ni option (choix sans l'utilisateur) ; composantes réparties (H2) : la ligne de la répartition, donc la prescription de la composante.
 - Aperçu avant de démarrer (feuille `ExpressSheet`) : séries par ligne (0 = retirée), durée estimée en direct (orange au-delà de la durée choisie), autre durée ou autre séance remplacée (régénère), ce qui n'est pas repris et pourquoi.
 - Enregistrement : `SessionLog.expressMinutes` = la durée, `templateId` = la séance remplacée, `templateSnapshot` = la séance générée, nommée « Express 30 min · Combo » (type de la séance remplacée). Elle prend le type, la couleur et le créneau de la séance remplacée : le créneau compte comme fait. L'export du journal la signale (« Séance express (30 min) »).
 - Choix sans l'utilisateur, à valider à l'usage :
@@ -433,7 +459,7 @@ Saisis par l'utilisateur dans Réglages, absents du tableur : **ne plus réimpor
 - Composantes (liste éditable) : grand dentelé, rhomboïde, deltoïde antérieur, extension thoracique.
 - Bornes paramétrables : 4 à 6 séries par composante et par semaine.
 - Le **soir garantit le minimum** à lui seul ; le **matin est un bonus** jusqu'au maximum ; sauter un matin ne fait jamais passer sous le minimum.
-- Prévu : somme sur la semaine type des séries des lignes dont l'élément est la composante, quel que soit le bloc, séparée soir / matin.
+- Prévu : somme sur la semaine type des séries des lignes dont l'élément est la composante, quel que soit le bloc, séparée soir / matin ; avec des composantes réparties (H2), les lignes de la répartition comptent comme des lignes écrites.
   - **Minimum garanti** (décidé) = Σ séries **min** des lignes obligatoires des séances du soir obligatoires.
   - **Contrôle du maximum** = Σ séries **max** de toutes les lignes, soir + matin, optionnelles comprises.
   - Le tableur additionne la colonne Séries max et filtre sur le bloc « Renfo composantes » : même résultat avec le programme actuel.
@@ -490,11 +516,15 @@ PrescriptionItem { id, blockTypeId, elementId, candidateExerciseIds, candidatesT
                    restText, restMinSec, restMaxSec, superset, optional, notes,
                    byTranche? /* { [tranche]: { setsMin?, setsMax?, targetText?, targets?, intensityText?, intensity? } } */,
                    lowerProgressionIds? }
+ProgramComponent { id /* = id de ses lignes */, elementId, setsPerSession, candidateExerciseIds, candidatesText, targetText,
+                   targets, intensityText, intensity, restText, restMinSec, restMaxSec, notes }
 AppSettings      { id: 'settings', cycleStartDate, avgWorkSecPerSet, freeRestSec, lastBackupAt }
 Program          { id, name, startWeek, notes, objectiveIds, createdAt, schedule: 'week' | 'sequence',
                    startDate /* séquence */, cycleLengthWeeks /* semaines ou tranches */, deloadWeek,
                    deloadReductionPct, hideMorningsInDeload, volumeMin, volumeMax,
                    componentVolumes: { elementId, work, min, max }[], morningMaxMinutes,
+                   components: ProgramComponent[] /* composantes réparties */, componentBlockTypeId,
+                   componentAcceptance: { [sessionTypeId]: 'all' | 'endurance' | 'none' },
                    weekPlan: { 1…7: { morning: templateId | null, evening: templateId | null } } }
 Settings         = AppSettings + réglages du programme en vigueur + { programId, programStartWeek } (calculé, non stocké)
 SessionLog       { id, date, week, cycleWeek, seqDay, moment, templateId, templateSnapshot, sessionTypeId,
@@ -505,7 +535,7 @@ SetLog           { id, sessionId, itemId, blockTypeId, elementId, exerciseId, se
 Objective        { id, name, criterion, target, unit, exerciseId, order, tests: { id, date, value, note }[] }
 ```
 
-- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`) ; 4 (17/10/2026) ajoute `SessionLog.expressMinutes` (`null` sur les séances existantes) ; 5 (27/10/2026) ajoute la table `programs` (index `startWeek`) et l'index `templates.programId` : un premier programme (semaine 1, nommé d'après le mois de `cycleStartDate`, tous les objectifs) reprend les réglages du cycle, du volume, des matins et la semaine type, retirés de `settings` ; modèles et copies figées reçoivent son `programId` ; 6 (28/10/2026) ajoute `Program.schedule` (`week`), `startDate` (`null`) et `componentVolumes` (`[]`) ; 7 (01/11/2026) ajoute `SessionTemplate.sharedBlocks` : les blocs identiques des modèles non archivés d'un même programme deviennent communs (lignes du premier modèle, identifiants compris), `{}` sur les copies figées.
+- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`) ; 4 (17/10/2026) ajoute `SessionLog.expressMinutes` (`null` sur les séances existantes) ; 5 (27/10/2026) ajoute la table `programs` (index `startWeek`) et l'index `templates.programId` : un premier programme (semaine 1, nommé d'après le mois de `cycleStartDate`, tous les objectifs) reprend les réglages du cycle, du volume, des matins et la semaine type, retirés de `settings` ; modèles et copies figées reçoivent son `programId` ; 6 (28/10/2026) ajoute `Program.schedule` (`week`), `startDate` (`null`) et `componentVolumes` (`[]`) ; 7 (01/11/2026) ajoute `SessionTemplate.sharedBlocks` : les blocs identiques des modèles non archivés d'un même programme deviennent communs (lignes du premier modèle, identifiants compris), `{}` sur les copies figées ; 8 (01/11/2026) ajoute `Program.components` (`[]`), `componentBlockTypeId` (`null`) et `componentAcceptance` (`{}`) : les programmes existants gardent leurs composantes écrites.
 - `SetDraft.exerciseId` (dans `resume`) : exercice choisi dans le pavé pour une série à faire (autre candidat, progression inférieure).
 - Dans `weekPlan`, `null` signifie « rien » : Repos le soir, pas de séance le matin.
 - `SessionLog.resume` contient l'état d'interface de la séance en cours :
@@ -535,7 +565,7 @@ Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en do
 
 ## Sauvegarde et exports
 
-- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices ; format 4 : `expressMinutes` sur les séances, `null` avant ; format 5 : table `programs`, même conversion que la version 5 du schéma ; format 6 : `schedule`, `startDate`, `componentVolumes` sur les programmes ; format 7 : `sharedBlocks` sur les modèles, blocs identiques mis en commun comme dans la version 7 du schéma, et `{}` sur les copies figées). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
+- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices ; format 4 : `expressMinutes` sur les séances, `null` avant ; format 5 : table `programs`, même conversion que la version 5 du schéma ; format 6 : `schedule`, `startDate`, `componentVolumes` sur les programmes ; format 7 : `sharedBlocks` sur les modèles, blocs identiques mis en commun comme dans la version 7 du schéma, et `{}` sur les copies figées ; format 8 : `components`, `componentBlockTypeId`, `componentAcceptance` sur les programmes, vides avant). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
 - Rappel de sauvegarde sur Aujourd'hui : dernière sauvegarde de plus de 7 jours, ou aucune alors qu'au moins une séance a été faite dans l'appli. Sur Android, « Envoyer une sauvegarde » ouvre le menu de partage (Drive, e-mail). Le fichier envoyé est en `.txt` (`text/plain`) : Chrome ne partage qu'une liste fermée de types, sans le JSON, et `navigator.canShare` ne vérifie pas le type. La restauration accepte `.json` et `.txt`. Une annulation ne dit rien ; un refus s'affiche avec « Enregistrer » (téléchargement) à la place.
 - Export du journal ([src/io/journal/exportJournal.ts](src/io/journal/exportJournal.ts)) : .xlsx (onglet « Journal », vraies dates Excel) et .csv pour Excel en français (« ; », CRLF, marque UTF-8). Les notes de ligne reprennent « Séance express (N min) », « Séance abandonnée » et la note de séance (1re ligne), les notes de série et les numéros des séries dégradées.
 - Version affichée dans Réglages → Sauvegarde et données → Appli : `version` du package.json et date du build.

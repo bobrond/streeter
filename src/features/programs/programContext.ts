@@ -20,7 +20,7 @@ export function programContext(data: AppData, lookups: Lookups, programId: ID | 
   return {
     program,
     settings: effectiveSettings(data.appSettings, program),
-    plan: { ...lookups.program, weekPlan: program.weekPlan },
+    plan: { ...lookups.program, weekPlan: program.weekPlan, sequence: program.schedule === 'sequence', componentPlan: program },
     templates: templatesOf(data.templates, program.id),
   };
 }

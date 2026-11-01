@@ -116,6 +116,15 @@ describe('programme suivant', () => {
     expect(max.programId).toBe('oct');
   });
 
+  it('copie les composantes réparties sous de nouveaux identifiants', () => {
+    const component = { id: 'c1', elementId: 'gd', setsPerSession: 2, candidateExerciseIds: ['ex'], candidatesText: 'Ex', targetText: '', targets: [], intensityText: '', intensity: null, restText: '60 s', restMinSec: 60, restMaxSec: 60, notes: '' };
+    const source = { ...october, components: [component], componentBlockTypeId: 'renfo', componentAcceptance: { combo: 'endurance' as const } };
+    const { program: copy } = duplicateProgram(source, [], { newId: () => 'nouveau', name: 'Décembre 2026', startWeek: 9, now: 1 });
+    expect(copy.components).toEqual([{ ...component, id: 'nouveau' }]);
+    expect(copy).toMatchObject({ componentBlockTypeId: 'renfo', componentAcceptance: { combo: 'endurance' } });
+    expect(source.components[0].id).toBe('c1');
+  });
+
   it('garde les blocs communs entre les copies, sous de nouveaux identifiants', () => {
     const warmup = item({ blockTypeId: 'echauf', elementId: 'connexion' });
     const own = item({ blockTypeId: 'skill', elementId: 'planche' });

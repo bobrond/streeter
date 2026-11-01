@@ -33,7 +33,15 @@ export function buildLookups(data: AppData): Lookups {
     sessionTypes: byId(data.sessionTypes),
     sessions: byId(data.sessions),
     objectives: byId(data.objectives),
-    program: { weekPlan: data.settings.weekPlan, templates, elements: data.elements, blocks, exercises, sequence: data.settings.schedule === 'sequence' },
+    program: {
+      weekPlan: data.settings.weekPlan,
+      templates,
+      elements: data.elements,
+      blocks,
+      exercises,
+      sequence: data.settings.schedule === 'sequence',
+      componentPlan: data.settings,
+    },
   };
 }
 

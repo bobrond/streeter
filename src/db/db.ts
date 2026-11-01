@@ -159,6 +159,20 @@ export class StreeterDB extends Dexie {
             if (session.templateSnapshot) session.templateSnapshot.sharedBlocks ??= {};
           });
       });
+    // 8 (01/11/2026) : composantes réparties par l'appli (`Program.components`, `componentBlockTypeId`,
+    // `componentAcceptance`), sans nouvel index ; les programmes existants gardent leurs composantes écrites.
+    this.version(8)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table('programs')
+          .toCollection()
+          .modify((program: Partial<Program>) => {
+            program.components ??= [];
+            program.componentBlockTypeId ??= null;
+            program.componentAcceptance ??= {};
+          }),
+      );
   }
 }
 

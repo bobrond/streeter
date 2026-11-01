@@ -1,11 +1,13 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { appSettings, block, element, exercise, item, program, setLog, template, weekPlan } from '../test/builders';
+import { convertToComponents } from '../domain/componentConversion';
 import { programToFile, readProgramFile } from '../io/program/programFile';
 import { StreeterDB } from './db';
 import {
   InUseError,
   addProgram,
+  applyComponentConversion,
   applyProgramImport,
   deleteBand,
   deleteElement,
@@ -13,6 +15,7 @@ import {
   deleteProgram,
   deleteTemplate,
   replaceTemplates,
+  restoreProgram,
   restoreTemplates,
   saveOrder,
   saveTemplate,
@@ -210,7 +213,37 @@ describe('programStore', () => {
     expect(await db.templates.get(tpl.id)).toBeDefined();
   });
 
-  it('écrit un fichier programme importé : nouveautés, objectifs repris avec leurs tests, modèles remplacés', async () => {
+  it('passe un programme aux composantes réparties en une transaction ; « Annuler » remet tout', async () => {
+    const db = freshDb();
+    const skill = item({ blockTypeId: 'skill', elementId: 'planche' });
+    const line = item({ blockTypeId: renfo.id, elementId: dentele.id, candidateExerciseIds: [wallSlide.id] });
+    const max = template('Max', 'evening', [skill, line], { sessionTypeId: 'max' });
+    const max5 = template('Max 5', 'evening', [skill, { ...line, id: 'autre' }], { sessionTypeId: 'max' });
+    const unused = template('Max bis', 'evening', [skill, { ...line, id: 'encore' }], { sessionTypeId: 'max' });
+    const source = program({ weekPlan: weekPlan({ 1: { evening: max.id }, 3: { evening: max5.id }, 5: { evening: unused.id } }) });
+    await db.elements.add(dentele);
+    await db.programs.add(source);
+    await db.templates.bulkAdd([max, max5, unused]);
+    const conversion = convertToComponents(source, [max, max5, unused], [dentele], { newId: () => crypto.randomUUID(), usedTemplateIds: new Set([max5.id]) })!;
+    expect(conversion.merged.map((m) => [m.template.name, m.archive])).toEqual([
+      ['Max 5', true],
+      ['Max bis', false],
+    ]);
+    const undo = await applyComponentConversion(db, conversion);
+    const after = (await db.programs.get(source.id))!;
+    expect(after.components.map((c) => c.elementId)).toEqual([dentele.id]);
+    expect([after.weekPlan[1].evening, after.weekPlan[3].evening, after.weekPlan[5].evening]).toEqual([max.id, max.id, max.id]);
+    expect((await db.templates.get(max.id))!.items).toEqual([skill]);
+    expect(await db.templates.get(max5.id)).toMatchObject({ archived: true });
+    expect(await db.templates.get(unused.id)).toBeUndefined();
+    await expect(applyComponentConversion(db, conversion)).rejects.toBeInstanceOf(InUseError);
+
+    await restoreProgram(db, undo);
+    expect(await db.programs.get(source.id)).toEqual(source);
+    expect(await db.templates.bulkGet([max.id, max5.id, unused.id])).toEqual([max, max5, unused]);
+  });
+
+    it('écrit un fichier programme importé : nouveautés, objectifs repris avec leurs tests, modèles remplacés', async () => {
     const db = freshDb();
     const tpl = await seed(db);
     await db.objectives.update('o', { tests: [{ id: 't', date: '2026-10-07', value: 3, note: '' }] });

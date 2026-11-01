@@ -1,10 +1,19 @@
 // Libellés et formats français.
 import { diffDays } from './cycle';
 import type { ObjectiveStatus } from './objectives';
-import type { Intensity, Measure, Moment, SeqDay, Target, TargetUnit } from './types';
+import type { ComponentAcceptance, Intensity, Measure, Moment, SeqDay, Target, TargetUnit } from './types';
 import type { VolumeStatus } from './volume';
 
 export const MOMENT_LABEL: Record<Moment, string> = { morning: 'Matin', evening: 'Soir' };
+
+/** Ce qu'un type de séance accepte des composantes réparties. */
+export const ACCEPTANCE_LABEL: Record<ComponentAcceptance, string> = { all: 'Toutes', endurance: 'Endurance seulement', none: 'Aucune' };
+
+/** « Force », « Endurance » ; un autre type de travail tel quel, avec une majuscule. */
+export function workLabel(work: string | null): string {
+  if (!work) return 'Non précisé';
+  return work.charAt(0).toUpperCase() + work.slice(1);
+}
 
 export const VOLUME_STATUS_LABEL: Record<VolumeStatus, string> = {
   ok: 'OK',

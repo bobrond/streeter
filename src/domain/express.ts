@@ -8,7 +8,7 @@ import {
   componentBounds,
   componentElements,
   plannedComponentVolume,
-  plannedSlots,
+  programSlots,
   realizedComponentVolume,
   remainingEveningSets,
   type PlanContext,
@@ -138,7 +138,7 @@ const baseSets = (item: PrescriptionItem): number => (item.setsMin > 0 ? item.se
 function componentSource(elementId: ID, replaced: SessionTemplate, program: PlanContext): PrescriptionItem | null {
   const pick = (template: SessionTemplate) =>
     template.items.find((i) => i.elementId === elementId && !i.optional) ?? template.items.find((i) => i.elementId === elementId);
-  const slots = plannedSlots(program.weekPlan, program.templates);
+  const slots = programSlots(program);
   const ordered = [replaced, ...slots.filter((s) => s.moment === 'evening').map((s) => s.template), ...slots.filter((s) => s.moment === 'morning').map((s) => s.template)];
   for (const template of ordered) {
     const found = pick(template);
@@ -163,7 +163,7 @@ function componentSource(elementId: ID, replaced: SessionTemplate, program: Plan
  */
 export function buildExpress(args: {
   minutes: number;
-  /** Séance du jour remplacée, telle que dans la semaine type (avant allégement). */
+  /** Séance du jour remplacée, telle que dans la semaine type, avec les composantes de son créneau (avant allégement). */
   replaced: SessionTemplate;
   name: string;
   isDeload: boolean;

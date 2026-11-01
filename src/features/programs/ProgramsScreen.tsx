@@ -8,14 +8,15 @@ import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
 import { saveTemplate, swapWeekSlotsOf } from '../../db/programStore';
 import { blockSummary } from '../../domain/blocks';
+import { acceptanceOf, componentBounds, slotComponentLines, withComponents } from '../../domain/components';
 import { dateOf, dayInfo, localISODate } from '../../domain/cycle';
 import { estimateDuration } from '../../domain/duration';
 import { templateDays, uniqueName } from '../../domain/editing';
-import { MOMENT_LABEL, formatDateLong, formatDurationRange, joinFrench, seqDayLabel } from '../../domain/labels';
+import { ACCEPTANCE_LABEL, MOMENT_LABEL, formatDateLong, formatDurationRange, joinFrench, seqDayLabel, workLabel } from '../../domain/labels';
 import { tranchePeriod } from '../../domain/period';
 import { programPhase, programStartDate } from '../../domain/programs';
 import { projectedCycleEnd, sequenceIds, type SequenceInfo } from '../../domain/sequence';
-import { MOMENTS, SEQ_DAYS, type SessionTemplate, type Settings } from '../../domain/types';
+import { MOMENTS, SEQ_DAYS, type PrescriptionItem, type SessionTemplate, type Settings } from '../../domain/types';
 import { weekProgress, type DayProgress, type SlotProgress } from '../../domain/week';
 import { useNow } from '../../lib/device';
 import { newId } from '../../lib/id';
@@ -28,6 +29,7 @@ import { Screen } from '../../ui/Screen';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/toastStore';
 import { ExerciseDetail } from '../journal/ExerciseDetail';
+import { ComponentsScreen } from './ComponentsScreen';
 import { infoFor, programSessions } from '../today/planned';
 import { ExerciseEditor } from './ExerciseEditor';
 import { ExerciseLibrary } from './ExerciseLibrary';
@@ -46,7 +48,7 @@ const byName = (a: SessionTemplate, b: SessionTemplate) => a.name.localeCompare(
 
 /**
  * #/programs (?vue=exercices, ?programme=:id), #/programs/all, #/programs/template/:id, #/programs/exercise/:id(/edit),
- * #/programs/exercise/new, #/programs/week (?programme=:id), #/programs/import.
+ * #/programs/exercise/new, #/programs/week (?programme=:id), #/programs/components (?programme=:id), #/programs/import.
  */
 export function ProgramsScreen({ data, path }: { data: AppData; path: string }) {
   const parts = path.split('?')[0].split('/').filter(Boolean);
@@ -56,6 +58,7 @@ export function ProgramsScreen({ data, path }: { data: AppData; path: string }) 
   if (parts[1] === 'exercise' && parts[2]) return <ExerciseDetail key={parts[2]} data={data} exerciseId={parts[2]} backTo="/programs?vue=exercices" />;
   if (parts[1] === 'week') return <WeekPlanEditor data={data} programId={queryParam(path, 'programme')} />;
   if (parts[1] === 'all') return <ProgramsListRoute data={data} />;
+  if (parts[1] === 'components') return <ComponentsScreen key={queryParam(path, 'programme') ?? 'current'} data={data} programId={queryParam(path, 'programme')} />;
   if (parts[1] === 'import') return <ProgramImportScreen data={data} />;
   if (queryParam(path, 'vue') === 'exercices') return <ExerciseLibrary data={data} path={path} />;
   return <ProgramView key={queryParam(path, 'programme') ?? 'current'} data={data} programId={queryParam(path, 'programme')} />;
@@ -89,6 +92,20 @@ function templateMeta(template: SessionTemplate, context: ProgramContext, lookup
   const { minSec, maxSec } = estimateDuration(template, context.settings, lookups);
   const lines = template.items.length;
   return `${MOMENT_LABEL[template.moment]} · ${lines} ligne${lines > 1 ? 's' : ''} · ${formatDurationRange(minSec, maxSec)}`;
+}
+
+/** Composantes reçues par un créneau : « Grand dentelé 2 », etc. */
+function ComponentChips({ lines, lookups }: { lines: readonly PrescriptionItem[]; lookups: Lookups }) {
+  if (lines.length === 0) return null;
+  return (
+    <span className="mt-1 flex flex-wrap gap-1">
+      {lines.map((line) => (
+        <span key={line.id} className="rounded-md border border-line px-1.5 text-sm text-ink-2">
+          {lookups.elements.get(line.elementId)?.name ?? '?'} <b className="text-ink tabular-nums">{line.setsMin}</b>
+        </span>
+      ))}
+    </span>
+  );
 }
 
 const SLOT_STATUS: Partial<Record<SlotProgress['status'], { label: string; className: string }>> = {
@@ -148,9 +165,10 @@ function SlotRow({
           <span className="min-w-0 font-semibold leading-snug">{template.name}</span>
         </span>
         <span className="block text-sm text-ink-2">
-          {templateMeta(template, context, lookups)}
+          {templateMeta(withComponents(template, slot.components), context, lookups)}
           {template.optional ? ' · optionnelle' : ''}
         </span>
+        <ComponentChips lines={slot.components} lookups={lookups} />
         {status && <span className={`block text-sm font-semibold ${status.className}`}>{status.label}</span>}
       </button>
       <button type="button" aria-label={`Options de ${template.name} (${seqDayLabel(day.seqDay)} ${MOMENT_LABEL[slot.moment].toLowerCase()})`} onClick={onMenu} className="flex size-12 shrink-0 items-center justify-center rounded-xl text-ink-2 active:bg-card-2">
@@ -180,9 +198,11 @@ function templateUsage(template: SessionTemplate, settings: Settings): string {
 function SessionMeta({ template, context }: { template: SessionTemplate; context: ProgramContext }) {
   const { blocks, shared } = blockSummary(template, context.templates);
   const blockText = `${blocks} bloc${blocks > 1 ? 's' : ''}${shared > 0 ? `, dont ${shared} commun${shared > 1 ? 's' : ''}` : ''}`;
+  const components = context.program.components.length > 0 ? ` · composantes : ${ACCEPTANCE_LABEL[acceptanceOf(context.program, template.sessionTypeId)].toLowerCase()}` : '';
   return (
     <>
       {MOMENT_LABEL[template.moment]} · {blockText} · <span className="whitespace-nowrap">{templateUsage(template, context.settings)}</span>
+      {components}
     </>
   );
 }
@@ -354,7 +374,7 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
             <ul className="flex flex-col gap-2">
               {SEQ_DAYS.filter((day) => settings.weekPlan[day].morning).map((day) => {
                 const template = lookups.templates.get(settings.weekPlan[day].morning!);
-                const slot: SlotProgress = { moment: 'morning', planned: template ?? null, sessions: [], status: 'none' };
+                const slot: SlotProgress = { moment: 'morning', planned: template ?? null, components: slotComponentLines(settings, lookups.templates, day, 'morning'), sessions: [], status: 'none' };
                 const source: Slot = { day, moment: 'morning' };
                 return (
                   <li key={day} className="rounded-2xl border border-line bg-card p-1.5">
@@ -398,6 +418,8 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
         </button>
       </section>
 
+      <ComponentsSection context={context} lookups={lookups} href={withProgram('/programs/components', data, program.id)} hasWritten={sessionList.some((t) => t.items.some((i) => lookups.elements.get(i.elementId)?.kind === 'component'))} canConvert={phase !== 'past'} />
+
       {archived.length > 0 && (
         <details className="group/archived mt-2">
           <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 font-display text-2xl leading-none tracking-wider text-ink-3">
@@ -421,6 +443,11 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
             label={isSequence ? 'Déroulé, cycle et volume' : 'Cycle et semaine allégée'}
             hint={isSequence ? 'Séquence ou semaine type, tranches, tranche allégée, volume par type de travail, durée des matins.' : 'Déroulé, longueur du cycle, semaine allégée, volume, durée des matins.'}
             onClick={() => navigate(withProgram('/settings/cycle', data, program.id))}
+          />
+          <MenuItem
+            label="Composantes"
+            hint="Réparties par l’appli : travail, volume, séries par séance, exercices ; la répartition."
+            onClick={() => navigate(withProgram('/programs/components', data, program.id))}
           />
           <MenuItem
             icon={<CopyIcon />}
@@ -464,5 +491,49 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
       <TemplateActions key={menu?.template.id ?? 'aucun'} target={menu} onClose={() => setMenu(null)} data={data} lookups={lookups} />
       <SlotPickerSheet slot={picker} onClose={() => setPicker(null)} context={context} lookups={lookups} />
     </Screen>
+  );
+}
+
+/** Composantes du programme : résumé et lien vers leur écran ; sinon, la proposition de les faire répartir. */
+function ComponentsSection({ context, lookups, href, hasWritten, canConvert }: { context: ProgramContext; lookups: Lookups; href: string; hasWritten: boolean; canConvert: boolean }) {
+  const { program } = context;
+  const per = program.schedule === 'sequence' ? 'tranche' : 'semaine';
+  const open = () => navigate(href);
+  if (program.components.length === 0) {
+    if (!hasWritten || !canConvert) return null;
+    return (
+      <section className="mt-2 flex flex-col gap-2">
+        <h2 className="font-display text-2xl leading-none tracking-wider text-ink-3">Composantes</h2>
+        <button type="button" onClick={open} className="flex min-h-14 items-center gap-3 rounded-2xl border border-accent bg-card p-3 text-left active:bg-card-2">
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Répartir les composantes</span>
+            <span className="block text-sm text-ink-2">Elles sont écrites dans les séances : l’appli peut les répartir elle-même selon le volume. Aperçu avant de valider.</span>
+          </span>
+          <ChevronDownIcon className="size-5 shrink-0 -rotate-90 text-ink-3" />
+        </button>
+      </section>
+    );
+  }
+  return (
+    <section className="mt-2 flex flex-col gap-2">
+      <h2 className="font-display text-2xl leading-none tracking-wider text-ink-3">Composantes</h2>
+      <p className="text-sm text-ink-3">Réparties par l’appli sur chaque {per} : le soir fait le minimum, les matins complètent jusqu’au maximum.</p>
+      <ul className="flex flex-col rounded-2xl border border-line bg-card">
+        {program.components.map((c) => {
+          const bounds = componentBounds(program, c.elementId);
+          return (
+            <li key={c.id} className="border-b border-line px-3 py-2 last:border-b-0">
+              <span className="block font-semibold">{lookups.elements.get(c.elementId)?.name ?? '?'}</span>
+              <span className="block text-sm text-ink-2">
+                {workLabel(bounds.work)} · {bounds.min} à {bounds.max} séries par {per} · {c.setsPerSession} par séance
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <button type="button" onClick={open} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-line font-semibold text-ink-2 active:bg-card-2">
+        Modifier et voir la répartition
+      </button>
+    </section>
   );
 }

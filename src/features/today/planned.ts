@@ -2,19 +2,22 @@
 // ou position dans la séquence d'un programme en séquence.
 import type { AppData } from '../../db/hooks';
 import type { Lookups } from '../../db/lookups';
+import { slotComponentLines, withComponents } from '../../domain/components';
 import { addDays, dayInfo, type DayInfo } from '../../domain/cycle';
 import { morningsHidden, practicedTemplate } from '../../domain/deload';
 import { seqDayLabel } from '../../domain/labels';
 import { tranchePeriod, weekPeriod, type PeriodView } from '../../domain/period';
 import { programDateWindow, programStartDate, settingsAtDate } from '../../domain/programs';
 import { projectedDate, sequenceDayInfo, sequenceIds, sequencePosition, sessionsBetween } from '../../domain/sequence';
-import type { Moment, Program, SeqDay, SessionLog, SessionTemplate } from '../../domain/types';
+import type { Moment, PrescriptionItem, Program, SeqDay, SessionLog, SessionTemplate } from '../../domain/types';
 import { MOMENTS } from '../../domain/types';
 
 export interface Planned {
   moment: Moment;
   template: SessionTemplate;
-  /** Tel qu'il se pratique aujourd'hui (valeurs de la tranche, allégé en semaine allégée). */
+  /** Avec les composantes réparties sur le créneau, avant les valeurs de la tranche et l'allégement. */
+  slotted: SessionTemplate;
+  /** Tel qu'il se pratique aujourd'hui (composantes, valeurs de la tranche, allégé en semaine allégée). */
   practiced: SessionTemplate;
   hidden: boolean;
   done: SessionLog[];
@@ -45,6 +48,16 @@ export function periodFor(info: DayInfo, data: AppData, lookups: Lookups): Perio
   return weekPeriod(info.week, info.date, data.settings, lookups.templates, data.sessions);
 }
 
+/**
+ * Lignes des composantes réparties sur le créneau d'un jour : la séance du soir de sa position (ou de son jour), le
+ * matin proposé. Une autre séance faite à ce moment les reçoit aussi (décidé avec l'utilisateur le 01/11/2026).
+ */
+export function slotLinesFor(info: DayInfo, moment: Moment, data: AppData, lookups: Lookups): PrescriptionItem[] {
+  if (info.beforeStart) return [];
+  const seqDay = moment === 'morning' && info.sequence ? info.sequence.morningDay : info.seqDay;
+  return slotComponentLines(data.settings, lookups.templates, seqDay, moment);
+}
+
 export function plannedFor(info: DayInfo, data: AppData, lookups: Lookups): Planned[] {
   if (info.beforeStart) return [];
   const slot = info.sequence?.slot ?? data.settings.weekPlan[info.seqDay];
@@ -54,10 +67,12 @@ export function plannedFor(info: DayInfo, data: AppData, lookups: Lookups): Plan
   for (const moment of moments) {
     const template = lookups.templates.get(slot[moment] ?? '');
     if (!template) continue;
+    const slotted = withComponents(template, slotLinesFor(info, moment, data, lookups));
     list.push({
       moment,
       template,
-      practiced: practicedTemplate(template, info, lookups.blocks, data.settings),
+      slotted,
+      practiced: practicedTemplate(slotted, info, lookups.blocks, data.settings),
       hidden: moment === 'morning' && morningsHidden(info.isDeload, data.settings),
       done: data.sessions.filter((s) => s.date === info.date && s.moment === moment && s.status !== 'in_progress'),
     });

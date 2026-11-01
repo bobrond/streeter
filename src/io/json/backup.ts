@@ -13,8 +13,10 @@ export const BACKUP_APP = 'streeter';
  * au programme ; `programId` sur chaque modèle et chaque copie figée.
  * 6 (28/10/2026) : déroulé du programme (`schedule`, `startDate`) et volume par type de travail (`componentVolumes`).
  * 7 (01/11/2026) : blocs communs (`sharedBlocks`) sur chaque modèle et chaque copie figée.
+ * 8 (01/11/2026) : composantes réparties (`components`, `componentBlockTypeId`, `componentAcceptance`) sur chaque
+ * programme.
  */
-export const BACKUP_FORMAT_VERSION = 7;
+export const BACKUP_FORMAT_VERSION = 8;
 
 export const BACKUP_TABLES = [
   'settings',
@@ -122,6 +124,11 @@ function migrate(backup: Backup, newId: () => string): Backup {
       return isObject(session.templateSnapshot) ? { ...session, templateSnapshot: unlinked(session.templateSnapshot) } : session;
     });
     current = { ...current, formatVersion: 7, tables: { ...current.tables, templates, sessions } };
+  }
+  if (current.formatVersion < 8) {
+    // Format 7 → 8 : comme la version 8 de la base, les programmes gardent leurs composantes écrites.
+    const programs = current.tables.programs.map((program) => ({ components: [], componentBlockTypeId: null, componentAcceptance: {}, ...(program as Record<string, unknown>) }));
+    current = { ...current, formatVersion: 8, tables: { ...current.tables, programs } };
   }
   return current;
 }

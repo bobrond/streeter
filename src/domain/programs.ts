@@ -16,6 +16,9 @@ export const PROGRAM_CONFIG_KEYS = [
   'volumeMin',
   'volumeMax',
   'componentVolumes',
+  'components',
+  'componentBlockTypeId',
+  'componentAcceptance',
   'morningMaxMinutes',
   'weekPlan',
 ] as const satisfies readonly (keyof ProgramConfig)[];
@@ -146,7 +149,8 @@ function remapWeekPlan(weekPlan: WeekPlan, ids: ReadonlyMap<ID, ID>): WeekPlan {
 }
 
 /**
- * Copie d'un programme pour la suite : mêmes réglages, mêmes objectifs, copie de tous ses modèles (archivés compris,
+ * Copie d'un programme pour la suite : mêmes réglages et composantes réparties, mêmes objectifs, copie de tous ses
+ * modèles (archivés compris,
  * avec de nouveaux identifiants de modèle et de ligne) placés aux mêmes créneaux. Les blocs communs le restent entre
  * les copies, sous de nouveaux identifiants : une ligne commune garde le même identifiant d'un modèle à l'autre.
  */
@@ -181,6 +185,7 @@ export function duplicateProgram(
     notes: '',
     createdAt: args.now,
     weekPlan: remapWeekPlan(source.weekPlan, ids),
+    components: source.components.map((c) => ({ ...structuredClone(c), id: args.newId() })),
   };
   return { program, templates: copies.map((t) => ({ ...t, programId: program.id })) };
 }
@@ -241,6 +246,9 @@ export function programFromLegacySettings(
     schedule: 'week',
     startDate: null,
     componentVolumes: [],
+    components: [],
+    componentBlockTypeId: null,
+    componentAcceptance: {},
     id: args.id,
     name: programNameFor(app.cycleStartDate),
     startWeek: 1,

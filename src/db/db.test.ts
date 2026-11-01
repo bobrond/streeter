@@ -40,7 +40,7 @@ describe('migrations du schéma', () => {
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', setIndex: 2, value: 10, createdAt: 2, kind: 'normal' },
     ]);
-    expect(db.verno).toBe(7);
+    expect(db.verno).toBe(8);
     expect(await db.sets.where('sessionId').equals('ses').count()).toBe(2);
     expect(await db.sessions.get('ses')).toMatchObject({ date: '2026-10-16', status: 'done' });
     db.close();
@@ -65,7 +65,7 @@ describe('migrations du schéma', () => {
     v2.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(7);
+    expect(db.verno).toBe(8);
     expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, archived: false, sharedBlocks: {} });
     expect(await db.exercises.get('hold')).toEqual({ ...oldExercise, workSecPerSet: null });
     expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, archived: false, sharedBlocks: {} });
@@ -88,7 +88,7 @@ describe('migrations du schéma', () => {
     v3.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(7);
+    expect(db.verno).toBe(8);
     expect(await db.sessions.get('run')).toEqual({ ...running, expressMinutes: null });
     expect(await db.sessions.get('xlsx')).toMatchObject({ source: 'xlsx', expressMinutes: null });
     expect(await db.sessions.where('status').equals('in_progress').count()).toBe(1);
@@ -132,7 +132,7 @@ describe('migrations du schéma', () => {
     v4.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(7);
+    expect(db.verno).toBe(8);
     const programs = await db.programs.toArray();
     expect(programs).toHaveLength(1);
     const [program] = programs;
@@ -170,8 +170,8 @@ describe('migrations du schéma', () => {
     await v5.table('programs').add(program);
     v5.close();
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(7);
-    expect(await db.programs.get('p1')).toEqual({ ...program, schedule: 'week', startDate: null, componentVolumes: [] });
+    expect(db.verno).toBe(8);
+    expect(await db.programs.get('p1')).toEqual({ ...program, schedule: 'week', startDate: null, componentVolumes: [], components: [], componentBlockTypeId: null, componentAcceptance: {} });
     db.close();
   });
 
@@ -213,7 +213,7 @@ describe('migrations du schéma', () => {
     v6.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(7);
+    expect(db.verno).toBe(8);
     const [a, b, c, d] = await db.templates.bulkGet(['a', 'b', 'c', 'd']);
     expect(a!.sharedBlocks.echauf).toBeDefined();
     expect(b!.sharedBlocks).toEqual({ echauf: a!.sharedBlocks.echauf });
@@ -227,7 +227,27 @@ describe('migrations du schéma', () => {
     db.close();
   });
 
-  it('version 5 : une base vide reste vide (pas de programme sans réglages)', async () => {
+  it('version 8 : les programmes gardent leurs composantes écrites, sans perte', async () => {
+    const name = `migration-${Math.random()}`;
+    names.push(name);
+    const v7 = new Dexie(name);
+    v7.version(1).stores(SCHEMA_V1);
+    v7.version(5).stores({ programs: 'id, startWeek', templates: 'id, name, programId' });
+    v7.version(7).stores({});
+    await v7.open();
+    const program = { id: 'nov', name: 'Novembre 2026', startWeek: 5, weekPlan: {}, volumeMin: 4, volumeMax: 6, schedule: 'sequence', startDate: '2026-10-29', componentVolumes: [{ elementId: 'gd', work: 'endurance', min: 8, max: 10 }] };
+    const written = { id: 'st', name: 'Séance type', programId: 'nov', items: [{ id: 'gd1', blockTypeId: 'renfo', elementId: 'gd', setsMin: 2, setsMax: 2 }], sharedBlocks: {} };
+    await v7.table('programs').add(program);
+    await v7.table('templates').add(written);
+    v7.close();
+    const db = new StreeterDB(name);
+    expect(db.verno).toBe(8);
+    expect(await db.programs.get('nov')).toEqual({ ...program, components: [], componentBlockTypeId: null, componentAcceptance: {} });
+    expect(await db.templates.get('st')).toEqual(written);
+    db.close();
+  });
+
+    it('version 5 : une base vide reste vide (pas de programme sans réglages)', async () => {
     const name = `migration-${Math.random()}`;
     names.push(name);
     const v4 = new Dexie(name);

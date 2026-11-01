@@ -182,6 +182,31 @@ export interface ComponentVolume {
   max: number;
 }
 
+/** Ce qu'un type de séance accepte des composantes réparties par l'appli : toutes, l'endurance seulement, aucune. */
+export type ComponentAcceptance = 'all' | 'endurance' | 'none';
+
+/**
+ * Composante répartie par l'appli (programmation par blocs, phase H2) : ses bornes et son type de travail sont ceux de
+ * `ProgramConfig.componentVolumes` (sinon les bornes par défaut) ; ses lignes sont créées, séance par séance, d'après
+ * la répartition du programme (`components.ts`), avec cette prescription et `setsPerSession` séries.
+ */
+export interface ProgramComponent {
+  /** Identifiant de la ligne créée dans chaque séance qui reçoit la composante. */
+  id: ID;
+  elementId: ID;
+  setsPerSession: number;
+  candidateExerciseIds: ID[];
+  candidatesText: string;
+  targetText: string;
+  targets: Target[];
+  intensityText: string;
+  intensity: Intensity | null;
+  restText: string;
+  restMinSec: number | null;
+  restMaxSec: number | null;
+  notes: string;
+}
+
 /** Réglages propres à un programme : cycle, semaine allégée, volume, matins, semaine type ou séquence. */
 export interface ProgramConfig {
   schedule: ProgramSchedule;
@@ -199,6 +224,15 @@ export interface ProgramConfig {
   volumeMax: number;
   /** Bornes propres à certaines composantes (type de travail) ; les autres gardent `volumeMin` / `volumeMax`. */
   componentVolumes: ComponentVolume[];
+  /**
+   * Composantes réparties par l'appli, dans l'ordre des lignes d'une séance. Vide : les composantes sont des lignes
+   * écrites dans les séances, comme avant la phase H2 (programmes passés).
+   */
+  components: ProgramComponent[];
+  /** Bloc des lignes de composantes réparties ; `null` sans composante répartie. */
+  componentBlockTypeId: ID | null;
+  /** Par type de séance : composantes qu'il accepte ; absent : toutes. */
+  componentAcceptance: Record<ID, ComponentAcceptance>;
   morningMaxMinutes: number;
   weekPlan: WeekPlan;
 }

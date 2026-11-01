@@ -20,6 +20,7 @@ import { ValueStepper } from '../../ui/inputs';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/toastStore';
 import { CandidatesSheet } from './CandidatesSheet';
+import { INTENSITY_PRESETS, REST_PRESETS, TARGET_PRESETS } from './presets';
 import { ProgramChecks } from './ProgramChecks';
 import { programContext } from './programContext';
 
@@ -41,11 +42,8 @@ const FIELD_TITLE: Record<Exclude<ItemField, 'all'>, string> = {
   notes: 'Note',
 };
 
-const TARGET_PRESETS = ['8-15 reps', '3-5 reps', '10-15 reps', '3-6 s', '8-12 s', '20-30 s', '1-3 combos', '8-12 s ou 3-5 reps'];
-const INTENSITY_PRESETS = ['RPE ≤ 5', 'RPE ≤ 6', 'RPE 6-7', 'RPE 8', 'RPE 8-9', '1-2 reps en réserve', '2 reps en réserve'];
-const REST_PRESETS = ['Libre', '30 s', '60 s', '90 s', '2 min', '60-90 s', '90 s-2 min'];
 
-function Presets({ values, current, onPick }: { values: readonly string[]; current: string; onPick: (value: string) => void }) {
+export function Presets({ values, current, onPick }: { values: readonly string[]; current: string; onPick: (value: string) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {values.map((value) => (
@@ -63,7 +61,7 @@ function Presets({ values, current, onPick }: { values: readonly string[]; curre
   );
 }
 
-function Reading({ ok, children }: { ok: boolean; children: ReactNode }) {
+export function Reading({ ok, children }: { ok: boolean; children: ReactNode }) {
   return <div className={`text-sm ${ok ? 'text-ok' : 'text-ink-3'}`}>{children}</div>;
 }
 

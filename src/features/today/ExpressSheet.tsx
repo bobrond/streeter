@@ -30,7 +30,7 @@ function generate(minutes: number, planned: Planned, info: DayInfo, data: AppDat
   const label = lookups.sessionTypes.get(planned.template.sessionTypeId)?.name ?? planned.template.name;
   return buildExpress({
     minutes,
-    replaced: planned.template,
+    replaced: planned.slotted,
     name: expressName(minutes, label),
     isDeload: info.isDeload,
     cycleWeek: info.cycleWeek,

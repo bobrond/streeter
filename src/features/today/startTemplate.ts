@@ -2,6 +2,7 @@ import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import type { Lookups } from '../../db/lookups';
 import { SessionInProgressError, startSession } from '../../db/sessionStore';
+import { withComponents } from '../../domain/components';
 import type { DayInfo } from '../../domain/cycle';
 import { newSessionLog } from '../../domain/session';
 import type { SessionLog, SessionTemplate } from '../../domain/types';
@@ -9,6 +10,7 @@ import { unlockAudio } from '../../lib/audio';
 import { newId } from '../../lib/id';
 import { navigate } from '../../lib/router';
 import { showToast } from '../../ui/toastStore';
+import { slotLinesFor } from './planned';
 
 type StartOptions = { replace?: boolean };
 
@@ -28,14 +30,15 @@ async function launch(session: SessionLog, options: StartOptions): Promise<void>
 }
 
 /**
- * Commence une séance à partir d'un modèle et ouvre le mode séance. `replace` : la séance remplace l'écran
+ * Commence une séance à partir d'un modèle et ouvre le mode séance. Elle reçoit les composantes réparties sur le
+ * créneau du jour à son moment, qu'elle soit la séance prévue ou une autre. `replace` : la séance remplace l'écran
  * courant dans l'historique (onglet Séance, qui rouvrirait sinon la séance en boucle au retour).
  */
 export async function startTemplate(template: SessionTemplate, info: DayInfo, data: AppData, lookups: Lookups, options: StartOptions = {}): Promise<void> {
   unlockAudio();
   const session = newSessionLog({
     id: newId(),
-    template,
+    template: withComponents(template, slotLinesFor(info, template.moment, data, lookups)),
     sessionType: lookups.sessionTypes.get(template.sessionTypeId),
     info,
     blocksById: lookups.blocks,

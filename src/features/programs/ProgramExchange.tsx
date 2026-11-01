@@ -68,6 +68,9 @@ export function ExportProgramSheet({ program, data, onClose }: { program: Progra
         <p className="text-ink-2">
           Le programme complet et le catalogue de l’appli (exercices, éléments, blocs, types de séance, élastiques, objectifs), au format que ton agent de programmation connaît.
         </p>
+        {program.components.length > 0 && (
+          <p className="text-sm text-ink-2">Composantes réparties par l’appli : le format version 2 ne les décrit pas. Le fichier donne leurs volumes, sans leurs lignes dans les séances.</p>
+        )}
         <Button onClick={() => void copyText(text(), 'Programme copié : colle-le dans la conversation avec ton agent.')}>Copier le programme</Button>
         {canShare && (
           <Button variant="secondary" onClick={() => void share()}>

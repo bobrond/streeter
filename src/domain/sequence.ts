@@ -79,6 +79,8 @@ export function sequencePosition(index: number, length: number, s: Pick<Settings
 export interface SequenceDay {
   /** Séances proposées ce jour-là : la séance du soir de la position, le prochain matin disponible de la tranche. */
   slot: WeekSlot;
+  /** Rang (1…m) du matin proposé dans la liste des matins, `null` sans matin : créneau de ses composantes. */
+  morningDay: DayInfo['seqDay'] | null;
   /** Position de la séance du soir de ce jour (0 = la première séance du programme). */
   index: number;
   /** Tranche depuis le début du programme, 0 = la première. */
@@ -112,7 +114,8 @@ export function sequenceDayInfo(
     (s) => s.moment === 'morning' && s.status === 'done' && s.date < date && state.trancheOf.get(s.id) === position.tranche,
   ).length;
   const hasMorningToday = todays.some((s) => s.moment === 'morning');
-  const morning = mornings.length === 0 ? null : morningsBefore < mornings.length ? mornings[morningsBefore] : hasMorningToday ? mornings[mornings.length - 1] : null;
+  const morningIndex = mornings.length === 0 ? null : morningsBefore < mornings.length ? morningsBefore : hasMorningToday ? mornings.length - 1 : null;
+  const morning = morningIndex === null ? null : mornings[morningIndex];
   const calendar = dayInfo(date, { cycleStartDate: settings.cycleStartDate, cycleLengthWeeks: 1, deloadWeek: 0 });
   return {
     date,
@@ -124,6 +127,7 @@ export function sequenceDayInfo(
     beforeStart: date < settings.startDate,
     sequence: {
       slot: { morning, evening: evenings.length > 0 ? evenings[index % evenings.length] : null },
+      morningDay: morningIndex === null ? null : ((morningIndex + 1) as DayInfo['seqDay']),
       index,
       tranche: position.tranche,
       length: state.length,

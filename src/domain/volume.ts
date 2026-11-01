@@ -1,4 +1,5 @@
 // Volume hebdomadaire : composantes de renfo (prévu / réalisé / statut) et totaux par skill.
+import { componentBounds, slotComponentLines, withComponents, type ComponentPlan } from './components';
 import { deloadSets, practicedTemplate } from './deload';
 import { estimateDuration } from './duration';
 import type {
@@ -26,6 +27,8 @@ export interface PlanContext {
   exercises: ReadonlyMap<ID, Exercise>;
   /** Programme en séquence : chaque séance compte à part dans le nombre de séances d'un skill. */
   sequence?: boolean;
+  /** Composantes réparties par l'appli : chaque créneau reçoit les siennes (`components.ts`). */
+  componentPlan?: Omit<ComponentPlan, 'weekPlan'>;
 }
 
 export type VolumeSettings = Pick<
@@ -34,11 +37,7 @@ export type VolumeSettings = Pick<
 > &
   Partial<Pick<Settings, 'componentVolumes'>>;
 
-/** Bornes d'une composante : celles de son type de travail dans le programme, sinon les bornes par défaut. */
-export function componentBounds(settings: VolumeSettings, elementId: ID): { min: number; max: number; work: string | null } {
-  const own = settings.componentVolumes?.find((v) => v.elementId === elementId);
-  return own ? { min: own.min, max: own.max, work: own.work } : { min: settings.volumeMin, max: settings.volumeMax, work: null };
-}
+export { componentBounds };
 
 /** Séances d'une semaine absolue. */
 export function weekSessionIds(sessions: Iterable<SessionLog>, week: number): Set<ID> {
@@ -61,16 +60,26 @@ export interface PlannedSlot {
   template: SessionTemplate;
 }
 
-/** Séances de la semaine type, dans l'ordre J1 matin, J1 soir, J2 matin… */
-export function plannedSlots(weekPlan: WeekPlan, templates: ReadonlyMap<ID, SessionTemplate>): PlannedSlot[] {
+/**
+ * Séances de la semaine type, dans l'ordre J1 matin, J1 soir, J2 matin… Avec `plan`, chacune avec les lignes des
+ * composantes réparties sur son créneau.
+ */
+export function plannedSlots(weekPlan: WeekPlan, templates: ReadonlyMap<ID, SessionTemplate>, plan?: Omit<ComponentPlan, 'weekPlan'>): PlannedSlot[] {
   const slots: PlannedSlot[] = [];
   for (const seqDay of SEQ_DAYS) {
     for (const moment of MOMENTS) {
       const template = templates.get(weekPlan[seqDay][moment] ?? '');
-      if (template) slots.push({ seqDay, moment, template });
+      if (!template) continue;
+      const lines = plan ? slotComponentLines({ ...plan, weekPlan }, templates, seqDay, moment) : [];
+      slots.push({ seqDay, moment, template: withComponents(template, lines) });
     }
   }
   return slots;
+}
+
+/** Séances prévues d'un programme, avec ses composantes réparties. */
+export function programSlots(program: PlanContext): PlannedSlot[] {
+  return plannedSlots(program.weekPlan, program.templates, program.componentPlan);
 }
 
 /** Statut du tableur : sous le minimum garanti par le soir, sinon au-dessus du maximum, sinon OK. */
@@ -117,7 +126,7 @@ export function plannedComponentVolume(program: PlanContext, settings: VolumeSet
       status: 'ok',
     });
   }
-  for (const { moment, template } of plannedSlots(program.weekPlan, program.templates)) {
+  for (const { moment, template } of programSlots(program)) {
     for (const item of template.items) {
       const row = rows.get(item.elementId);
       if (!row) continue;
@@ -205,7 +214,7 @@ export interface SkillTotal {
 export function skillTotals(program: PlanContext, settings: VolumeSettings): SkillTotal[] {
   const skills = new Map(program.elements.filter((e) => e.kind === 'skill').map((e) => [e.id, e]));
   const totals = new Map<string, SkillTotal & { days: Set<string> }>();
-  for (const { seqDay, moment, template } of plannedSlots(program.weekPlan, program.templates)) {
+  for (const { seqDay, moment, template } of programSlots(program)) {
     for (const item of template.items) {
       if (!skills.has(item.elementId)) continue;
       const key = `${item.blockTypeId}|${item.elementId}`;
@@ -272,11 +281,15 @@ export function programIssues(program: PlanContext, settings: CheckSettings): Pr
       issues.push({ kind: 'component_volume', elementId: row.elementId, status: row.status });
     }
   }
-  const seen = new Set<ID>();
-  for (const { template } of plannedSlots(program.weekPlan, program.templates)) {
-    if (seen.has(template.id)) continue;
-    seen.add(template.id);
-    issues.push(...templateIssues(template, program, settings));
+  // Une séance par créneau : avec ses composantes, une même séance peut changer d'un créneau à l'autre.
+  const seen = new Set<string>();
+  for (const { template } of programSlots(program)) {
+    for (const issue of templateIssues(template, program, settings)) {
+      const key = `${issue.kind}|${'templateId' in issue ? issue.templateId : ''}|${'elementId' in issue ? issue.elementId : ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      issues.push(issue);
+    }
   }
   return issues;
 }
@@ -284,7 +297,7 @@ export function programIssues(program: PlanContext, settings: CheckSettings): Pr
 /** Contrôles affichés dans l'éditeur d'un modèle : ceux du programme, plus ceux du modèle s'il n'est pas dans la semaine type. */
 export function editorIssues(program: PlanContext, settings: CheckSettings, template: SessionTemplate): ProgramIssue[] {
   const issues = programIssues(program, settings);
-  const inWeek = plannedSlots(program.weekPlan, program.templates).some((slot) => slot.template.id === template.id);
+  const inWeek = programSlots(program).some((slot) => slot.template.id === template.id);
   return inWeek ? issues : [...issues, ...templateIssues(template, program, settings)];
 }
 
@@ -343,7 +356,7 @@ export function remainingEveningSets(
     if (slot.status === 'today' || slot.status === 'upcoming') {
       const planned = slot.planned;
       if (!planned || planned.optional) continue;
-      const practiced = practicedTemplate(planned, at, blocks, settings);
+      const practiced = practicedTemplate(withComponents(planned, slot.components), at, blocks, settings);
       for (const item of practiced.items) if (!item.optional) add(item.blockTypeId, item.elementId, item.setsMin);
     } else if (slot.status === 'in_progress') {
       const session = slot.sessions.find((s) => s.status === 'in_progress');

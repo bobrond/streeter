@@ -1,7 +1,8 @@
 // Avancement d'une semaine : séances prévues J1…J7 et séances réellement faites, par date.
 import { addDays, dateOf, dayInfo, type CycleSettings } from './cycle';
+import { slotComponentLines, type ComponentPlan } from './components';
 import { morningsHidden } from './deload';
-import type { ID, Moment, SeqDay, SessionLog, SessionTemplate, Settings } from './types';
+import type { ID, Moment, PrescriptionItem, SeqDay, SessionLog, SessionTemplate, Settings } from './types';
 import { MOMENTS, SEQ_DAYS } from './types';
 
 export type SlotStatus =
@@ -24,6 +25,8 @@ export type SlotStatus =
 export interface SlotProgress {
   moment: Moment;
   planned: SessionTemplate | null;
+  /** Lignes des composantes réparties sur ce créneau (`withComponents`), à ajouter à la séance prévue. */
+  components: PrescriptionItem[];
   /** Séances enregistrées ce jour-là à ce moment (quel que soit le modèle). */
   sessions: SessionLog[];
   status: SlotStatus;
@@ -39,7 +42,7 @@ export interface DayProgress {
 export function weekProgress(
   week: number,
   today: string,
-  settings: CycleSettings & Pick<Settings, 'weekPlan' | 'hideMorningsInDeload'>,
+  settings: CycleSettings & Pick<Settings, 'weekPlan' | 'hideMorningsInDeload'> & Partial<ComponentPlan>,
   templatesById: ReadonlyMap<ID, SessionTemplate>,
   sessions: readonly SessionLog[],
 ): DayProgress[] {
@@ -59,7 +62,8 @@ export function weekProgress(
       else if (date < today) status = planned.optional ? 'skipped' : 'missed';
       else if (date === today) status = 'today';
       else status = 'upcoming';
-      slots[moment] = { moment, planned, sessions: logged, status };
+      const components = planned ? slotComponentLines(settings as ComponentPlan, templatesById, seqDay, moment) : [];
+      slots[moment] = { moment, planned, components, sessions: logged, status };
     }
     return { seqDay, date, isToday: date === today, slots };
   });

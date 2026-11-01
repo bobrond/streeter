@@ -454,7 +454,7 @@ function WeekVolumeScreen({ todayData, path, today }: { todayData: AppData; path
     return settings === todayData.settings ? todayData : { ...todayData, settings };
   }, [todayData, week]);
   const lookups = useMemo(
-    () => (data === todayData ? todayLookups : { ...todayLookups, program: { ...todayLookups.program, weekPlan: data.settings.weekPlan, sequence: false } }),
+    () => (data === todayData ? todayLookups : { ...todayLookups, program: { ...todayLookups.program, weekPlan: data.settings.weekPlan, sequence: false, componentPlan: data.settings } }),
     [data, todayData, todayLookups],
   );
   const [preview, setPreview] = useState<SessionTemplate | null>(null);

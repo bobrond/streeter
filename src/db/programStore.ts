@@ -14,6 +14,7 @@ import {
 import { splitSettingsPatch, weekOfDate } from '../domain/programs';
 import { sequenceIds, sequenceWeekPlan } from '../domain/sequence';
 import type { AppSettings, Band, BlockType, Element, Exercise, ID, Moment, Program, SeqDay, SessionTemplate, SessionType, Settings, WeekPlan } from '../domain/types';
+import type { ComponentConversion } from '../domain/componentConversion';
 import type { ProgramImport } from '../io/program/programFile';
 import type { StreeterDB } from './db';
 
@@ -218,6 +219,42 @@ export async function updateEffectiveSettings(db: StreeterDB, programId: ID, pat
     if (Object.keys(app).length > 0) await db.settings.update('settings', app);
     if (Object.keys(program).length > 0) await db.programs.update(programId, program);
     if (app.cycleStartDate) await refreshSequenceStartWeeks(db, app.cycleStartDate);
+  });
+}
+
+/** État d'un programme et de ses modèles avant une écriture, pour « Annuler ». */
+export interface ProgramUndo {
+  program: Program;
+  templates: SessionTemplate[];
+  /** Modèles créés par l'écriture, à supprimer pour annuler. */
+  created: ID[];
+}
+
+/**
+ * Passe un programme aux composantes réparties en une transaction : ses réglages, ses séances sans leurs lignes de
+ * composantes ; une séance fusionnée dans une autre est archivée si elle a servi, supprimée sinon. Les séances déjà
+ * faites gardent leur copie. Renvoie l'état d'avant, pour « Annuler » (`restoreProgram`).
+ */
+export async function applyComponentConversion(db: StreeterDB, conversion: ComponentConversion): Promise<ProgramUndo> {
+  return db.transaction('rw', [db.programs, db.templates], async () => {
+    const program = await db.programs.get(conversion.program.id);
+    if (!program) throw new InUseError('Ce programme n’existe plus.');
+    if (program.components.length > 0) throw new InUseError('Les composantes de ce programme sont déjà réparties par l’appli.');
+    const touched = [...conversion.templates.map((t) => t.id), ...conversion.merged.map((m) => m.template.id)];
+    const before = (await db.templates.bulkGet(touched)).filter((t): t is SessionTemplate => t !== undefined);
+    await db.programs.put(conversion.program);
+    await db.templates.bulkPut(conversion.templates);
+    await db.templates.bulkDelete(conversion.merged.filter((m) => !m.archive).map((m) => m.template.id));
+    return { program, templates: before, created: [] };
+  });
+}
+
+/** « Annuler » : remet un programme et ses modèles dans l'état d'avant. */
+export async function restoreProgram(db: StreeterDB, undo: ProgramUndo): Promise<void> {
+  await db.transaction('rw', [db.programs, db.templates], async () => {
+    await db.programs.put(undo.program);
+    await db.templates.bulkPut(undo.templates);
+    await db.templates.bulkDelete(undo.created);
   });
 }
 

@@ -946,6 +946,10 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
     schedule: isSequence ? 'sequence' : 'week',
     startDate,
     componentVolumes,
+    // Le format version 2 ne décrit pas les composantes réparties : un programme remplacé garde les siennes.
+    components: replaces?.components ?? [],
+    componentBlockTypeId: replaces?.componentBlockTypeId ?? null,
+    componentAcceptance: replaces?.componentAcceptance ?? {},
     id: programId,
     name,
     startWeek,

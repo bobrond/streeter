@@ -8,13 +8,14 @@ import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
 import { restoreTemplates, saveTemplate, setTemplateArchived } from '../../db/programStore';
 import { blockPartners, blockSources, templateNames } from '../../domain/blocks';
+import { componentDistribution, slotKey } from '../../domain/components';
 import { estimateDuration } from '../../domain/duration';
 import { duplicateItem, reorderItem, templateDays } from '../../domain/editing';
-import { MOMENT_LABEL, formatDurationRange, formatRange, formatSets, formatTarget, restParts } from '../../domain/labels';
+import { MOMENT_LABEL, formatDurationRange, formatRange, formatSets, formatTarget, joinFrench, restParts } from '../../domain/labels';
 import { buildPlan } from '../../domain/session';
 import type { ID, PrescriptionItem, SessionTemplate } from '../../domain/types';
 import { newId } from '../../lib/id';
-import { goBack } from '../../lib/router';
+import { goBack, navigate } from '../../lib/router';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { insertionIndex, measureDropRects, useLongPress, useVerticalDrag, type DragHandleProps } from '../../ui/gestures';
@@ -26,8 +27,9 @@ import { showToast } from '../../ui/toastStore';
 import { BlockMenuSheet, BlockPickerSheet } from './BlockSheets';
 import { CandidatesSheet } from './CandidatesSheet';
 import { ItemSheet, type ItemField, type ItemSheetTarget } from './ItemSheet';
+import { AcceptanceChips } from './ComponentsScreen';
 import { ProgramChecks } from './ProgramChecks';
-import { programContext } from './programContext';
+import { programContext, withProgram, type ProgramContext } from './programContext';
 import { TemplateActions } from './TemplateActions';
 
 export function TemplateEditor({ data, templateId }: { data: AppData; templateId: string }) {
@@ -173,6 +175,61 @@ function LineCard({
         </button>
       )}
     </article>
+  );
+}
+
+/**
+ * Bloc des composantes réparties par l'appli : ce que le type de la séance accepte (réglage du programme) et ce que
+ * la séance reçoit à chacune de ses places du déroulé.
+ */
+function ComponentBlock({ template, context, lookups, href }: { template: SessionTemplate; context: ProgramContext; lookups: Lookups; href: string }) {
+  const { program } = context;
+  const sequence = program.schedule === 'sequence';
+  const d = componentDistribution(context.settings, lookups.templates);
+  const type = lookups.sessionTypes.get(template.sessionTypeId);
+  const name = (id: string) => lookups.elements.get(id)?.name.toLowerCase() ?? '?';
+  // Places de la séance, regroupées par composantes reçues.
+  const groups = new Map<string, { labels: string[]; text: string }>();
+  for (const slot of d.slots.filter((s) => s.template.id === template.id)) {
+    const list = d.bySlot.get(slotKey(slot.seqDay, slot.moment)) ?? [];
+    const sets = [...new Set(list.map((c) => c.setsPerSession))];
+    const text =
+      list.length === 0
+        ? 'aucune composante'
+        : sets.length === 1
+          ? `${joinFrench(list.map((c) => name(c.elementId)))}, ${sets[0]} série${sets[0] > 1 ? 's' : ''}${list.length > 1 ? ' chacun' : ''}`
+          : joinFrench(list.map((c) => `${name(c.elementId)} ${c.setsPerSession}`));
+    const group = groups.get(text) ?? { labels: [], text };
+    group.labels.push(sequence ? String(slot.seqDay) : `J${slot.seqDay}`);
+    groups.set(text, group);
+  }
+  const where = (labels: string[]) => {
+    const plural = labels.length > 1;
+    if (!sequence) return joinFrench(labels);
+    return template.moment === 'morning' ? `Matin${plural ? 's' : ''} ${joinFrench(labels)}` : `Séance${plural ? 's' : ''} ${joinFrench(labels)}`;
+  };
+  const blockName = lookups.blocks.get(program.componentBlockTypeId ?? '')?.name ?? 'Composantes';
+  return (
+    <section className="mt-2 flex flex-col gap-2 rounded-2xl border border-line bg-card p-3" aria-label={blockName}>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="font-display text-2xl leading-none tracking-wider text-ink-3">{blockName}</h2>
+        <Badge>Réparti par l’appli</Badge>
+      </div>
+      <p className="text-sm text-ink-2">Les séances {type ? `de type « ${type.name} »` : 'de ce type'} acceptent :</p>
+      <AcceptanceChips program={program} sessionTypeId={template.sessionTypeId} />
+      {groups.size === 0 ? (
+        <p className="text-sm text-ink-2">Hors du déroulé : faite à une place, la séance reçoit les composantes de cette place.</p>
+      ) : (
+        [...groups.values()].map((g) => (
+          <p key={g.text} className="text-sm text-ink">
+            {where(g.labels)} : {g.text}.
+          </p>
+        ))
+      )}
+      <button type="button" onClick={() => navigate(href)} className="flex min-h-11 items-center justify-center rounded-xl border border-line font-semibold text-ink-2 active:bg-card-2">
+        Composantes et répartition
+      </button>
+    </section>
   );
 }
 
@@ -329,6 +386,9 @@ function Editor({ template, data, lookups }: { template: SessionTemplate; data: 
         );
       })}
       {template.items.length === 0 && <p className="text-ink-2">Aucune ligne pour l’instant.</p>}
+      {context.program.components.length > 0 && !template.archived && (
+        <ComponentBlock template={template} context={context} lookups={lookups} href={withProgram('/programs/components', data, context.program.id)} />
+      )}
 
       <Button variant="secondary" className="mt-2" onClick={() => setSheet({ kind: 'item', target: { itemId: null, field: 'all' } })}>
         <PlusIcon /> Ajouter une ligne
