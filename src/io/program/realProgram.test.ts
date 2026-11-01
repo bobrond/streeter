@@ -61,7 +61,16 @@ describe.skipIf(!existsSync(FILE))('fichier programme du vrai tableur', () => {
     const diff = diffPrograms({ program, templates }, { program: read.value.program, templates: read.value.templates }, names);
     expect(diff, JSON.stringify(diff.changed, null, 1)).toSatisfy(isEmptyDiff);
     // Mêmes lignes, valeurs lues comprises ; le texte d'origine des candidats (« Au choix (skill FL) ») devient leur liste.
-    const strip = (list: readonly SessionTemplate[]) => list.map((t) => ({ ...t, id: '', items: t.items.map((i) => ({ ...i, id: '', candidatesText: '' })) }));
+    // Mêmes blocs communs : chaque bloc commun est décrit par les séances qui le partagent.
+    const strip = (list: readonly SessionTemplate[]) =>
+      list.map((t) => ({
+        ...t,
+        id: '',
+        items: t.items.map((i) => ({ ...i, id: '', candidatesText: '' })),
+        sharedBlocks: Object.fromEntries(
+          Object.entries(t.sharedBlocks).map(([blockTypeId, link]) => [blockTypeId, list.filter((o) => o.sharedBlocks[blockTypeId] === link).map((o) => o.name).sort()]),
+        ),
+      }));
     const byName = (a: SessionTemplate, b: SessionTemplate) => a.name.localeCompare(b.name);
     expect(strip([...read.value.templates].sort(byName))).toEqual(strip([...templates].sort(byName)));
   });

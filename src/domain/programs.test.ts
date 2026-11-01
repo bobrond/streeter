@@ -115,6 +115,22 @@ describe('programme suivant', () => {
     expect(source.weekPlan[1].evening).toBe(max.id);
     expect(max.programId).toBe('oct');
   });
+
+  it('garde les blocs communs entre les copies, sous de nouveaux identifiants', () => {
+    const warmup = item({ blockTypeId: 'echauf', elementId: 'connexion' });
+    const own = item({ blockTypeId: 'skill', elementId: 'planche' });
+    const st = template('Séance type', 'evening', [warmup, own], { programId: 'oct', sharedBlocks: { echauf: 'commun' } });
+    const combo = template('Combo libre', 'evening', [warmup], { programId: 'oct', sharedBlocks: { echauf: 'commun' } });
+    let n = 0;
+    const { templates } = duplicateProgram({ ...october, weekPlan: weekPlan({ 1: { evening: st.id } }) }, [st, combo], { newId: () => `n${++n}`, name: 'Novembre', startWeek: 5, now: 0 });
+    const [copyST, copyCombo] = templates;
+    expect(copyST.sharedBlocks.echauf).toBeDefined();
+    expect(copyST.sharedBlocks.echauf).not.toBe('commun');
+    expect(copyCombo.sharedBlocks).toEqual(copyST.sharedBlocks);
+    expect(copyCombo.items[0].id).toBe(copyST.items[0].id);
+    expect(copyST.items[0].id).not.toBe(warmup.id);
+    expect(new Set(copyST.items.map((i) => i.id)).size).toBe(2);
+  });
 });
 
 describe('objectifs et tests', () => {

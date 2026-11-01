@@ -7,14 +7,15 @@ import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
 import { saveTemplate, swapWeekSlotsOf } from '../../db/programStore';
+import { blockSummary } from '../../domain/blocks';
 import { dateOf, dayInfo, localISODate } from '../../domain/cycle';
 import { estimateDuration } from '../../domain/duration';
-import { uniqueName } from '../../domain/editing';
-import { MOMENT_LABEL, formatDateLong, formatDurationRange, seqDayLabel } from '../../domain/labels';
+import { templateDays, uniqueName } from '../../domain/editing';
+import { MOMENT_LABEL, formatDateLong, formatDurationRange, joinFrench, seqDayLabel } from '../../domain/labels';
 import { tranchePeriod } from '../../domain/period';
 import { programPhase, programStartDate } from '../../domain/programs';
 import { projectedCycleEnd, sequenceIds, type SequenceInfo } from '../../domain/sequence';
-import { MOMENTS, SEQ_DAYS, type SessionTemplate } from '../../domain/types';
+import { MOMENTS, SEQ_DAYS, type SessionTemplate, type Settings } from '../../domain/types';
 import { weekProgress, type DayProgress, type SlotProgress } from '../../domain/week';
 import { useNow } from '../../lib/device';
 import { newId } from '../../lib/id';
@@ -69,7 +70,7 @@ async function createTemplate(data: AppData, context: ProgramContext): Promise<v
   const type = data.sessionTypes.find((t) => t.moment === 'evening') ?? data.sessionTypes[0];
   const template: SessionTemplate = {
     id: newId(),
-    name: uniqueName('Nouveau modèle', context.templates),
+    name: uniqueName('Nouvelle séance', context.templates),
     sessionTypeId: type?.id ?? '',
     moment: 'evening',
     optional: false,
@@ -77,6 +78,7 @@ async function createTemplate(data: AppData, context: ProgramContext): Promise<v
     items: [],
     archived: false,
     programId: context.program.id,
+    sharedBlocks: {},
   };
   await saveTemplate(db, template);
   navigate(`/programs/template/${template.id}`);
@@ -158,6 +160,33 @@ function SlotRow({
   );
 }
 
+/** Où sert un modèle : « séances 1, 3 et 5 », « matins 1 et 2 », « J1 soir et J5 soir », « hors séquence ». */
+function templateUsage(template: SessionTemplate, settings: Settings): string {
+  if (settings.schedule === 'sequence') {
+    const at = (moment: 'evening' | 'morning') => sequenceIds(settings.weekPlan, moment).flatMap((id, i) => (id === template.id ? [String(i + 1)] : []));
+    const evenings = at('evening');
+    const mornings = at('morning');
+    const parts = [
+      evenings.length > 0 ? `séance${evenings.length > 1 ? 's' : ''} ${joinFrench(evenings)}` : '',
+      mornings.length > 0 ? `matin${mornings.length > 1 ? 's' : ''} ${joinFrench(mornings)}` : '',
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(' · ') : 'hors séquence';
+  }
+  const days = templateDays(template.id, settings.weekPlan);
+  return days.length > 0 ? joinFrench(days) : 'hors semaine type';
+}
+
+/** « Soir · 6 blocs, dont 3 communs », puis « séances 1, 3 et 5 » (gardé sur une ligne). */
+function SessionMeta({ template, context }: { template: SessionTemplate; context: ProgramContext }) {
+  const { blocks, shared } = blockSummary(template, context.templates);
+  const blockText = `${blocks} bloc${blocks > 1 ? 's' : ''}${shared > 0 ? `, dont ${shared} commun${shared > 1 ? 's' : ''}` : ''}`;
+  return (
+    <>
+      {MOMENT_LABEL[template.moment]} · {blockText} · <span className="whitespace-nowrap">{templateUsage(template, context.settings)}</span>
+    </>
+  );
+}
+
 function TemplateRow({ template, context, lookups, onMenu }: { template: SessionTemplate; context: ProgramContext; lookups: Lookups; onMenu: () => void }) {
   const type = lookups.sessionTypes.get(template.sessionTypeId);
   return (
@@ -167,7 +196,9 @@ function TemplateRow({ template, context, lookups, onMenu }: { template: Session
           <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: type?.color }} aria-hidden />
           <span className="min-w-0 font-semibold">{template.name}</span>
         </span>
-        <span className="block text-sm text-ink-2">{templateMeta(template, context, lookups)}</span>
+        <span className="block text-sm text-ink-2">
+          <SessionMeta template={template} context={context} />
+        </span>
       </button>
       <button type="button" aria-label={`Options de ${template.name}`} onClick={onMenu} className="flex size-12 shrink-0 items-center justify-center rounded-xl text-ink-2 active:bg-card-2">
         <DotsIcon className="size-6" />
@@ -197,8 +228,14 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
   const [picker, setPicker] = useState<Slot | null>(null);
   const [programMenu, setProgramMenu] = useState(false);
   const [programSheet, setProgramSheet] = useState<'rename' | 'duplicate' | 'export' | null>(null);
-  const inWeek = new Set(SEQ_DAYS.flatMap((day) => [settings.weekPlan[day].morning, settings.weekPlan[day].evening]));
-  const others = context.templates.filter((t) => !t.archived && !inWeek.has(t.id)).sort(byName);
+  // Séances du programme, une fois chacune : celles du déroulé (ou de la semaine type) dans leur ordre, puis les autres.
+  const rank = new Map<string, number>();
+  for (const id of [...SEQ_DAYS.map((day) => settings.weekPlan[day].evening), ...SEQ_DAYS.map((day) => settings.weekPlan[day].morning)]) {
+    if (id && !rank.has(id)) rank.set(id, rank.size);
+  }
+  const sessionList = context.templates
+    .filter((t) => !t.archived)
+    .sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER) || byName(a, b));
   const archived = context.templates.filter((t) => t.archived).sort(byName);
 
   // Glisser une séance sur un autre jour : les deux jours échangent leur séance de ce moment.
@@ -344,24 +381,22 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
           </>
         )}
         <p className="px-1 text-sm text-ink-3">{isSequence ? '⠿ : glisser une séance sur une autre pour échanger leurs places.' : '⠿ : glisser une séance sur un autre jour pour échanger les deux jours.'}</p>
+      </section>
+
+      <section className="mt-2 flex flex-col gap-2">
+        <h2 className="font-display text-2xl leading-none tracking-wider text-ink-3">Séances</h2>
+        <p className="text-sm text-ink-3">Chaque séance assemble des blocs. Un bloc commun se modifie une fois pour toutes les séances qui l’utilisent.</p>
+        {sessionList.map((template) => (
+          <TemplateRow key={template.id} template={template} context={context} lookups={lookups} onMenu={() => setMenu({ template })} />
+        ))}
         <button
           type="button"
           onClick={() => void createTemplate(data, context)}
           className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line font-semibold text-ink-2 active:bg-card-2"
         >
-          <PlusIcon className="size-5" /> Nouveau modèle
+          <PlusIcon className="size-5" /> Nouvelle séance
         </button>
       </section>
-
-      {others.length > 0 && (
-        <section className="mt-2 flex flex-col gap-2">
-          <h2 className="font-display text-2xl leading-none tracking-wider text-ink-3">Autres modèles</h2>
-          <p className="text-sm text-ink-3">Hors de la semaine type : à choisir pour une séance ponctuelle ou à placer dans un créneau.</p>
-          {others.map((template) => (
-            <TemplateRow key={template.id} template={template} context={context} lookups={lookups} onMenu={() => setMenu({ template })} />
-          ))}
-        </section>
-      )}
 
       {archived.length > 0 && (
         <details className="group/archived mt-2">
@@ -415,7 +450,7 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
           />
           <MenuItem
             icon={<PlusIcon />}
-            label="Nouveau modèle"
+            label="Nouvelle séance"
             onClick={() => {
               setProgramMenu(false);
               void createTemplate(data, context);

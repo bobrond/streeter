@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
+import { linkIdenticalBlocks } from '../domain/blocks';
 import { programFromLegacySettings } from '../domain/programs';
 import type {
   AppSettings,
@@ -140,6 +141,24 @@ export class StreeterDB extends Dexie {
             program.componentVolumes ??= [];
           }),
       );
+    // 7 (01/11/2026) : blocs communs (`SessionTemplate.sharedBlocks`), sans nouvel index. Les blocs identiques des
+    // modèles non archivés d'un même programme sont mis en commun ; les copies figées des séances n'en ont aucun.
+    this.version(7)
+      .stores({})
+      .upgrade(async (tx) => {
+        const templates = (await tx.table('templates').toArray()) as SessionTemplate[];
+        const linked = linkIdenticalBlocks(
+          templates.map((template) => ({ ...template, sharedBlocks: template.sharedBlocks ?? {} })),
+          () => crypto.randomUUID(),
+        );
+        await tx.table('templates').bulkPut(linked);
+        await tx
+          .table('sessions')
+          .toCollection()
+          .modify((session: Partial<SessionLog>) => {
+            if (session.templateSnapshot) session.templateSnapshot.sharedBlocks ??= {};
+          });
+      });
   }
 }
 

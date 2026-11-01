@@ -150,4 +150,29 @@ describe.skipIf(![XLSX_FILE, V1, V2].every((f) => existsSync(f)))('programme de 
     expect(combo.items.filter((i) => i.setsMin === 0).map((i) => i.setsMax)).toEqual([8, 8]);
     expect(st.items.filter((i) => (i.lowerProgressionIds ?? []).length > 0)).toHaveLength(2);
   });
+
+  it('version 2 : les blocs recopiés d’une séance à l’autre deviennent communs', () => {
+    const v2 = read(V2, { ...setup(), today: '2026-10-31', currentWeek: 5 });
+    const blockName = (id: string) => v2.blockTypes.find((b) => b.id === id)?.name ?? '?';
+    // Pour chaque séance, ses blocs communs et les séances qui les partagent.
+    const sharing = Object.fromEntries(
+      v2.templates.map((t) => [
+        t.name,
+        Object.fromEntries(Object.entries(t.sharedBlocks).map(([blockTypeId, link]) => [blockName(blockTypeId), v2.templates.filter((o) => o.sharedBlocks[blockTypeId] === link).length])),
+      ]),
+    );
+    const evening = { Échauffement: 3, 'Travail prioritaire': 3, 'Renfo skill': 3 };
+    expect(sharing).toEqual({
+      'Séance type': { ...evening, 'Travail principal': 2, 'Assisté / progression': 2 },
+      'Séance type 5 (force en bonus)': { ...evening, 'Travail principal': 2, 'Assisté / progression': 2 },
+      'Combo libre': evening,
+      Matin: {},
+    });
+    // Un bloc commun a les mêmes lignes, identifiants compris, dans chaque séance.
+    const st = v2.templates.find((t) => t.name === 'Séance type')!;
+    const combo = v2.templates.find((t) => t.name === 'Combo libre')!;
+    const warmup = (t: SessionTemplate) => t.items.filter((i) => blockName(i.blockTypeId) === 'Échauffement');
+    expect(warmup(combo)).toEqual(warmup(st));
+    expect(warmup(st)).toHaveLength(4);
+  });
 });

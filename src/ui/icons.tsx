@@ -197,3 +197,18 @@ export const SwapIcon = (p: IconProps) => (
     <path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4" />
   </Icon>
 );
+
+// Blocs communs : bloc partagé avec d'autres séances, bloc rendu propre.
+export const LinkIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+    <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+  </Icon>
+);
+
+export const UnlinkIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M15 7h2a5 5 0 0 1 0 10h-2M9 17H7A5 5 0 0 1 7 7h2" />
+    <path d="M4 4l16 16" />
+  </Icon>
+);

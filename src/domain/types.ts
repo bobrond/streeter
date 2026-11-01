@@ -139,6 +139,11 @@ export interface SessionTemplate {
   archived: boolean;
   /** Programme auquel appartient le modèle. */
   programId: ID;
+  /**
+   * Blocs communs, par type de bloc : identifiant du bloc commun que ce bloc partage avec d'autres modèles du même
+   * programme (`blocks.ts`). Ses lignes sont alors les mêmes, identifiants compris, dans chacun. Absent : bloc propre.
+   */
+  sharedBlocks: Record<ID, ID>;
 }
 
 export interface WeekSlot {

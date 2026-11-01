@@ -40,7 +40,7 @@ describe('migrations du schéma', () => {
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', setIndex: 2, value: 10, createdAt: 2, kind: 'normal' },
     ]);
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7);
     expect(await db.sets.where('sessionId').equals('ses').count()).toBe(2);
     expect(await db.sessions.get('ses')).toMatchObject({ date: '2026-10-16', status: 'done' });
     db.close();
@@ -65,10 +65,10 @@ describe('migrations du schéma', () => {
     v2.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(6);
-    expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, archived: false });
+    expect(db.verno).toBe(7);
+    expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, archived: false, sharedBlocks: {} });
     expect(await db.exercises.get('hold')).toEqual({ ...oldExercise, workSecPerSet: null });
-    expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, archived: false });
+    expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, archived: false, sharedBlocks: {} });
     expect((await db.sessions.get('xlsx'))?.templateSnapshot).toBeNull();
     expect(await db.sets.get('s1')).toMatchObject({ value: 12, kind: 'warmup' });
     db.close();
@@ -88,7 +88,7 @@ describe('migrations du schéma', () => {
     v3.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7);
     expect(await db.sessions.get('run')).toEqual({ ...running, expressMinutes: null });
     expect(await db.sessions.get('xlsx')).toMatchObject({ source: 'xlsx', expressMinutes: null });
     expect(await db.sessions.where('status').equals('in_progress').count()).toBe(1);
@@ -132,7 +132,7 @@ describe('migrations du schéma', () => {
     v4.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7);
     const programs = await db.programs.toArray();
     expect(programs).toHaveLength(1);
     const [program] = programs;
@@ -151,9 +151,9 @@ describe('migrations du schéma', () => {
       objectiveIds: ['o1', 'o2'],
     });
     expect(await db.settings.get('settings')).toEqual({ id: 'settings', cycleStartDate: '2026-10-05', avgWorkSecPerSet: 35, freeRestSec: 20, lastBackupAt: 123 });
-    expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, programId: program.id });
+    expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, programId: program.id, sharedBlocks: {} });
     expect(await db.templates.where('programId').equals(program.id).count()).toBe(1);
-    expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, programId: program.id });
+    expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, programId: program.id, sharedBlocks: {} });
     expect((await db.sessions.get('xlsx'))?.templateSnapshot).toBeNull();
     expect(await db.sets.get('s1')).toMatchObject({ sessionId: 'ses', value: 12 });
     db.close();
@@ -170,8 +170,60 @@ describe('migrations du schéma', () => {
     await v5.table('programs').add(program);
     v5.close();
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7);
     expect(await db.programs.get('p1')).toEqual({ ...program, schedule: 'week', startDate: null, componentVolumes: [] });
+    db.close();
+  });
+
+  it('version 7 : les blocs identiques d’un programme deviennent communs, sans perte', async () => {
+    const name = `migration-${Math.random()}`;
+    names.push(name);
+    // Base telle que l'écrivait la version 6 de l'appli : trois séances du soir recopient le même échauffement.
+    const v6 = new Dexie(name);
+    v6.version(1).stores(SCHEMA_V1);
+    v6.version(5).stores({ programs: 'id, startWeek', templates: 'id, name, programId' });
+    v6.version(6).stores({});
+    await v6.open();
+    const line = (id: string, blockTypeId: string, elementId: string, setsMin = 1) => ({
+      id,
+      blockTypeId,
+      elementId,
+      candidateExerciseIds: ['cars'],
+      candidatesText: 'CARs',
+      setsMin,
+      setsMax: 2,
+      targetText: '8-10 reps',
+      targets: [{ unit: 'reps', min: 8, max: 10 }],
+      intensityText: 'RPE ≤ 5',
+      intensity: { kind: 'rpe', min: null, max: 5 },
+      restText: 'Libre',
+      restMinSec: null,
+      restMaxSec: null,
+      superset: false,
+      optional: false,
+      notes: '',
+    });
+    const base = { sessionTypeId: 'type', moment: 'evening', optional: false, notes: '', archived: false, programId: 'nov' };
+    const seanceType = { ...base, id: 'a', name: 'Séance type', items: [line('a1', 'echauf', 'connexion'), line('a2', 'principal', 'planche', 4)] };
+    const combo = { ...base, id: 'b', name: 'Combo libre', items: [line('b1', 'echauf', 'connexion'), line('b2', 'principal', 'planche', 0)] };
+    const archived = { ...base, id: 'c', name: 'Ancienne', archived: true, items: [line('c1', 'echauf', 'connexion')] };
+    const october = { ...base, id: 'd', name: 'Max', programId: 'oct', items: [line('d1', 'echauf', 'connexion')] };
+    await v6.table('templates').bulkAdd([seanceType, combo, archived, october]);
+    await v6.table('sessions').add({ id: 'ses', date: '2026-10-31', status: 'done', templateSnapshot: combo });
+    v6.close();
+
+    const db = new StreeterDB(name);
+    expect(db.verno).toBe(7);
+    const [a, b, c, d] = await db.templates.bulkGet(['a', 'b', 'c', 'd']);
+    expect(a!.sharedBlocks.echauf).toBeDefined();
+    expect(b!.sharedBlocks).toEqual({ echauf: a!.sharedBlocks.echauf });
+    expect(a!.sharedBlocks.principal).toBeUndefined();
+    // Le bloc commun prend les lignes du premier modèle ; le reste ne bouge pas.
+    expect(b!.items).toEqual([line('a1', 'echauf', 'connexion'), line('b2', 'principal', 'planche', 0)]);
+    expect(a!.items).toEqual(seanceType.items);
+    expect(c).toEqual({ ...archived, sharedBlocks: {} });
+    expect(d).toEqual({ ...october, sharedBlocks: {} });
+    expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...combo, sharedBlocks: {} });
     db.close();
   });
 

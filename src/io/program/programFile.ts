@@ -5,6 +5,7 @@
 // Version 2 (28/10/2026) : déroulé en séquence de séances (`sequence`, `matins.seances`, cycle en tranches), volume
 // par type de travail (`programme.volumes`), séries sans minimum (`series.min` à 0), repères par tranche
 // (`parTranche`) et progressions inférieures (`progressionsInferieures`) sur une ligne.
+import { linkIdenticalBlocks } from '../../domain/blocks';
 import { dateOf, dayInfo } from '../../domain/cycle';
 import { DEFAULT_SESSION_TYPE_COLOR } from '../../domain/defaults';
 import { nextOrder, uniqueName } from '../../domain/editing';
@@ -852,6 +853,7 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
       items: sorted.map((x) => x.item),
       archived: false,
       programId,
+      sharedBlocks: {},
     });
   });
 
@@ -958,7 +960,8 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
     ok: true,
     value: {
       program,
-      templates,
+      // Le fichier décrit chaque séance en entier : les blocs identiques d'une séance à l'autre sont mis en commun.
+      templates: linkIdenticalBlocks(templates, ctx.newId),
       replaces,
       removedTemplates,
       newElements,

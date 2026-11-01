@@ -1,5 +1,6 @@
 // Écritures de l'édition du programme et du catalogue (Réglages).
 // Une suppression vérifie l'utilisation dans la même transaction : rien n'est perdu par mégarde.
+import { detachAllBlocks, syncSharedBlocks } from '../domain/blocks';
 import {
   bandUsage,
   blockUsage,
@@ -97,8 +98,35 @@ export async function saveOrder(db: StreeterDB, table: 'blockTypes' | 'bands' | 
   });
 }
 
-export async function saveTemplate(db: StreeterDB, template: SessionTemplate): Promise<void> {
-  await db.templates.put(template);
+/**
+ * Enregistre un modèle ; ses blocs communs sont recopiés dans les modèles qui les partagent, dans la même transaction.
+ * Renvoie l'état d'avant des modèles modifiés qui existaient déjà, pour « Annuler » (`restoreTemplates`).
+ */
+export async function saveTemplate(db: StreeterDB, template: SessionTemplate): Promise<SessionTemplate[]> {
+  return db.transaction('rw', db.templates, async () => {
+    const program = await db.templates.where('programId').equals(template.programId).toArray();
+    const { saved, partners } = syncSharedBlocks(template, program);
+    return writeTemplates(db, [saved, ...partners], program);
+  });
+}
+
+/**
+ * Écrit des modèles tels quels (blocs communs déjà cohérents : reprise d'un bloc, bloc rendu propre ou retiré,
+ * séance avec les mêmes blocs). Renvoie l'état d'avant de ceux qui existaient déjà, pour « Annuler ».
+ */
+export async function replaceTemplates(db: StreeterDB, templates: readonly SessionTemplate[]): Promise<SessionTemplate[]> {
+  return db.transaction('rw', db.templates, async () => writeTemplates(db, templates, await db.templates.bulkGet(templates.map((t) => t.id))));
+}
+
+async function writeTemplates(db: StreeterDB, templates: readonly SessionTemplate[], current: readonly (SessionTemplate | undefined)[]): Promise<SessionTemplate[]> {
+  const before = new Map(current.filter((t): t is SessionTemplate => t !== undefined).map((t) => [t.id, t]));
+  await db.templates.bulkPut([...templates]);
+  return templates.map((t) => before.get(t.id)).filter((t): t is SessionTemplate => t !== undefined);
+}
+
+/** « Annuler » : remet des modèles dans l'état renvoyé par `saveTemplate` ou `replaceTemplates`. */
+export async function restoreTemplates(db: StreeterDB, previous: readonly SessionTemplate[]): Promise<void> {
+  await db.templates.bulkPut([...previous]);
 }
 
 /**
@@ -148,13 +176,15 @@ export async function deleteTemplate(db: StreeterDB, id: ID): Promise<void> {
 
 /**
  * Archive un modèle : il quitte la semaine type et n'est plus proposé, mais reste modifiable et peut être désarchivé
- * (sans revenir dans la semaine type). Les séances déjà faites gardent leur copie.
+ * (sans revenir dans la semaine type). Ses blocs communs deviennent propres : le modifier ne touche plus les autres
+ * séances. Les séances déjà faites gardent leur copie.
  */
 export async function setTemplateArchived(db: StreeterDB, id: ID, archived: boolean): Promise<void> {
   await db.transaction('rw', [db.templates, db.programs], async () => {
     const template = await db.templates.get(id);
-    if (archived && template) await editWeekPlan(db, template.programId, (weekPlan) => removeFromWeekPlan(weekPlan, id));
-    await db.templates.update(id, { archived });
+    if (!template) return;
+    if (archived) await editWeekPlan(db, template.programId, (weekPlan) => removeFromWeekPlan(weekPlan, id));
+    await db.templates.put({ ...(archived ? detachAllBlocks(template, () => crypto.randomUUID()) : template), archived });
   });
 }
 
@@ -235,7 +265,7 @@ export async function applyProgramImport(db: StreeterDB, imported: ProgramImport
       await db.objectives.update(id, { criterion, target, unit, exerciseId });
     }
     for (const { template, archive } of imported.removedTemplates) {
-      if (archive) await db.templates.update(template.id, { archived: true });
+      if (archive) await db.templates.update(template.id, { archived: true, sharedBlocks: {} });
       else await db.templates.delete(template.id);
     }
     await db.templates.bulkPut(imported.templates);

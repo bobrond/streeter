@@ -1,5 +1,6 @@
 // Import du tableur : fonction pure « lignes du fichier + données existantes → entités + rapport ».
 // Les entités existantes sont rapprochées par nom et gardent leur identifiant (ré-import sans doublon).
+import { linkIdenticalBlocks } from '../../domain/blocks';
 import { addDays, dayInfo, toDayNumber, weekdayOf } from '../../domain/cycle';
 import {
   BLOCK_PRESETS,
@@ -467,6 +468,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
         items,
         archived: false,
         programId,
+        sharedBlocks: {},
       };
       templateBySignature.set(signature, template);
       templates.push(template);
@@ -501,6 +503,8 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
     }
     template.id = previous.id;
   }
+  // Blocs identiques d'un modèle à l'autre (échauffement…) : mis en commun, avant les copies figées du journal.
+  templates.splice(0, templates.length, ...linkIdenticalBlocks(templates, newId));
 
   // Réglages : créés au premier import (paramètres du tableur), la semaine type est toujours remplacée.
   let settings: Settings;

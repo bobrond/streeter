@@ -6,6 +6,7 @@ import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import type { Lookups } from '../../db/lookups';
 import { saveTemplate } from '../../db/programStore';
+import { blockPartners, syncSharedBlocks, templateNames } from '../../domain/blocks';
 import { emptyItemForm, formErrors, formToItem, insertItem, itemToForm, type ItemForm } from '../../domain/editing';
 import { formatIntensity, formatRest, formatTarget } from '../../domain/labels';
 import { KIND_ORDER } from '../../domain/library';
@@ -101,7 +102,12 @@ function ItemSheetForm({ target, template, data, lookups, onClose }: { target: I
   const draft = formToItem(existing?.id ?? 'brouillon', form, lookups.exercises);
   const draftTemplate = { ...template, items: existing ? template.items.map((i) => (i.id === existing.id ? draft : i)) : insertItem(template.items, draft, lookups.blocks) };
   const context = programContext(data, lookups, template.programId);
-  const draftProgram = { ...context.plan, templates: new Map(lookups.templates).set(template.id, draftTemplate) };
+  // Contrôles comme après l'enregistrement : un bloc commun change aussi dans les autres séances.
+  const synced = syncSharedBlocks(draftTemplate, context.templates);
+  const draftTemplates = new Map(lookups.templates).set(template.id, synced.saved);
+  for (const partner of synced.partners) draftTemplates.set(partner.id, partner);
+  const draftProgram = { ...context.plan, templates: draftTemplates };
+  const partners = blockPartners(template, form.blockTypeId, context.templates);
   const element = lookups.elements.get(form.elementId);
   const targets = parseTargets(form.targetText);
   const intensity = parseIntensity(form.intensityText);
@@ -117,7 +123,7 @@ function ItemSheetForm({ target, template, data, lookups, onClose }: { target: I
     const items = existing ? template.items.map((i) => (i.id === item.id ? item : i)) : insertItem(template.items, item, lookups.blocks);
     await saveTemplate(db, { ...template, items });
     onClose();
-    if (!existing) showToast('Ligne ajoutée.');
+    if (!existing) showToast(partners.length > 0 ? `Ligne ajoutée, aussi dans ${templateNames(partners)}.` : 'Ligne ajoutée.');
   };
 
   const title = !existing ? 'Nouvelle ligne' : field === 'all' ? (element?.name ?? 'Ligne') : `${FIELD_TITLE[field]} · ${element?.name ?? ''}`;
@@ -129,6 +135,7 @@ function ItemSheetForm({ target, template, data, lookups, onClose }: { target: I
       footer={
         <>
           {showErrors && errors.length > 0 && <p className="font-semibold text-danger">{errors.join(' ')}</p>}
+          {partners.length > 0 && <p className="text-sm text-ink-2">Bloc commun : la ligne change aussi dans {templateNames(partners)}.</p>}
           <Button onClick={() => void save()}>{existing ? 'Enregistrer' : 'Ajouter la ligne'}</Button>
         </>
       }

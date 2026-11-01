@@ -295,6 +295,7 @@ export function buildExpress(args: {
       notes: '',
       items: sortItemsByBlock(ordered, program.blocks),
       archived: false,
+      sharedBlocks: {},
       programId: args.replaced.programId,
     },
     reasons,

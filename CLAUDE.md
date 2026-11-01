@@ -8,7 +8,7 @@ PWA personnelle de programmation et de suivi d'entraînement street workout : un
 
 ## Méthode de travail
 
-- Phases livrables et testables sur téléphone : 0 socle, import, calculs testés, mise en ligne → 1 Aujourd'hui et mode séance, hors ligne, export JSON de secours → 2 édition complète dans Réglages → 3 Semaine, Journal, Objectifs → 4 sauvegarde complète, exports, finitions PWA. Refonte de l'interface (V2) : phases 0 et A à F, toutes livrées le 17/10/2026, voir « Interface V2 ». Programmes mensuels : phases G1 à G3, puis Novembre, voir « Programmes mensuels ».
+- Phases livrables et testables sur téléphone : 0 socle, import, calculs testés, mise en ligne → 1 Aujourd'hui et mode séance, hors ligne, export JSON de secours → 2 édition complète dans Réglages → 3 Semaine, Journal, Objectifs → 4 sauvegarde complète, exports, finitions PWA. Refonte de l'interface (V2) : phases 0 et A à F, toutes livrées le 17/10/2026, voir « Interface V2 ». Programmes mensuels : phases G1 à G3, puis Novembre, voir « Programmes mensuels ». Programmation par blocs : phases H1 et H2, voir « Programmation par blocs ».
 - Fin de phase : tests verts, journal de bord du jour à jour, `git commit`, `git push` (déploiement automatique), puis court récapitulatif (ce qui marche, ce qui reste, quoi tester sur le téléphone).
 - Échanges en français, en tutoyant l'utilisateur. Son téléphone : Android (Chrome).
 
@@ -57,6 +57,7 @@ Le dossier `vault/` est le second cerveau du projet (lisible dans Obsidian et VS
 | Séance faite · Série faite · Propre / dégradée | `SessionLog` · `SetLog` · `'clean'` / `'degraded'` |
 | Type de série : normale · échauffement · échec | `SetLog.kind` : `'normal'` · `'warmup'` · `'failure'` |
 | Objectif · Test d'objectif | `Objective` · `ObjectiveTest` |
+| Bloc commun · bloc propre | `SessionTemplate.sharedBlocks` (avec ou sans identifiant pour ce type de bloc) |
 
 ## Interface V2 (décidée et livrée le 17/10/2026)
 
@@ -110,8 +111,42 @@ Phases :
 
 - **G1, programmes datés** (livrée le 27/10/2026, v1.7.0) : schéma Dexie v5, format de sauvegarde 5. Voir « Programmes datés (depuis la phase G1) ».
 - **G2, format programme JSON** (livrée le 28/10/2026, v1.8.0) : format version 1 fixé par la consigne donnée à l'agent, [docs/consigne_agent_programmation.md](docs/consigne_agent_programmation.md), implémenté tel quel. Pas de changement de schéma ni de format de sauvegarde. Tout changement du format passe par une nouvelle version de la consigne. Voir « Format programme JSON (depuis la phase G2) ».
-- **G3, bilan du programme** : export Markdown pour l'agent, contenu promis dans la consigne (volume réalisé par semaine, records, tests, séances sautées ou dégradées, notes, séances express).
+- **G3, bilan du programme** : export Markdown pour l'agent, contenu promis dans la consigne (volume réalisé par semaine, records, tests, séances sautées ou dégradées, notes, séances express). En suspens avec l'agent depuis le 01/11/2026 (« Programmation par blocs »).
 - **Novembre, format version 2** (livrée le 28/10/2026, v1.9.0) : les 5 `demandesAppli` du programme de novembre. Schéma Dexie v6, format de sauvegarde 6, format programme JSON version 2. Voir « Séquence et format version 2 ».
+
+## Programmation par blocs (décidée le 01/11/2026)
+
+Demandé par l'utilisateur : programmer beaucoup plus simplement dans l'appli, au point de se passer de l'agent. Une séance assemble des blocs indépendants ; les exercices d'un bloc se saisissent une fois ; les composantes sont réparties par l'appli selon le volume du programme. Maquette des écrans : canevas privé, lien dans le journal du vault du 01/11/2026.
+
+Décidé avec l'utilisateur :
+
+- Un bloc commun modifié change dans toutes les séances qui l'utilisent ; une séance peut avoir sa propre version d'un bloc.
+- Seules les composantes sont réparties par l'appli (ni le Renfo skill ni les connexions, pour l'instant).
+- Séries par séance : un réglage par composante. Chaque type de séance dit ce qu'il accepte : toutes les composantes, l'endurance seulement, ou aucune. Pas de règle « jamais de force deux séances de suite ».
+- Le soir fait le minimum, les matins complètent jusqu'au maximum (règle du volume inchangée).
+- Quand une composante n'a pas besoin de toutes les séances qui l'acceptent : séances équilibrées (à peu près autant de séries de composantes dans chacune), les composantes qui ont le moins de séances possibles (la force) placées d'abord, au plus tôt. Novembre : séance 1, grand dentelé, deltoïde ant, ext. thoracique ; 2, grand dentelé, rhomboïde ; 3, rhomboïde, deltoïde ant, ext. thoracique ; 4 et 5, grand dentelé, rhomboïde ; matin 1, grand dentelé ; matin 2, rhomboïde ; 2 séries chaque fois.
+- Répartition fixe ; seule la séance express s'adapte à ce qui a été fait.
+- Novembre converti dès que la répartition est prête : « Séance type 5 » disparaît.
+- Agent en suspens : pas de format programme version 3, G3 attend aussi. Repères par tranche et progressions inférieures restent modifiables par le fichier seulement (pas nécessaire dans l'éditeur).
+
+Phases :
+
+- **H1, blocs communs** (livrée le 01/11/2026, v1.10.0) : schéma Dexie v7, format de sauvegarde 7. Voir ci-dessous.
+- **H2, composantes réparties** : composantes du programme (travail force ou endurance, volume par tranche, séries par séance, exercices et prescription), réglage par type de séance, répartition fixe et aperçu de la tranche dans Programmes, conversion de novembre ; jauges, séries encore prévues et séance express s'appuient dessus.
+
+Blocs communs (depuis H1, [src/domain/blocks.ts](src/domain/blocks.ts), [src/features/programs/BlockSheets.tsx](src/features/programs/BlockSheets.tsx)) :
+
+- Un bloc = les lignes d'un type de bloc d'un modèle. `SessionTemplate.sharedBlocks` donne, par type de bloc, l'identifiant du bloc commun ; ses lignes sont les mêmes, identifiants compris, dans chaque modèle qui le partage. Chaque modèle garde ses lignes : séance, volume, historique, séance express et export lisent les modèles comme avant.
+- `saveTemplate` recopie les blocs communs du modèle enregistré dans les autres modèles du programme, dans la même transaction (`syncSharedBlocks`) ; un bloc commun vidé ne l'est plus ; il renvoie l'état d'avant des modèles modifiés pour « Annuler » (`restoreTemplates`).
+- Blocs identiques (même type, mêmes lignes) des modèles non archivés d'un programme mis en commun (`linkIdenticalBlocks`) : migration v7, sauvegarde de format 6 ou moins, import d'un fichier programme ou du tableur. Novembre : Échauffement, Travail prioritaire et Renfo skill communs aux trois séances du soir ; Travail principal et Assisté communs à Séance type et Séance type 5.
+- Éditeur de modèle : badge « Commun » ou « Propre » sur chaque bloc, « Aussi dans … » ; ⋯ du bloc : rendre propre (copie sous de nouveaux identifiants), reprendre le bloc d'une autre séance (en commun ; confirmation si le bloc a des lignes), retirer le bloc de la séance (les autres le gardent) ; « Reprendre un bloc d'une autre séance » en bas. Chaque action propose « Annuler ». Une ligne ajoutée ou supprimée dans un bloc commun l'est partout (message « aussi dans … »).
+- ⋯ d'une séance : « Nouvelle séance avec les mêmes blocs » (tous communs) ou « Dupliquer » (copie à part, sans bloc commun). Dupliquer un programme garde ses blocs communs entre les copies.
+- Programmes : section « Séances » à la place de « Autres modèles » : chaque séance une fois (moment, blocs dont communs, place dans la séquence ou la semaine type, « hors séquence »), puis « Nouvelle séance ».
+- Choix sans l'utilisateur, à valider à l'usage :
+  - archiver une séance rend ses blocs propres : elle ne suit plus les autres et ne reprend pas de bloc ;
+  - supprimer la dernière ligne d'un bloc commun le vide partout (« Retirer ce bloc » ne le retire que de la séance) ;
+  - la séance avec les mêmes blocs s'appelle « … (blocs communs) » et n'est pas placée dans la semaine type ;
+  - blocs mis en commun dès qu'ils sont identiques, à l'import comme à la migration.
 
 ## Programmes datés (depuis la phase G1)
 
@@ -121,8 +156,8 @@ Phases :
   - `Settings` = réglages effectifs (communs + programme en vigueur, avec `programId` et `programStartWeek`) : c'est ce que lit le reste de l'appli. `AppData.settings` est celui d'aujourd'hui ; `settingsAtWeek` / `settingsAtDate` pour une autre semaine (Volume d'une semaine passée, prochaine séance, tableau des semaines).
 - **Programme en vigueur** (`programAtWeek`) : le dernier dont la semaine de début est atteinte ; avant le premier, le premier. Un programme commence par un J1 (semaine de début stockée, sa date s'en déduit) : décaler la séquence décale aussi le début des programmes.
 - **Cycle** : `dayInfo` compte les cycles depuis `programStartWeek`. Test des objectifs : première semaine de chaque cycle (début d'un programme compris), jamais la semaine 1 ; `nextTestDate` suit les programmes à venir.
-- **Programmes** (onglet) : le programme en cours par défaut ; `?programme=:id` en affiche un autre (bandeau « Commence le… » ou « Programme terminé », bouton « En cours ») ; `/programs/all` liste les programmes (passé, en cours, à venir), « Préparer le programme suivant ». Menu ⋯ du programme : tous les programmes, créneaux, cycle (`/settings/cycle?programme=:id`), dupliquer pour la suite, exporter pour l'agent, importer un programme, renommer, nouveau modèle.
-- **Dupliquer pour la suite** : copie de la semaine type, de tous les modèles (archivés compris, nouveaux identifiants de modèle et de ligne), des objectifs et des réglages ; début proposé à la fin du cycle en cours du dernier programme, jamais avant la semaine prochaine ; nom par défaut : le mois du début (« Novembre 2026 »).
+- **Programmes** (onglet) : le programme en cours par défaut ; `?programme=:id` en affiche un autre (bandeau « Commence le… » ou « Programme terminé », bouton « En cours ») ; `/programs/all` liste les programmes (passé, en cours, à venir), « Préparer le programme suivant ». Menu ⋯ du programme : tous les programmes, créneaux, cycle (`/settings/cycle?programme=:id`), dupliquer pour la suite, exporter pour l'agent, importer un programme, renommer, nouvelle séance.
+- **Dupliquer pour la suite** : copie de la semaine type, de tous les modèles (archivés compris, nouveaux identifiants de modèle et de ligne, blocs communs gardés entre les copies), des objectifs et des réglages ; début proposé à la fin du cycle en cours du dernier programme, jamais avant la semaine prochaine ; nom par défaut : le mois du début (« Novembre 2026 »).
 - **Règles** : un nouveau programme commence au plus tôt la semaine prochaine, à une semaine libre ; seul un programme à venir change de date ou se supprime (avec ses modèles) ; il en reste toujours un.
 - Le reste suit le programme en cours : Aujourd'hui (nom du programme en sous-titre), « Choisir une séance », séance express, fiche exercice (« Dans le programme »), Skills (objectifs du programme, « Anciens objectifs » repliés). Un nouvel objectif rejoint le programme en cours. L'import du tableur écrit dans le programme en vigueur (un premier programme sur une base vide).
 - Choix sans l'utilisateur, à valider à l'usage :
@@ -215,18 +250,18 @@ Onglet Programmes ([src/features/programs/](src/features/programs/)). Un program
   - les anciennes adresses `/settings/templates…`, `/settings/exercises…` et `/settings/week` redirigent.
 - **Programme actif** : J1 à J7 en cartes ; aujourd'hui en orange (bordure, case du jour pleine, « auj. »).
   - Chaque séance : nom, moment, nombre de lignes, durée estimée, « ✓ faite » cette semaine.
-  - Son ⋯ : modifier, changer la séance du créneau, renommer, type / moment / notes, dupliquer, archiver, supprimer.
+  - Son ⋯ : modifier, changer la séance du créneau, renommer, type / moment / notes, nouvelle séance avec les mêmes blocs, dupliquer, archiver, supprimer.
   - Le ⋯ du programme mène aux créneaux et au cycle.
-  - Puis « Nouveau modèle », « Autres modèles » (hors semaine type) et « Archivés ».
+  - Puis « Séances » (chaque séance du programme une fois, avec ses blocs communs ; « Nouvelle séance ») et « Archivés » : voir « Programmation par blocs ».
 - **Glisser-déposer** ([src/ui/gestures.ts](src/ui/gestures.ts), `useVerticalDrag`) par la poignée ⠿, avec défilement près des bords ; toujours un équivalent dans un menu ⋯.
   - Une séance glissée sur un autre jour échange les séances de ce moment entre les deux jours (« Annuler » dans le message).
   - Une ligne glissée dans l'éditeur change de rang dans son bloc, d'après l'ordre affiché ; dans un bloc à alternance, les paires se reforment d'après le nouvel ordre (règle 3). Monter / Descendre dans le ⋯ de la ligne.
 - **Éditeur de modèle** : blocs, paires et supersets comme le tableau de la séance (trait orange). Une carte par ligne de prescription : élément, exercices candidats (toucher : choisir), cellules Séries, Cible, RPE (ou « En réserve »), Repos, note.
   - Toucher une cellule ouvre ce seul champ dans une feuille (`ItemSheet`), avec « Toute la ligne » ; « Enregistrer » valide, fermer abandonne.
   - ⋯ ou appui long sur l'en-tête d'une ligne : modifier toute la ligne, dupliquer, monter, descendre, supprimer (« Annuler » dans le message).
-  - « + Ligne en <bloc> » sous chaque bloc, « Ajouter une ligne » en bas.
+  - « + Ligne en <bloc> » sous chaque bloc, « Ajouter une ligne » en bas. En-tête d'un bloc : « Commun » ou « Propre » et son ⋯ (blocs communs, depuis H1).
   - Contrôles du programme dans un bandeau collé en haut de l'écran, détail au toucher. Ils couvrent aussi le modèle édité quand il est hors de la semaine type (`editorIssues`).
-- **Archiver** un modèle le retire de la semaine type (avec confirmation s'il y est) ; il n'est plus proposé (créneaux, « Choisir une séance ») mais reste modifiable. Il se désarchive sans revenir dans la semaine type. Les séances faites gardent leur copie.
+- **Archiver** un modèle le retire de la semaine type (avec confirmation s'il y est) ; il n'est plus proposé (créneaux, « Choisir une séance ») mais reste modifiable ; ses blocs communs deviennent propres. Il se désarchive sans revenir dans la semaine type. Les séances faites gardent leur copie.
 - **Bibliothèque** ([src/domain/library.ts](src/domain/library.ts)) : recherche (nom, autres noms, élément), puces Tous / Skills / Composantes / Autres, puis un élément ; exercices groupés par élément, désactivés à part.
 - **Création d'un exercice en 2 niveaux** : nom, type de mesure, élément ; « Plus d'options » replié : temps par série, catégorie, rapide, actif, notes techniques, autres noms.
 - Choix sans l'utilisateur, à valider à l'usage :
@@ -448,7 +483,8 @@ SessionType      { id, name, moment, description, color, isTestDay }
 Exercise         { id, name, category, elementId, measure: 'reps' | 'seconds' | 'combos' | 'none',
                    quick, active, notes, aliases, order, workSecPerSet /* null : réglage général */ }
 Band             { id, name, color, order /* 0 = le plus assistant */, active }
-SessionTemplate  { id, name, sessionTypeId, moment, optional, notes, items: PrescriptionItem[], archived, programId }
+SessionTemplate  { id, name, sessionTypeId, moment, optional, notes, items: PrescriptionItem[], archived, programId,
+                   sharedBlocks /* { [blockTypeId]: identifiant du bloc commun } ; absent : bloc propre */ }
 PrescriptionItem { id, blockTypeId, elementId, candidateExerciseIds, candidatesText, setsMin, setsMax,
                    targetText, targets: { unit, min, max }[], intensityText, intensity: { kind: 'rpe' | 'rir', min, max },
                    restText, restMinSec, restMaxSec, superset, optional, notes,
@@ -469,7 +505,7 @@ SetLog           { id, sessionId, itemId, blockTypeId, elementId, exerciseId, se
 Objective        { id, name, criterion, target, unit, exerciseId, order, tests: { id, date, value, note }[] }
 ```
 
-- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`) ; 4 (17/10/2026) ajoute `SessionLog.expressMinutes` (`null` sur les séances existantes) ; 5 (27/10/2026) ajoute la table `programs` (index `startWeek`) et l'index `templates.programId` : un premier programme (semaine 1, nommé d'après le mois de `cycleStartDate`, tous les objectifs) reprend les réglages du cycle, du volume, des matins et la semaine type, retirés de `settings` ; modèles et copies figées reçoivent son `programId` ; 6 (28/10/2026) ajoute `Program.schedule` (`week`), `startDate` (`null`) et `componentVolumes` (`[]`).
+- Versions du schéma : 1 (07/10/2026) ; 2 (17/10/2026) ajoute `SetLog.kind`, les séries existantes deviennent `normal` ; 3 (17/10/2026) ajoute `SessionTemplate.archived` (`false`, copies figées des séances comprises) et `Exercise.workSecPerSet` (`null`) ; 4 (17/10/2026) ajoute `SessionLog.expressMinutes` (`null` sur les séances existantes) ; 5 (27/10/2026) ajoute la table `programs` (index `startWeek`) et l'index `templates.programId` : un premier programme (semaine 1, nommé d'après le mois de `cycleStartDate`, tous les objectifs) reprend les réglages du cycle, du volume, des matins et la semaine type, retirés de `settings` ; modèles et copies figées reçoivent son `programId` ; 6 (28/10/2026) ajoute `Program.schedule` (`week`), `startDate` (`null`) et `componentVolumes` (`[]`) ; 7 (01/11/2026) ajoute `SessionTemplate.sharedBlocks` : les blocs identiques des modèles non archivés d'un même programme deviennent communs (lignes du premier modèle, identifiants compris), `{}` sur les copies figées.
 - `SetDraft.exerciseId` (dans `resume`) : exercice choisi dans le pavé pour une série à faire (autre candidat, progression inférieure).
 - Dans `weekPlan`, `null` signifie « rien » : Repos le soir, pas de séance le matin.
 - `SessionLog.resume` contient l'état d'interface de la séance en cours :
@@ -499,7 +535,7 @@ Des fonctions pures ([src/io/xlsx/](src/io/xlsx/)) transforment le fichier en do
 
 ## Sauvegarde et exports
 
-- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices ; format 4 : `expressMinutes` sur les séances, `null` avant ; format 5 : table `programs`, même conversion que la version 5 du schéma ; format 6 : `schedule`, `startDate`, `componentVolumes` sur les programmes). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
+- Sauvegarde JSON complète ([src/io/json/backup.ts](src/io/json/backup.ts)) : toutes les tables, `formatVersion` et `dbVersion`. Une sauvegarde d'une version plus récente est refusée. Tout changement du format incrémente `BACKUP_FORMAT_VERSION` et ajoute une étape testée dans `migrate` (format 2 : `kind` sur chaque série, `normal` pour une sauvegarde de format 1 ; format 3 : `archived` sur les modèles et leurs copies figées, `workSecPerSet` sur les exercices ; format 4 : `expressMinutes` sur les séances, `null` avant ; format 5 : table `programs`, même conversion que la version 5 du schéma ; format 6 : `schedule`, `startDate`, `componentVolumes` sur les programmes ; format 7 : `sharedBlocks` sur les modèles, blocs identiques mis en commun comme dans la version 7 du schéma, et `{}` sur les copies figées). La restauration remplace toutes les données en une transaction ; elle est proposée dès l'écran d'accueil (changement de téléphone).
 - Rappel de sauvegarde sur Aujourd'hui : dernière sauvegarde de plus de 7 jours, ou aucune alors qu'au moins une séance a été faite dans l'appli. Sur Android, « Envoyer une sauvegarde » ouvre le menu de partage (Drive, e-mail). Le fichier envoyé est en `.txt` (`text/plain`) : Chrome ne partage qu'une liste fermée de types, sans le JSON, et `navigator.canShare` ne vérifie pas le type. La restauration accepte `.json` et `.txt`. Une annulation ne dit rien ; un refus s'affiche avec « Enregistrer » (téléchargement) à la place.
 - Export du journal ([src/io/journal/exportJournal.ts](src/io/journal/exportJournal.ts)) : .xlsx (onglet « Journal », vraies dates Excel) et .csv pour Excel en français (« ; », CRLF, marque UTF-8). Les notes de ligne reprennent « Séance express (N min) », « Séance abandonnée » et la note de séance (1re ligne), les notes de série et les numéros des séries dégradées.
 - Version affichée dans Réglages → Sauvegarde et données → Appli : `version` du package.json et date du build.

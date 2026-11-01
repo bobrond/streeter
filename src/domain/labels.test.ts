@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { expressName, formatClock, formatDayMonth, formatRelativeDay, formatDuration, formatDurationRange, formatRange, formatRest, restParts, formatSetValue, formatTarget, formatValue, formatValueList } from './labels';
+import { expressName, formatClock, formatDayMonth, formatRelativeDay, formatDuration, formatDurationRange, formatRange, formatRest, restParts, formatSetValue, formatTarget, formatValue, formatValueList, joinFrench } from './labels';
 
 describe('formats', () => {
+  it('énumère à la française', () => {
+    expect(joinFrench([])).toBe('');
+    expect(joinFrench(['Séance type'])).toBe('Séance type');
+    expect(joinFrench(['Séance type', 'Combo libre'])).toBe('Séance type et Combo libre');
+    expect(joinFrench(['1', '3', '5'])).toBe('1, 3 et 5');
+  });
+
   it('accorde les unités', () => {
     expect(formatTarget({ unit: 'reps', min: 1, max: 1 })).toBe('1 rep');
     expect(formatTarget({ unit: 'reps', min: 3, max: 5 })).toBe('3-5 reps');

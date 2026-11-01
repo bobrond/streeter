@@ -1,5 +1,7 @@
 // Sauvegarde JSON complète : toutes les tables, avec un numéro de version de format.
+import { linkIdenticalBlocks } from '../../domain/blocks';
 import { programFromLegacySettings } from '../../domain/programs';
+import type { SessionTemplate } from '../../domain/types';
 
 export const BACKUP_APP = 'streeter';
 /**
@@ -10,8 +12,9 @@ export const BACKUP_APP = 'streeter';
  * 5 (27/10/2026) : programmes datés (table `programs`) ; cycle, volume, matins et semaine type passent des réglages
  * au programme ; `programId` sur chaque modèle et chaque copie figée.
  * 6 (28/10/2026) : déroulé du programme (`schedule`, `startDate`) et volume par type de travail (`componentVolumes`).
+ * 7 (01/11/2026) : blocs communs (`sharedBlocks`) sur chaque modèle et chaque copie figée.
  */
-export const BACKUP_FORMAT_VERSION = 6;
+export const BACKUP_FORMAT_VERSION = 7;
 
 export const BACKUP_TABLES = [
   'settings',
@@ -107,6 +110,18 @@ function migrate(backup: Backup, newId: () => string): Backup {
     // Format 5 → 6 : les programmes restent en semaine type, sans volume propre à une composante.
     const programs = current.tables.programs.map((program) => ({ schedule: 'week', startDate: null, componentVolumes: [], ...(program as Record<string, unknown>) }));
     current = { ...current, formatVersion: 6, tables: { ...current.tables, programs } };
+  }
+  if (current.formatVersion < 7) {
+    // Format 6 → 7 : comme la version 7 de la base, les blocs identiques des modèles non archivés d'un programme sont
+    // mis en commun ; les copies figées n'ont aucun bloc commun.
+    const unlinked = (template: unknown): Record<string, unknown> => ({ sharedBlocks: {}, ...(template as Record<string, unknown>) });
+    const listed = current.tables.templates.map(unlinked);
+    const templates = listed.every((t) => Array.isArray(t.items)) ? linkIdenticalBlocks(listed as unknown as SessionTemplate[], newId) : listed;
+    const sessions = current.tables.sessions.map((record) => {
+      const session = record as Record<string, unknown>;
+      return isObject(session.templateSnapshot) ? { ...session, templateSnapshot: unlinked(session.templateSnapshot) } : session;
+    });
+    current = { ...current, formatVersion: 7, tables: { ...current.tables, templates, sessions } };
   }
   return current;
 }

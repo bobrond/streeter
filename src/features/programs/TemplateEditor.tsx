@@ -1,11 +1,13 @@
 // Éditeur d'un modèle de séance, dans le style du tableau de la séance : blocs, paires planche / FL et supersets
 // (trait orange), une carte par ligne de prescription avec ses cellules à toucher (séries, cible, intensité, repos).
 // Poignée ⠿ : glisser une ligne dans son bloc ; ⋯ ou appui long : options de la ligne ; contrôles du programme en haut.
+// Chaque bloc est commun avec d'autres séances ou propre à celle-ci ; ⋯ de son en-tête : ses options (blocs communs).
 import { useState, type ReactNode } from 'react';
 import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { useLookups, type Lookups } from '../../db/lookups';
-import { saveTemplate, setTemplateArchived } from '../../db/programStore';
+import { restoreTemplates, saveTemplate, setTemplateArchived } from '../../db/programStore';
+import { blockPartners, blockSources, templateNames } from '../../domain/blocks';
 import { estimateDuration } from '../../domain/duration';
 import { duplicateItem, reorderItem, templateDays } from '../../domain/editing';
 import { MOMENT_LABEL, formatDurationRange, formatRange, formatSets, formatTarget, restParts } from '../../domain/labels';
@@ -16,11 +18,12 @@ import { goBack } from '../../lib/router';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { insertionIndex, measureDropRects, useLongPress, useVerticalDrag, type DragHandleProps } from '../../ui/gestures';
-import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, CopyIcon, DotsIcon, DragIcon, PencilIcon, PlusIcon, TrashIcon } from '../../ui/icons';
+import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, CopyIcon, DotsIcon, DragIcon, LinkIcon, PencilIcon, PlusIcon, TrashIcon } from '../../ui/icons';
 import { MenuItem, MenuList } from '../../ui/Menu';
 import { Screen } from '../../ui/Screen';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/toastStore';
+import { BlockMenuSheet, BlockPickerSheet } from './BlockSheets';
 import { CandidatesSheet } from './CandidatesSheet';
 import { ItemSheet, type ItemField, type ItemSheetTarget } from './ItemSheet';
 import { ProgramChecks } from './ProgramChecks';
@@ -181,8 +184,11 @@ function DropMark() {
 function Editor({ template, data, lookups }: { template: SessionTemplate; data: AppData; lookups: Lookups }) {
   const [sheet, setSheet] = useState<SheetState>(null);
   const [candidates, setCandidates] = useState<ID[]>([]);
+  const [blockMenu, setBlockMenu] = useState<ID | null>(null);
+  const [picker, setPicker] = useState<{ blockTypeId?: ID } | null>(null);
   const plan = buildPlan(template, lookups.blocks, lookups.elements);
   const context = programContext(data, lookups, template.programId);
+  const canAdopt = !template.archived && blockSources(template, context.templates).length > 0;
   const days = templateDays(template.id, context.program.weekPlan);
   const type = lookups.sessionTypes.get(template.sessionTypeId);
   const { minSec, maxSec } = estimateDuration(template, context.settings, lookups);
@@ -214,10 +220,12 @@ function Editor({ template, data, lookups }: { template: SessionTemplate; data: 
   const lineIndex = lineItem ? lineShown.indexOf(lineItem.id) : -1;
   const candidatesItem = sheet?.kind === 'candidates' ? template.items.find((i) => i.id === sheet.itemId) : undefined;
 
-  const removeLine = (item: PrescriptionItem) => {
-    const previous = template.items;
-    void saveItems(template.items.filter((i) => i.id !== item.id));
-    showToast('Ligne supprimée.', { action: { label: 'Annuler', run: () => void saveTemplate(db, { ...template, items: previous }) } });
+  const removeLine = async (item: PrescriptionItem) => {
+    const partners = blockPartners(template, item.blockTypeId, context.templates);
+    const previous = await saveItems(template.items.filter((i) => i.id !== item.id));
+    showToast(partners.length > 0 ? `Ligne supprimée, aussi dans ${templateNames(partners)}.` : 'Ligne supprimée.', {
+      action: { label: 'Annuler', run: () => void restoreTemplates(db, previous) },
+    });
   };
 
   const card = (item: PrescriptionItem) => (
@@ -277,9 +285,28 @@ function Editor({ template, data, lookups }: { template: SessionTemplate; data: 
       {plan.blocks.map((block, b) => {
         const name = lookups.blocks.get(block.blockTypeId)?.name ?? 'Bloc inconnu';
         const last = block.units.at(-1)?.itemIds.at(-1);
+        const partners = blockPartners(template, block.blockTypeId, context.templates);
         return (
           <section key={`${block.blockTypeId}-${b}`} data-sort-group className="flex flex-col gap-3" aria-label={name}>
-            <h2 className="mt-2 font-display text-2xl leading-none tracking-wider text-ink-3">{name}</h2>
+            <div className="mt-2 flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <h2 className="min-w-0 font-display text-2xl leading-none tracking-wider text-ink-3">{name}</h2>
+                {partners.length > 0 ? <Badge tone="accent">Commun</Badge> : <Badge>Propre</Badge>}
+                <button
+                  type="button"
+                  aria-label={`Options du bloc ${name}`}
+                  onClick={() => setBlockMenu(block.blockTypeId)}
+                  className="ml-auto flex size-12 shrink-0 items-center justify-center rounded-xl text-ink-2 active:bg-card-2"
+                >
+                  <DotsIcon className="size-6" />
+                </button>
+              </div>
+              {partners.length > 0 && (
+                <p className="text-sm text-ink-3">
+                  Aussi dans {templateNames(partners)}. Une modification change {partners.length > 1 ? 'toutes ces séances' : 'les deux séances'}.
+                </p>
+              )}
+            </div>
             {block.units.map((unit) => {
               const items = unit.itemIds.map((id) => plan.itemsById.get(id)!);
               if (unit.mode === 'single') return items.map(card);
@@ -306,8 +333,22 @@ function Editor({ template, data, lookups }: { template: SessionTemplate; data: 
       <Button variant="secondary" className="mt-2" onClick={() => setSheet({ kind: 'item', target: { itemId: null, field: 'all' } })}>
         <PlusIcon /> Ajouter une ligne
       </Button>
+      {canAdopt && (
+        <Button variant="secondary" onClick={() => setPicker({})}>
+          <LinkIcon /> Reprendre un bloc d’une autre séance
+        </Button>
+      )}
 
       <ItemSheet target={sheet?.kind === 'item' ? sheet.target : null} template={template} data={data} lookups={lookups} onClose={() => setSheet(null)} />
+      <BlockMenuSheet
+        template={template}
+        blockTypeId={blockMenu}
+        templates={context.templates}
+        lookups={lookups}
+        onClose={() => setBlockMenu(null)}
+        onReplace={(blockTypeId) => setPicker({ blockTypeId })}
+      />
+      <BlockPickerSheet target={picker ? { template, ...picker } : null} templates={context.templates} lookups={lookups} onClose={() => setPicker(null)} />
 
       <Sheet open={lineItem !== undefined} onClose={() => setSheet(null)} title={lineItem ? lookups.elements.get(lineItem.elementId)?.name : ''}>
         {lineItem && (
@@ -346,7 +387,7 @@ function Editor({ template, data, lookups }: { template: SessionTemplate; data: 
               danger
               onClick={() => {
                 setSheet(null);
-                removeLine(lineItem);
+                void removeLine(lineItem);
               }}
             />
           </MenuList>

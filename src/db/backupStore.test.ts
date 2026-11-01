@@ -60,7 +60,7 @@ describe('sauvegarde JSON', () => {
       tables: { settings: [{ id: 'settings', weekPlan: {} }], sets: [oldSet, { ...oldSet, id: 's2', kind: 'warmup' }] },
     });
     const backup = parseBackup(text, 2);
-    expect(backup.formatVersion).toBe(6);
+    expect(backup.formatVersion).toBe(7);
     expect(backup.tables.sets).toEqual([
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', kind: 'warmup' },
@@ -90,17 +90,17 @@ describe('sauvegarde JSON', () => {
       },
     });
     const backup = parseBackup(text, 3, () => 'p1');
-    expect(backup.formatVersion).toBe(6);
+    expect(backup.formatVersion).toBe(7);
     expect(backup.tables.templates).toEqual([
-      { ...oldTemplate, archived: false, programId: 'p1' },
-      { ...oldTemplate, id: 'old', archived: true, programId: 'p1' },
+      { ...oldTemplate, archived: false, programId: 'p1', sharedBlocks: {} },
+      { ...oldTemplate, id: 'old', archived: true, programId: 'p1', sharedBlocks: {} },
     ]);
     expect(backup.tables.exercises).toEqual([
       { ...oldExercise, workSecPerSet: null },
       { ...oldExercise, id: 'slow', workSecPerSet: 60 },
     ]);
     expect(backup.tables.sessions).toEqual([
-      { id: 'ses', date: '2026-10-16', templateSnapshot: { ...oldTemplate, archived: false, programId: 'p1' }, expressMinutes: null },
+      { id: 'ses', date: '2026-10-16', templateSnapshot: { ...oldTemplate, archived: false, programId: 'p1', sharedBlocks: {} }, expressMinutes: null },
       { id: 'xlsx', date: '2026-10-07', templateSnapshot: null, expressMinutes: null },
     ]);
 
@@ -125,7 +125,7 @@ describe('sauvegarde JSON', () => {
       },
     });
     const backup = parseBackup(text, 4);
-    expect(backup.formatVersion).toBe(6);
+    expect(backup.formatVersion).toBe(7);
     expect(backup.tables.sessions).toEqual([
       { id: 'ses', date: '2026-10-16', status: 'done', expressMinutes: null },
       { id: 'new', date: '2026-10-17', status: 'done', expressMinutes: 30 },
@@ -167,7 +167,7 @@ describe('sauvegarde JSON', () => {
       },
     });
     const backup = parseBackup(text, 5, () => 'p1');
-    expect(backup.formatVersion).toBe(6);
+    expect(backup.formatVersion).toBe(7);
     expect(backup.tables.settings).toEqual([{ id: 'settings', cycleStartDate: '2026-10-05', avgWorkSecPerSet: 30, freeRestSec: 30, lastBackupAt: 7 }]);
     expect(backup.tables.programs).toEqual([
       {
@@ -190,8 +190,8 @@ describe('sauvegarde JSON', () => {
         componentVolumes: [],
       },
     ]);
-    expect(backup.tables.templates).toEqual([{ ...oldTemplate, programId: 'p1' }]);
-    expect(backup.tables.sessions).toEqual([{ id: 'ses', date: '2026-10-16', status: 'done', templateSnapshot: { ...oldTemplate, programId: 'p1' }, expressMinutes: null }]);
+    expect(backup.tables.templates).toEqual([{ ...oldTemplate, programId: 'p1', sharedBlocks: {} }]);
+    expect(backup.tables.sessions).toEqual([{ id: 'ses', date: '2026-10-16', status: 'done', templateSnapshot: { ...oldTemplate, programId: 'p1', sharedBlocks: {} }, expressMinutes: null }]);
 
     const target = freshDb();
     await restoreBackup(target, backup);
@@ -202,8 +202,34 @@ describe('sauvegarde JSON', () => {
     const program = { id: 'p1', name: 'Octobre 2026', startWeek: 1, weekPlan: {}, volumeMin: 4, volumeMax: 6 };
     const text = JSON.stringify({ app: 'streeter', formatVersion: 5, dbVersion: 5, exportedAt: 0, tables: { settings: [{ id: 'settings' }], programs: [program] } });
     const backup = parseBackup(text, 6);
-    expect(backup.formatVersion).toBe(6);
+    expect(backup.formatVersion).toBe(7);
     expect(backup.tables.programs).toEqual([{ ...program, schedule: 'week', startDate: null, componentVolumes: [] }]);
+  });
+
+  it('convertit une sauvegarde du format 6 : les blocs identiques d’un programme deviennent communs', async () => {
+    const line = (id: string, blockTypeId: string) => ({ id, blockTypeId, elementId: 'connexion', candidateExerciseIds: ['cars'], setsMin: 1, setsMax: 2, targetText: '8-10 reps' });
+    const base = { sessionTypeId: 'type', moment: 'evening', optional: false, notes: '', archived: false, programId: 'p1' };
+    const a = { ...base, id: 'a', name: 'Séance type', items: [line('a1', 'echauf'), line('a2', 'principal')] };
+    const b = { ...base, id: 'b', name: 'Combo libre', items: [line('b1', 'echauf')] };
+    const program = { id: 'p1', name: 'Novembre 2026', startWeek: 5, weekPlan: {}, volumeMin: 4, volumeMax: 6, schedule: 'sequence', startDate: '2026-10-31', componentVolumes: [] };
+    const text = JSON.stringify({
+      app: 'streeter',
+      formatVersion: 6,
+      dbVersion: 6,
+      exportedAt: 0,
+      tables: { settings: [{ id: 'settings' }], programs: [program], templates: [a, b], sessions: [{ id: 'ses', date: '2026-10-31', templateSnapshot: b }] },
+    });
+    const backup = parseBackup(text, 7, () => 'commun');
+    expect(backup.formatVersion).toBe(7);
+    expect(backup.tables.templates).toEqual([
+      { ...a, sharedBlocks: { echauf: 'commun' } },
+      { ...b, items: [line('a1', 'echauf')], sharedBlocks: { echauf: 'commun' } },
+    ]);
+    expect(backup.tables.sessions).toEqual([{ id: 'ses', date: '2026-10-31', templateSnapshot: { ...b, sharedBlocks: {} } }]);
+
+    const target = freshDb();
+    await restoreBackup(target, backup);
+    expect(await target.templates.get('b')).toMatchObject({ sharedBlocks: { echauf: 'commun' } });
   });
 
   it('refuse une sauvegarde du format 5 sans programme', () => {

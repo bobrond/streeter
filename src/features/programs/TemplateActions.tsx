@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import type { Lookups } from '../../db/lookups';
-import { changeTemplateMoment, deleteTemplate, saveTemplate, setTemplateArchived, updateProgram } from '../../db/programStore';
+import { changeTemplateMoment, deleteTemplate, replaceTemplates, saveTemplate, setTemplateArchived, updateProgram } from '../../db/programStore';
+import { withSameBlocks } from '../../domain/blocks';
 import { duplicateTemplate, nameError, templateDays, uniqueName } from '../../domain/editing';
 import { MOMENT_LABEL, seqDayLabel } from '../../domain/labels';
 import { cleanSpaces } from '../../domain/text';
@@ -62,6 +63,16 @@ export function TemplateActions({
     navigate(`/programs/template/${copy.id}`, { replace: inEditor });
   };
 
+  // Nouvelle séance qui partage tous les blocs de celle-ci : on rend propres ceux à changer (Combo libre à partir de
+  // Séance type).
+  const sameBlocks = async () => {
+    const { source, copy } = withSameBlocks(template, { id: newId(), name: uniqueName(`${template.name} (blocs communs)`, context.templates) }, newId);
+    await replaceTemplates(db, [source, copy]);
+    close();
+    showToast(`Nouvelle séance : ses blocs sont communs avec « ${template.name} ».`);
+    navigate(`/programs/template/${copy.id}`, { replace: inEditor });
+  };
+
   const archive = async () => {
     const previous = context.program.weekPlan;
     await setTemplateArchived(db, template.id, true);
@@ -104,7 +115,15 @@ export function TemplateActions({
             hint={[type?.name, MOMENT_LABEL[template.moment], template.optional ? 'optionnelle' : null].filter(Boolean).join(' · ')}
             onClick={() => setMode('settings')}
           />
-          <MenuItem icon={<CopyIcon />} label="Dupliquer" hint="La copie n’est pas placée dans la semaine type." onClick={() => void duplicate()} />
+          {!template.archived && template.items.length > 0 && (
+            <MenuItem
+              icon={<CopyIcon />}
+              label="Nouvelle séance avec les mêmes blocs"
+              hint="Blocs communs aux deux séances ; rends propres ceux à changer."
+              onClick={() => void sameBlocks()}
+            />
+          )}
+          <MenuItem icon={<CopyIcon />} label="Dupliquer" hint="Copie à part, sans bloc commun ; pas placée dans la semaine type." onClick={() => void duplicate()} />
           {template.archived ? (
             <MenuItem icon={<ArchiveIcon />} label="Désarchiver" onClick={() => void unarchive()} />
           ) : (

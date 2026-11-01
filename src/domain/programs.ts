@@ -147,7 +147,8 @@ function remapWeekPlan(weekPlan: WeekPlan, ids: ReadonlyMap<ID, ID>): WeekPlan {
 
 /**
  * Copie d'un programme pour la suite : mêmes réglages, mêmes objectifs, copie de tous ses modèles (archivés compris,
- * avec de nouveaux identifiants de modèle et de ligne) placés aux mêmes créneaux.
+ * avec de nouveaux identifiants de modèle et de ligne) placés aux mêmes créneaux. Les blocs communs le restent entre
+ * les copies, sous de nouveaux identifiants : une ligne commune garde le même identifiant d'un modèle à l'autre.
  */
 export function duplicateProgram(
   source: Program,
@@ -155,6 +156,12 @@ export function duplicateProgram(
   args: { newId: () => ID; name: string; startWeek: number; now: number },
 ): { program: Program; templates: SessionTemplate[] } {
   const ids = new Map<ID, ID>();
+  const lineIds = new Map<ID, ID>();
+  const blockIds = new Map<ID, ID>();
+  const renamed = (map: Map<ID, ID>, id: ID) => {
+    if (!map.has(id)) map.set(id, args.newId());
+    return map.get(id)!;
+  };
   const copies = templatesOf(templates, source.id).map((template) => {
     const id = args.newId();
     ids.set(template.id, id);
@@ -162,7 +169,8 @@ export function duplicateProgram(
       ...structuredClone(template),
       id,
       programId: '',
-      items: template.items.map((item) => ({ ...structuredClone(item), id: args.newId() })),
+      items: template.items.map((item) => ({ ...structuredClone(item), id: renamed(lineIds, item.id) })),
+      sharedBlocks: Object.fromEntries(Object.entries(template.sharedBlocks).map(([blockTypeId, link]) => [blockTypeId, renamed(blockIds, link)])),
     };
   });
   const program: Program = {

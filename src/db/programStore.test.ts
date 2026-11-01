@@ -12,7 +12,10 @@ import {
   deleteExercise,
   deleteProgram,
   deleteTemplate,
+  replaceTemplates,
+  restoreTemplates,
   saveOrder,
+  saveTemplate,
   setTemplateArchived,
   setWeekSlot,
   swapWeekSlotsOf,
@@ -110,6 +113,70 @@ describe('programStore', () => {
     await setTemplateArchived(db, tpl.id, false);
     expect((await db.templates.get(tpl.id))?.archived).toBe(false);
     expect((await db.programs.get('prog'))!.weekPlan[2].evening).toBeNull();
+  });
+
+  it('enregistre un bloc commun dans toutes les séances qui le partagent ; « Annuler » remet tout', async () => {
+    const db = freshDb();
+    const warmup = item({ blockTypeId: renfo.id, elementId: dentele.id, candidateExerciseIds: [wallSlide.id] });
+    const st = template('Séance type', 'evening', [warmup], { sharedBlocks: { [renfo.id]: 'commun' } });
+    const combo = template('Combo libre', 'evening', [warmup], { sharedBlocks: { [renfo.id]: 'commun' } });
+    const elsewhere = template('Max', 'evening', [warmup], { programId: 'oct', sharedBlocks: { [renfo.id]: 'commun' } });
+    await db.templates.bulkPut([st, combo, elsewhere]);
+    const previous = await saveTemplate(db, { ...combo, items: [{ ...warmup, setsMax: 3 }] });
+    expect((await db.templates.get(st.id))!.items[0].setsMax).toBe(3);
+    expect((await db.templates.get(combo.id))!.items[0].setsMax).toBe(3);
+    expect((await db.templates.get(elsewhere.id))!.items[0].setsMax).toBe(2);
+    expect(previous.map((t) => t.id).sort()).toEqual([st.id, combo.id].sort());
+    await restoreTemplates(db, previous);
+    expect((await db.templates.get(st.id))!.items[0].setsMax).toBe(2);
+    expect((await db.templates.get(combo.id))!.items[0].setsMax).toBe(2);
+  });
+
+  it('archiver une séance rend ses blocs propres : les autres séances ne la suivent plus', async () => {
+    const db = freshDb();
+    await seed(db);
+    const warmup = item({ blockTypeId: renfo.id, elementId: dentele.id, candidateExerciseIds: [wallSlide.id] });
+    const st = template('Séance type', 'evening', [warmup], { sharedBlocks: { [renfo.id]: 'commun' } });
+    const old = template('Séance type 5', 'evening', [warmup], { sharedBlocks: { [renfo.id]: 'commun' } });
+    await replaceTemplates(db, [st, old]);
+    await setTemplateArchived(db, old.id, true);
+    const archived = (await db.templates.get(old.id))!;
+    expect(archived).toMatchObject({ archived: true, sharedBlocks: {} });
+    expect(archived.items[0].id).not.toBe(warmup.id);
+    expect({ ...archived.items[0], id: warmup.id }).toEqual(warmup);
+    await saveTemplate(db, { ...st, items: [{ ...warmup, notes: 'modifié' }] });
+    expect((await db.templates.get(old.id))!.items[0].notes).toBe('');
+  });
+
+  it('un programme importé met en commun les blocs identiques de ses séances', async () => {
+    const db = freshDb();
+    const tpl = await seed(db);
+    const catalog = {
+      elements: await db.elements.toArray(),
+      blockTypes: await db.blockTypes.toArray(),
+      sessionTypes: [{ id: 'type', name: 'Combo', moment: 'evening' as const, description: '', color: '#ffb020', isTestDay: false }],
+      exercises: await db.exercises.toArray(),
+      bands: [],
+      objectives: await db.objectives.toArray(),
+    };
+    const october = (await db.programs.get('prog'))!;
+    const file = programToFile(october, [tpl, { ...tpl, id: 'copie', name: 'Combo bis' }], catalog, appSettings());
+    const read = readProgramFile(JSON.stringify(file), {
+      ...catalog,
+      app: appSettings(),
+      programs: [october],
+      templates: [tpl],
+      usedTemplateIds: new Set(),
+      today: '2026-10-13',
+      currentWeek: 2,
+      newId: () => crypto.randomUUID(),
+      now: 1,
+    });
+    if (!read.ok) throw new Error(read.errors.join(' | '));
+    const [a, b] = read.value.templates;
+    expect(a.sharedBlocks[renfo.id]).toBeDefined();
+    expect(b.sharedBlocks).toEqual(a.sharedBlocks);
+    expect(b.items[0].id).toBe(a.items[0].id);
   });
 
   it('échange les séances du soir de deux jours', async () => {

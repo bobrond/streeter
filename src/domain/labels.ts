@@ -88,6 +88,12 @@ export function formatSets(min: number, max: number): string {
   return min === max ? `${min}` : `${min}-${max}`;
 }
 
+/** « A », « A et B », « A, B et C ». */
+export function joinFrench(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} et ${parts.at(-1)}`;
+}
+
 /** « 17 min », « 1 h 05 ». */
 export function formatDuration(sec: number): string {
   const minutes = Math.round(sec / 60);

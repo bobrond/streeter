@@ -267,9 +267,9 @@ export function exerciseUses(id: ID, templates: readonly SessionTemplate[]): { t
   return templates.flatMap((template) => template.items.filter((item) => item.candidateExerciseIds.includes(id)).map((item) => ({ template, item })));
 }
 
-/** Copie d'un modèle avec de nouveaux identifiants. */
+/** Copie à part d'un modèle : nouveaux identifiants, aucun bloc commun. */
 export function duplicateTemplate(template: SessionTemplate, newId: () => ID, name: string): SessionTemplate {
-  return { ...structuredClone(template), id: newId(), name, items: template.items.map((item) => ({ ...structuredClone(item), id: newId() })) };
+  return { ...structuredClone(template), id: newId(), name, items: template.items.map((item) => ({ ...structuredClone(item), id: newId() })), sharedBlocks: {} };
 }
 
 /** Retire un exercice supprimé des candidats de toutes les lignes ; renvoie les modèles modifiés. */
