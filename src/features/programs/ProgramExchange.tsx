@@ -30,7 +30,7 @@ import { WarningIcon } from '../../ui/icons';
 import { Screen } from '../../ui/Screen';
 import { ConfirmSheet, Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/toastStore';
-import { currentWeekOf } from './programContext';
+import { currentWeekOf, withProgram } from './programContext';
 import { ProgramChecks } from './ProgramChecks';
 
 function errorText(e: unknown): string {
@@ -54,6 +54,8 @@ async function agentInstructions(): Promise<string> {
 /** Export d'un programme pour l'agent : copier le texte, l'envoyer (.txt) ou l'enregistrer (.json). */
 export function ExportProgramSheet({ program, data, onClose }: { program: Program; data: AppData; onClose: () => void }) {
   const [canShare] = useState(canShareFiles);
+  const today = localISODate(new Date(useNow(60_000)));
+  const started = programPhase(data.programs, program, { app: data.appSettings, today }) !== 'upcoming';
   const text = () => serializeProgramFile(programToFile(program, data.templates, data, data.appSettings));
   const share = async () => {
     try {
@@ -86,6 +88,20 @@ export function ExportProgramSheet({ program, data, onClose }: { program: Progra
         >
           Enregistrer le fichier (.json)
         </Button>
+        {started && (
+          <>
+            <p className="mt-2 text-ink-2">Pour préparer la suite avec l’agent, accompagne le programme de son bilan Markdown (volume, records, tests, écarts, notes).</p>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                onClose();
+                navigate(withProgram('/programs/report', data, program.id));
+              }}
+            >
+              Ouvrir le bilan du programme
+            </Button>
+          </>
+        )}
         <p className="mt-2 text-ink-2">La consigne explique à l’agent le format et les principes de l’appli : à lui donner une fois, puis à chaque nouvelle version.</p>
         <Button variant="secondary" onClick={() => void agentInstructions().then((t) => copyText(t, 'Consigne copiée.'))}>
           Copier la consigne de l’agent

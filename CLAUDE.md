@@ -111,7 +111,7 @@ Phases :
 
 - **G1, programmes datés** (livrée le 27/10/2026, v1.7.0) : schéma Dexie v5, format de sauvegarde 5. Voir « Programmes datés (depuis la phase G1) ».
 - **G2, format programme JSON** (livrée le 28/10/2026, v1.8.0) : format version 1 fixé par la consigne donnée à l'agent, [docs/consigne_agent_programmation.md](docs/consigne_agent_programmation.md), implémenté tel quel. Pas de changement de schéma ni de format de sauvegarde. Tout changement du format passe par une nouvelle version de la consigne. Voir « Format programme JSON (depuis la phase G2) ».
-- **G3, bilan du programme** : export Markdown pour l'agent, contenu promis dans la consigne (volume réalisé par semaine, records, tests, séances sautées ou dégradées, notes, séances express). En suspens avec l'agent depuis le 01/11/2026 (« Programmation par blocs »).
+- **G3, bilan du programme** (livrée le 01/11/2026, v1.12.0) : export Markdown pour l'utilisateur (suivi des progrès en mode second cerveau) et pour l'agent de programmation ; pas de changement de schéma ni de format de sauvegarde. Consigne mise à jour ([docs/consigne_agent_programmation.md](docs/consigne_agent_programmation.md)). Voir « Bilan du programme (depuis la phase G3) ».
 - **Novembre, format version 2** (livrée le 28/10/2026, v1.9.0) : les 5 `demandesAppli` du programme de novembre. Schéma Dexie v6, format de sauvegarde 6, format programme JSON version 2. Voir « Séquence et format version 2 ».
 
 ## Programmation par blocs (décidée le 01/11/2026)
@@ -127,7 +127,7 @@ Décidé avec l'utilisateur :
 - Quand une composante n'a pas besoin de toutes les séances qui l'acceptent : séances équilibrées (à peu près autant de séries de composantes dans chacune), les composantes qui ont le moins de séances possibles (la force) placées d'abord, au plus tôt. Novembre : séance 1, grand dentelé, deltoïde ant, ext. thoracique ; 2, grand dentelé, rhomboïde ; 3, rhomboïde, deltoïde ant, ext. thoracique ; 4 et 5, grand dentelé, rhomboïde ; matin 1, grand dentelé ; matin 2, rhomboïde ; 2 séries chaque fois.
 - Répartition fixe ; seule la séance express s'adapte à ce qui a été fait.
 - Novembre converti dès que la répartition est prête : « Séance type 5 » disparaît.
-- Agent en suspens : pas de format programme version 3, G3 attend aussi. Repères par tranche et progressions inférieures restent modifiables par le fichier seulement (pas nécessaire dans l'éditeur).
+- Pas de format programme version 3 ; l'agent reste utilisé pour aider à programmer et suivre les progrès en mode second cerveau (G3 livrée le 01/11/2026). Repères par tranche et progressions inférieures restent modifiables par le fichier seulement (pas nécessaire dans l'éditeur).
 - Une autre séance faite à une place (« Choisir une séance », autre séance de la séquence) reçoit **toutes** les composantes de cette place, force comprise, même si son type ne les accepte pas (décidé le 01/11/2026).
 - Une séance du soir optionnelle (comme Technique léger) complète jusqu'au maximum, comme un matin ; elle ne porte pas le minimum (décidé le 01/11/2026).
 
@@ -226,6 +226,29 @@ Demandé par l'utilisateur le 28/10/2026 (les 5 `demandesAppli` du programme de 
 - **Aperçu** avant de valider : programme et date (« Remplace… » le cas échéant), remarques de lecture, contrôles du programme (`programIssues`), changements par rapport au programme remplacé ou à celui de la semaine d'avant (réglages, semaine type, séances nouvelles / retirées / modifiées ligne par ligne, rapprochées par bloc et élément), objectifs (nouveau, repris, modifié, devient ancien), ajouts au catalogue, demandes à l'appli (« Copier les demandes »). « Créer le programme » ou « Remplacer » (confirmation) : une seule transaction (`applyProgramImport`).
 - Tests : aller-retour export → import sans changement, y compris sur le vrai tableur (sauté sans le fichier).
 
+## Bilan du programme (depuis la phase G3)
+
+Export Markdown et aperçu sur téléphone du bilan d'un programme commencé, en cours ou terminé ([src/domain/programReport.ts](src/domain/programReport.ts), [src/io/program/programReport.ts](src/io/program/programReport.ts), [src/features/programs/ProgramReportScreen.tsx](src/features/programs/ProgramReportScreen.tsx)). Pas de changement de schéma ni de format de sauvegarde. Règles décidées avec l'utilisateur le 01/11/2026 :
+
+- **Destinataires** : les deux — l'utilisateur (suivi des progrès en mode second cerveau) et l'agent de programmation (ajustement du cycle suivant).
+- **Accès** (`/programs/report`, `?programme=:id` ; absent pour un programme à venir) : ⋯ du programme dans Programmes et dans la liste des programmes (« Bilan du programme »), bouton « Bilan » sur le bandeau « Programme terminé. », et raccourci « Ouvrir le bilan du programme » dans la feuille « Exporter pour l'agent ». Vue « Aperçu » en cartes et vue « Markdown » brute ; actions « Copier le bilan », « Envoyer (.txt) » (partage Android) et « Enregistrer (.md) ».
+- **Volume réalisé comparé au prévu** (par tranche en séquence, par semaine en semaine type) :
+  - **composantes** (avec leur type de travail `force` / `endurance` et leurs bornes, composantes réparties H2 et `byTranche` compris) **et skills par bloc** (Travail prioritaire, Travail principal / Skill, Assisté, Renfo skill : séries faites sur la fourchette prévue) ;
+  - **tranche ou semaine allégée** : réalisé comparé au **prévu allégé** (séries du soir réduites ligne par ligne via `practicedTemplate`, matins retirés si `hideMorningsInDeload`).
+- **Records battus (all-time)** : uniquement les records battus all-time pendant le programme (strictement au-dessus du meilleur avant le programme, ou — pour un exercice / élastique jamais fait avant le programme — battu lors d'une séance ultérieure du programme par rapport à la première ; les simples premières fois sont exclues), sur **tout exercice mesuré** (`measure !== 'none'` : skills, progressions inférieures, composantes, autres), sans élastique et par élastique ; échauffement et séries dégradées exclus, l'échec compte. Sous-section à part pour les séries faites sur **progressions inférieures** (`lowerProgressionIds` de `session.templateSnapshot`).
+- **Tests des objectifs** : seuls les tests datés dans les dates du programme (`startDate <= date <= endDate`), comparés au meilleur test antérieur à `startDate` (`bestBefore`), avec rappel de la meilleure série propre sans élastique en séance sur la période.
+- **Rythme, écarts et séries marquées** :
+  - en **séquence** : pauses de **plus de 2 jours consécutifs sans séance faite** (`computeTrainingGaps`, règle « jamais plus de 2 jours sans s'entraîner »), dates et durée réelle de chaque tranche, créneaux où une autre séance a remplacé la séance prévue (hors express) ;
+  - en **semaine type** : créneaux obligatoires manqués et créneaux optionnels non faits (semaines écoulées, matins masqués en semaine allégée exclus) ;
+  - **séances abandonnées** (avec durée et note), **séances express** (format, séance remplacée, durée), **séries dégradées** (`SetLog.quality === 'degraded'`, regroupées par séance et exercice) et **séries à l'échec** (`kind === 'failure'`).
+- **Notes** : notes du programme, notes de séance (faites et abandonnées) et notes de série.
+- Choix sans l'utilisateur, à valider à l'usage :
+  - programme en cours arrêté à aujourd'hui, séance `in_progress` exclue du bilan ;
+  - tranche ou semaine en cours affichée avec son volume partiel et signalée « en cours » ;
+  - partage Android en `.txt` (`text/plain`, contenu Markdown intact, même contrainte Chrome Android que la sauvegarde et le JSON), téléchargement en `.md` (`streeter-bilan-<slug>.md`) ;
+  - détection des progressions inférieures sur `session.templateSnapshot.items` (aucun champ ajouté en base) ;
+  - séries à l'échec listées à côté des séries dégradées quand il y en a.
+
 ## Navigation et charte (depuis la phase B)
 
 - **Onglets** ([src/ui/tabs.ts](src/ui/tabs.ts), [src/ui/TabBar.tsx](src/ui/TabBar.tsx)) :
@@ -271,7 +294,7 @@ Onglet Programmes ([src/features/programs/](src/features/programs/)). Un program
 
 - **Adresses** :
   - `/programs` : programme actif ; `/programs?vue=exercices` : bibliothèque (`&nature=skills|composantes|autres`, `&element=…`) ;
-  - `/programs/template/:id` : éditeur de modèle ; `/programs/week` : les 14 créneaux et le volume prévu ; `/programs/components` : composantes réparties (`?programme=:id`) ;
+  - `/programs/template/:id` : éditeur de modèle ; `/programs/week` : les 14 créneaux et le volume prévu ; `/programs/components` : composantes réparties (`?programme=:id`) ; `/programs/report` : bilan du programme (`?programme=:id`) ;
   - `/programs/exercise/:id` : fiche (celle de l'Historique, [src/features/journal/ExerciseDetail.tsx](src/features/journal/ExerciseDetail.tsx)) ; `/programs/exercise/:id/edit` et `/programs/exercise/new` : éditeur ;
   - les anciennes adresses `/settings/templates…`, `/settings/exercises…` et `/settings/week` redirigent.
 - **Programme actif** : J1 à J7 en cartes ; aujourd'hui en orange (bordure, case du jour pleine, « auj. »).

@@ -203,6 +203,13 @@ export function ProgramsList({ data, today }: { data: AppData; today: string }) 
           <MenuList>
             <MenuItem label="Afficher" onClick={() => open(action.program)} />
             <MenuItem icon={<PencilIcon />} label="Renommer" onClick={() => setAction({ ...action, kind: 'rename' })} />
+            {programPhase(data.programs, action.program, { app: data.appSettings, today }) !== 'upcoming' && (
+              <MenuItem
+                label="Bilan du programme"
+                hint="Volume, records, tests, écarts, séances express et notes en Markdown."
+                onClick={() => navigate(withProgram('/programs/report', data, action.program.id))}
+              />
+            )}
             <MenuItem label="Exporter pour l’agent" hint="Le programme et le catalogue, au format de la consigne." onClick={() => setAction({ ...action, kind: 'export' })} />
             <MenuItem icon={<CopyIcon />} label="Dupliquer pour la suite" hint="Nouveau programme après le dernier, avec la même semaine type." onClick={() => setAction({ ...action, kind: 'duplicate' })} />
             {action.program.startWeek > currentWeek && (

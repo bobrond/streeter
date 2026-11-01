@@ -36,6 +36,7 @@ import { ExerciseLibrary } from './ExerciseLibrary';
 import { PHASE_LABEL, programContext, programDates, withProgram, type ProgramContext } from './programContext';
 import { ProgramChecks } from './ProgramChecks';
 import { ExportProgramSheet, ProgramImportScreen } from './ProgramExchange';
+import { ProgramReportScreen } from './ProgramReportScreen';
 import { DuplicateProgramSheet, ProgramsList, RenameProgramSheet } from './ProgramsList';
 import { ProgramsNav, SettingsButton } from './ProgramsNav';
 import { SlotPickerSheet, type Slot } from './SlotPickerSheet';
@@ -48,7 +49,8 @@ const byName = (a: SessionTemplate, b: SessionTemplate) => a.name.localeCompare(
 
 /**
  * #/programs (?vue=exercices, ?programme=:id), #/programs/all, #/programs/template/:id, #/programs/exercise/:id(/edit),
- * #/programs/exercise/new, #/programs/week (?programme=:id), #/programs/components (?programme=:id), #/programs/import.
+ * #/programs/exercise/new, #/programs/week (?programme=:id), #/programs/components (?programme=:id),
+ * #/programs/report (?programme=:id), #/programs/import.
  */
 export function ProgramsScreen({ data, path }: { data: AppData; path: string }) {
   const parts = path.split('?')[0].split('/').filter(Boolean);
@@ -59,6 +61,7 @@ export function ProgramsScreen({ data, path }: { data: AppData; path: string }) 
   if (parts[1] === 'week') return <WeekPlanEditor data={data} programId={queryParam(path, 'programme')} />;
   if (parts[1] === 'all') return <ProgramsListRoute data={data} />;
   if (parts[1] === 'components') return <ComponentsScreen key={queryParam(path, 'programme') ?? 'current'} data={data} programId={queryParam(path, 'programme')} />;
+  if (parts[1] === 'report') return <ProgramReportScreen key={queryParam(path, 'programme') ?? 'current'} data={data} programId={queryParam(path, 'programme')} />;
   if (parts[1] === 'import') return <ProgramImportScreen data={data} />;
   if (queryParam(path, 'vue') === 'exercices') return <ExerciseLibrary data={data} path={path} />;
   return <ProgramView key={queryParam(path, 'programme') ?? 'current'} data={data} programId={queryParam(path, 'programme')} />;
@@ -279,10 +282,19 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
       <ProgramChecks program={context.plan} settings={settings} lookups={lookups} sticky />
 
       {!isCurrent && (
-        <div className="flex items-center gap-3 rounded-2xl border border-line bg-card-2 p-3">
+        <div className="flex items-center gap-2 rounded-2xl border border-line bg-card-2 p-3">
           <span className="flex-1 text-ink-2">
             {phase === 'upcoming' ? `Commence le ${formatDateLong(programStartDate(data.appSettings, program))}.` : 'Programme terminé.'}
           </span>
+          {phase === 'past' && (
+            <button
+              type="button"
+              onClick={() => navigate(withProgram('/programs/report', data, program.id))}
+              className="min-h-11 rounded-xl border border-accent px-3 font-semibold text-accent active:bg-card"
+            >
+              Bilan
+            </button>
+          )}
           <button type="button" onClick={() => navigate('/programs')} className="min-h-11 rounded-xl border border-line px-3 font-semibold active:bg-card">
             En cours
           </button>
@@ -458,6 +470,13 @@ function ProgramView({ data, programId }: { data: AppData; programId: string | n
               setProgramSheet('duplicate');
             }}
           />
+          {phase !== 'upcoming' && (
+            <MenuItem
+              label="Bilan du programme"
+              hint="Volume, records, tests, écarts, séances express et notes en Markdown."
+              onClick={() => navigate(withProgram('/programs/report', data, program.id))}
+            />
+          )}
           <MenuItem
             label="Exporter pour l’agent"
             hint="Le programme et le catalogue, à donner à ton agent de programmation."

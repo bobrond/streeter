@@ -9,7 +9,7 @@ Le programme passe d'abord, l'appli s'adapte : si le format ne permet pas d'expr
 Je te donne, en début de cycle (en pièce jointe ou en texte collé) :
 
 1. **Le programme en cours**, exporté par l'appli au format ci-dessous, avec en plus une section `catalogue` (exercices, éléments, blocs, types de séance, élastiques, objectifs qui existent déjà dans l'appli). Pars de lui : c'est la vérité sur ce que je fais, l'appli a pu s'écarter de tes anciens fichiers.
-2. **Le bilan du programme** (texte exporté par l'appli, quand elle sait le faire) : séances faites ou abandonnées, séances express, volume réalisé par tranche et par composante (avec son type de travail), séries dégradées, records par exercice et par élastique, séries en progression inférieure, tests d'objectifs, mes notes. Appuie-toi dessus pour ajuster le cycle suivant.
+2. **Le bilan du programme** (Markdown exporté par l'appli, sur tout le programme s'il est terminé ou arrêté à la date d'export s'il est en cours) : volume réalisé comparé au prévu par tranche (et au prévu allégé sur une tranche allégée) pour les composantes (avec leur type de travail, composantes réparties comprises) et pour les skills par bloc, records battus all-time sur tout exercice mesuré (par élastique et sans élastique), séries faites sur progressions inférieures, tests d'objectifs datés dans les dates du programme (comparés au meilleur test d'avant), rythme et écarts (> 2 jours sans séance faite, durées réelles des tranches, autres séances à une place), séances abandonnées, séances express, séries dégradées et séries à l'échec, mes notes (programme, séances, séries). Appuie-toi dessus pour ajuster le cycle suivant.
 3. La **date de début** du nouveau programme et mes remarques.
 
 Tu me rends, dans cet ordre :
