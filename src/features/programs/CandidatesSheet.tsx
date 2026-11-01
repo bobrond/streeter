@@ -3,7 +3,8 @@ import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { saveExercise } from '../../db/programStore';
 import { nameError, nextOrder } from '../../domain/editing';
-import { MEASURE_LABEL } from '../../domain/labels';
+import { inferExerciseEquipment } from '../../domain/equipment';
+import { MEASURE_LABEL, formatEquipment } from '../../domain/labels';
 import { fold } from '../../domain/text';
 import type { Exercise, ID, Measure } from '../../domain/types';
 import { newId } from '../../lib/id';
@@ -30,8 +31,9 @@ function ExerciseToggle({ exercise, index, onToggle }: { exercise: Exercise; ind
           {exercise.quick && <span className="text-accent"> ⚡</span>}
         </span>
         <span className="block text-sm text-ink-3">
-          {exercise.category} · {MEASURE_LABEL[exercise.measure]}
-          {!exercise.active && ' · désactivé'}
+          {[exercise.category, MEASURE_LABEL[exercise.measure], formatEquipment(exercise.equipment) || null, !exercise.active ? 'désactivé' : null]
+            .filter(Boolean)
+            .join(' · ')}
         </span>
       </span>
     </button>
@@ -72,10 +74,11 @@ export function CandidatesSheet({
 
   const create = async () => {
     if (!newName.trim() || createError) return;
+    const category = element?.name ?? 'Autres';
     const exercise: Exercise = {
       id: newId(),
       name: newName.trim(),
-      category: element?.name ?? 'Autres',
+      category,
       elementId: elementId || null,
       measure: newMeasure,
       quick: false,
@@ -84,6 +87,7 @@ export function CandidatesSheet({
       aliases: [],
       order: nextOrder(data.exercises),
       workSecPerSet: null,
+      equipment: inferExerciseEquipment(newName.trim(), category),
     };
     await saveExercise(db, exercise);
     onChange([...selected, exercise.id]);

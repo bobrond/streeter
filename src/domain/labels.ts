@@ -1,7 +1,8 @@
 // Libellés et formats français.
 import { diffDays } from './cycle';
 import type { ObjectiveStatus } from './objectives';
-import type { ComponentAcceptance, Intensity, Measure, Moment, SeqDay, Target, TargetUnit } from './types';
+import type { ComponentAcceptance, Equipment, Intensity, Measure, Moment, SeqDay, Target, TargetUnit } from './types';
+import { EQUIPMENTS } from './types';
 import type { VolumeStatus } from './volume';
 
 export const MOMENT_LABEL: Record<Moment, string> = { morning: 'Matin', evening: 'Soir' };
@@ -34,6 +35,21 @@ export const MEASURE_LABEL: Record<Measure, string> = {
   combos: 'combos',
   none: 'sans mesure',
 };
+
+export const EQUIPMENT_LABEL: Record<Equipment, string> = {
+  floor: 'Sol',
+  parallettes: 'Parallèles',
+  bar: 'Barre',
+  band: 'Élastiques',
+  dumbbell: 'Haltères',
+};
+
+/** « Sol, parallèles » (dans l'ordre canonique) ; vide si non restreint. */
+export function formatEquipment(equipment: readonly Equipment[]): string {
+  const ordered = EQUIPMENTS.filter((eq) => equipment.includes(eq));
+  if (ordered.length === 0) return '';
+  return ordered.map((eq, i) => (i === 0 ? EQUIPMENT_LABEL[eq] : EQUIPMENT_LABEL[eq].toLowerCase())).join(', ');
+}
 
 export const UNIT_SHORT: Record<TargetUnit, string> = { reps: 'reps', seconds: 's', combos: 'combos' };
 

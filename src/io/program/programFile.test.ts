@@ -442,4 +442,38 @@ describe('format version 2', () => {
       changed: [],
     });
   });
+
+  it('lit et exporte le matériel des nouveaux exercices, ou le déduit s’il est absent', () => {
+    const file = sequenceFile();
+    file.nouveautes.exercices = [
+      {
+        nom: 'Victorienne au sol hold',
+        element: 'Touch FL',
+        mesure: 'secondes',
+        categorie: 'Touch FL renfo spé',
+        rapide: true,
+        tempsParSerieSec: null,
+        autresNoms: [],
+        notes: '',
+        materiel: ['sol'],
+      },
+      {
+        nom: 'Planche lean-up',
+        element: 'Planche',
+        mesure: 'secondes',
+        categorie: 'Planche skill',
+        rapide: false,
+        tempsParSerieSec: null,
+        autresNoms: [],
+        notes: '',
+      },
+    ];
+    const imported = read(file);
+    expect(imported.newExercises.map((e) => [e.name, e.equipment])).toEqual([
+      ['Victorienne au sol hold', ['floor']],
+      ['Planche lean-up', ['parallettes']],
+    ]);
+    const exported = programToFile(imported.program, imported.templates, { ...catalog, exercises: [...catalog.exercises, ...imported.newExercises] }, appSettings());
+    expect(exported.catalogue?.exercices.find((e) => e.nom === 'Victorienne au sol hold')?.materiel).toEqual(['sol']);
+  });
 });

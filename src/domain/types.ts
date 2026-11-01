@@ -44,6 +44,10 @@ export interface SessionType {
   isTestDay: boolean;
 }
 
+/** Matériel d'entraînement : un exercice coché sur plusieurs matériels peut se faire sur l'un ou l'autre. */
+export type Equipment = 'floor' | 'parallettes' | 'bar' | 'band' | 'dumbbell';
+export const EQUIPMENTS: readonly Equipment[] = ['floor', 'parallettes', 'bar', 'band', 'dumbbell'];
+
 export interface Exercise {
   id: ID;
   name: string;
@@ -60,6 +64,8 @@ export interface Exercise {
   order: number;
   /** Temps de travail moyen d'une série (installation comprise), en secondes ; `null` : le réglage général. */
   workSecPerSet: number | null;
+  /** Matériels compatibles (au moins un suffit) ; vide : non restreint. */
+  equipment: Equipment[];
 }
 
 export interface Band {

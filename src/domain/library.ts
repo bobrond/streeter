@@ -1,7 +1,8 @@
-// Bibliothèque d'exercices (Programmes › Exercices) : filtres par nature d'élément et par élément, recherche,
-// exercices regroupés par élément dans l'ordre skills, composantes, autres.
+// Bibliothèque d'exercices (Programmes › Exercices) : filtres par nature d'élément, par élément et par matériel,
+// recherche, exercices regroupés par élément dans l'ordre skills, composantes, autres.
+import { formatEquipment } from './labels';
 import { fold } from './text';
-import type { Element, ElementKind, Exercise, ID } from './types';
+import type { Element, ElementKind, Equipment, Exercise, ID } from './types';
 
 /** `all` : tous les exercices ; sinon la nature de leur élément (un exercice sans élément est rangé dans `other`). */
 export type KindFilter = 'all' | ElementKind;
@@ -11,6 +12,8 @@ export interface LibraryFilter {
   /** Un seul élément ; `null` : tous ceux de la nature choisie. */
   elementId: ID | null;
   query: string;
+  /** Matériel filtré ; absent ou `null` : tous. */
+  equipment?: Equipment | null;
 }
 
 export interface LibraryGroup {
@@ -40,9 +43,10 @@ export function filterLibrary(exercises: readonly Exercise[], elements: readonly
   const kindOf = (exercise: Exercise): ElementKind => elementsById.get(exercise.elementId ?? '')?.kind ?? 'other';
   const matches = (exercise: Exercise): boolean => {
     if (filter.elementId ? exercise.elementId !== filter.elementId : filter.kind !== 'all' && kindOf(exercise) !== filter.kind) return false;
+    if (filter.equipment && exercise.equipment.length > 0 && !exercise.equipment.includes(filter.equipment)) return false;
     if (!q) return true;
     const element = elementsById.get(exercise.elementId ?? '');
-    return fold(`${exercise.name} ${exercise.category} ${exercise.aliases.join(' ')} ${element?.name ?? ''}`).includes(q);
+    return fold(`${exercise.name} ${exercise.category} ${exercise.aliases.join(' ')} ${element?.name ?? ''} ${formatEquipment(exercise.equipment)}`).includes(q);
   };
   const sorted = exercises.filter(matches).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   const groups = new Map<ID | null, LibraryGroup>();

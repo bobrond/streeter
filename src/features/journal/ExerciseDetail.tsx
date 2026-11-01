@@ -3,7 +3,7 @@ import type { AppData } from '../../db/hooks';
 import { useLookups } from '../../db/lookups';
 import { sessionLines } from '../../domain/journal';
 import { exerciseUses } from '../../domain/editing';
-import { MEASURE_LABEL, UNIT_SHORT, formatDateShort, formatSets, formatTarget, formatValueList } from '../../domain/labels';
+import { MEASURE_LABEL, UNIT_SHORT, formatDateShort, formatEquipment, formatSets, formatTarget, formatValueList } from '../../domain/labels';
 import { bandRecords } from '../../domain/objectives';
 import { goBack, navigate } from '../../lib/router';
 import { Button } from '../../ui/Button';
@@ -46,7 +46,15 @@ export function ExerciseDetail({ data, exerciseId, backTo = '/journal?vue=exerci
   return (
     <Screen
       title={exercise.name}
-      subtitle={[element?.name, MEASURE_LABEL[exercise.measure], exercise.quick ? '⚡ rapide' : null, exercise.active ? null : 'désactivé'].filter(Boolean).join(' · ')}
+      subtitle={[
+        element?.name,
+        MEASURE_LABEL[exercise.measure],
+        formatEquipment(exercise.equipment) || null,
+        exercise.quick ? '⚡ rapide' : null,
+        exercise.active ? null : 'désactivé',
+      ]
+        .filter(Boolean)
+        .join(' · ')}
       onBack={() => goBack(backTo)}
     >
       <div className="grid grid-cols-2 gap-2">

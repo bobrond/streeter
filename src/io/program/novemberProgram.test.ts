@@ -7,6 +7,8 @@ import * as XLSX from 'xlsx';
 import { convertToComponents } from '../../domain/componentConversion';
 import { distributeComponents, slotKey } from '../../domain/components';
 import { practicedTemplate } from '../../domain/deload';
+import { ensureFloorVictorianExercises } from '../../domain/equipment';
+import { buildExpress } from '../../domain/express';
 import { sequenceDayInfo, sequenceIds } from '../../domain/sequence';
 import type { Program, SessionTemplate } from '../../domain/types';
 import { plannedComponentVolume, programIssues } from '../../domain/volume';
@@ -242,5 +244,48 @@ describe.skipIf(![XLSX_FILE, V1, V2].every((f) => existsSync(f)))('programme de 
     const lines = d.bySlot.get(slotKey(1, 'evening'))!.map((c) => c.id);
     const practiced = practicedTemplate({ ...st, items: [...st.items, ...lines.map((id) => ({ ...st.items[0], id, blockTypeId: p.componentBlockTypeId!, setsMin: 2, setsMax: 2 }))] }, { cycleWeek: 4, isDeload: true }, plan.blocks, settings);
     expect(practiced.items.filter((i) => lines.includes(i.id)).map((i) => i.setsMin)).toEqual([1, 1, 1]);
+  });
+
+  it('séance express sur le programme de novembre : s’adapte au sol seul (Victorienne au sol, planches sol, sans lean-up)', () => {
+    const ctx = setup();
+    const v2 = read(V2, { ...ctx, today: '2026-10-31', currentWeek: 5 });
+    const after = applied(ctx, v2);
+    const exercises = ensureFloorVictorianExercises(after.exercises, after.elements, newId);
+    const exById = new Map(exercises.map((e) => [e.id, e]));
+    const blockById = new Map(after.blockTypes.map((b) => [b.id, b]));
+    const st = v2.templates.find((t) => t.name === 'Séance type')!;
+    const plan = {
+      weekPlan: v2.program.weekPlan,
+      templates: new Map(v2.templates.map((t) => [t.id, t])),
+      elements: after.elements,
+      blocks: blockById,
+      exercises: exById,
+      sequence: true,
+    };
+    const express = buildExpress({
+      minutes: 30,
+      replaced: st,
+      name: 'Express 30 min · Séance type',
+      isDeload: false,
+      cycleWeek: 1,
+      program: plan,
+      settings: { ...app, ...v2.program },
+      needs: [],
+      equipment: new Set(['floor']),
+      newId,
+    });
+    const blockNames = express.template.items.map((i) => blockById.get(i.blockTypeId)?.name);
+    expect(blockNames).not.toContain('Travail prioritaire');
+    const mainItems = express.template.items.filter((i) => blockById.get(i.blockTypeId)?.name === 'Travail principal');
+    expect(mainItems).toHaveLength(2);
+    const flLine = mainItems.find((i) => after.elements.find((e) => e.id === i.elementId)?.name === 'Touch FL')!;
+    expect(flLine.candidateExerciseIds.map((id) => exById.get(id)?.name)).toEqual(['Victorienne au sol hold', 'Victorienne au sol PU']);
+    expect(flLine.targetText).toBe('8-15 s ou 8-10 reps');
+    const plLine = mainItems.find((i) => after.elements.find((e) => e.id === i.elementId)?.name === 'Planche')!;
+    const plNames = plLine.candidateExerciseIds.map((id) => exById.get(id)?.name);
+    expect(plNames).toContain('Straddle planche hold');
+    expect(plNames).toContain('Adv tuck planche hold sol');
+    expect(plNames).not.toContain('Planche Hold');
+    expect(plNames).not.toContain('Planche lean-up');
   });
 });

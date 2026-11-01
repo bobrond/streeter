@@ -1,7 +1,9 @@
 // Sauvegarde JSON complète : toutes les tables, avec un numéro de version de format.
 import { linkIdenticalBlocks } from '../../domain/blocks';
+import { ensureFloorVictorianExercises, inferExerciseEquipment, normalizeEquipment } from '../../domain/equipment';
 import { programFromLegacySettings } from '../../domain/programs';
-import type { SessionTemplate } from '../../domain/types';
+import type { Element, Equipment, Exercise, SessionTemplate } from '../../domain/types';
+import { EQUIPMENTS } from '../../domain/types';
 
 export const BACKUP_APP = 'streeter';
 /**
@@ -15,8 +17,9 @@ export const BACKUP_APP = 'streeter';
  * 7 (01/11/2026) : blocs communs (`sharedBlocks`) sur chaque modèle et chaque copie figée.
  * 8 (01/11/2026) : composantes réparties (`components`, `componentBlockTypeId`, `componentAcceptance`) sur chaque
  * programme.
+ * 9 (01/11/2026) : matériel par exercice (`equipment`) et ajout des variantes de Victorienne au sol sur Touch FL.
  */
-export const BACKUP_FORMAT_VERSION = 8;
+export const BACKUP_FORMAT_VERSION = 9;
 
 export const BACKUP_TABLES = [
   'settings',
@@ -129,6 +132,31 @@ function migrate(backup: Backup, newId: () => string): Backup {
     // Format 7 → 8 : comme la version 8 de la base, les programmes gardent leurs composantes écrites.
     const programs = current.tables.programs.map((program) => ({ components: [], componentBlockTypeId: null, componentAcceptance: {}, ...(program as Record<string, unknown>) }));
     current = { ...current, formatVersion: 8, tables: { ...current.tables, programs } };
+  }
+  if (current.formatVersion < 9) {
+    // Format 8 → 9 : matériel par exercice (`equipment`) déduit du catalogue, et ajout des variantes de Victorienne
+    // au sol si l'élément Touch FL figure dans la sauvegarde.
+    const validEquipments = new Set<string>(EQUIPMENTS);
+    const upgraded = current.tables.exercises.map((record) => {
+      const exercise = record as Record<string, unknown>;
+      const existing = Array.isArray(exercise.equipment)
+        ? normalizeEquipment(exercise.equipment.filter((eq): eq is Equipment => typeof eq === 'string' && validEquipments.has(eq)))
+        : null;
+      const name = typeof exercise.name === 'string' ? exercise.name : '';
+      const category = typeof exercise.category === 'string' ? exercise.category : '';
+      const aliases = Array.isArray(exercise.aliases) ? exercise.aliases.filter((a): a is string => typeof a === 'string') : [];
+      return {
+        ...exercise,
+        equipment: existing ?? inferExerciseEquipment(name, category, aliases),
+      };
+    });
+    const canEnsureVictorian =
+      upgraded.every((e) => typeof (e as Record<string, unknown>).name === 'string') &&
+      current.tables.elements.every((el) => isObject(el) && typeof el.name === 'string' && typeof el.kind === 'string');
+    const exercises = canEnsureVictorian
+      ? ensureFloorVictorianExercises(upgraded as unknown as Exercise[], current.tables.elements as unknown as Element[], newId)
+      : upgraded;
+    current = { ...current, formatVersion: 9, tables: { ...current.tables, exercises } };
   }
   return current;
 }

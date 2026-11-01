@@ -2,7 +2,7 @@
 // puis par élément, exercices regroupés par élément ; toucher un exercice ouvre sa fiche (celle de l'historique).
 import { useMemo, useState } from 'react';
 import type { AppData } from '../../db/hooks';
-import { MEASURE_LABEL, formatDateShort } from '../../domain/labels';
+import { MEASURE_LABEL, formatDateShort, formatEquipment } from '../../domain/labels';
 import { elementsOfKind, filterLibrary, type KindFilter } from '../../domain/library';
 import type { Exercise, ID } from '../../domain/types';
 import { navigate, queryParam } from '../../lib/router';
@@ -39,6 +39,7 @@ interface ExerciseStats {
 function ExerciseRow({ exercise, stats }: { exercise: Exercise; stats: ExerciseStats | undefined }) {
   const details = [
     MEASURE_LABEL[exercise.measure],
+    formatEquipment(exercise.equipment) || null,
     stats ? `${stats.sessions} séance${stats.sessions > 1 ? 's' : ''}` : 'jamais fait',
     stats?.lastDate ? `dernière le ${formatDateShort(stats.lastDate)}` : null,
     exercise.workSecPerSet !== null ? `${exercise.workSecPerSet} s par série` : null,

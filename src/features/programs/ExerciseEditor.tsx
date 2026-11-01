@@ -1,18 +1,20 @@
-// Création et modification d'un exercice en deux niveaux : l'essentiel d'abord (nom, mesure, élément),
+// Création et modification d'un exercice en deux niveaux : l'essentiel d'abord (nom, mesure, élément, matériel),
 // le reste replié (temps par série, catégorie, rapide, actif, notes techniques, autres noms).
 import { useState } from 'react';
 import { db } from '../../db/db';
 import type { AppData } from '../../db/hooks';
 import { InUseError, deleteExercise, saveExercise } from '../../db/programStore';
 import { exerciseUsage, nameError, nextOrder } from '../../domain/editing';
-import { MEASURE_LABEL } from '../../domain/labels';
+import { normalizeEquipment } from '../../domain/equipment';
+import { EQUIPMENT_LABEL, MEASURE_LABEL } from '../../domain/labels';
 import { KIND_ORDER } from '../../domain/library';
 import { cleanSpaces } from '../../domain/text';
-import type { Exercise, ID, Measure } from '../../domain/types';
+import type { Equipment, Exercise, ID, Measure } from '../../domain/types';
+import { EQUIPMENTS } from '../../domain/types';
 import { newId } from '../../lib/id';
 import { goBack, queryParam } from '../../lib/router';
 import { Button } from '../../ui/Button';
-import { ChipSelect, Field, ListGroup, TextArea, TextInput, Toggle } from '../../ui/form';
+import { ChipMultiSelect, ChipSelect, Field, ListGroup, TextArea, TextInput, Toggle } from '../../ui/form';
 import { ChevronDownIcon } from '../../ui/icons';
 import { ValueStepper } from '../../ui/inputs';
 import { Screen } from '../../ui/Screen';
@@ -25,6 +27,7 @@ interface ExerciseForm {
   name: string;
   measure: Measure;
   elementId: ID | null;
+  equipment: Equipment[];
   workSecPerSet: number | null;
   category: string;
   quick: boolean;
@@ -34,7 +37,7 @@ interface ExerciseForm {
 }
 
 function toForm(exercise: Exercise): ExerciseForm {
-  return { ...exercise, aliases: exercise.aliases.join(', ') };
+  return { ...exercise, equipment: [...exercise.equipment], aliases: exercise.aliases.join(', ') };
 }
 
 export function ExerciseEditor({ data, exerciseId, path }: { data: AppData; exerciseId: string; path: string }) {
@@ -53,7 +56,18 @@ function ExerciseFormView({ data, existing, initialElement }: { data: AppData; e
   const [form, setForm] = useState<ExerciseForm>(() =>
     existing
       ? toForm(existing)
-      : { name: '', measure: 'reps', elementId: initialElement, workSecPerSet: null, category: '', quick: false, active: true, notes: '', aliases: '' },
+      : {
+          name: '',
+          measure: 'reps',
+          elementId: initialElement,
+          equipment: ['floor'],
+          workSecPerSet: null,
+          category: '',
+          quick: false,
+          active: true,
+          notes: '',
+          aliases: '',
+        },
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
@@ -94,6 +108,7 @@ function ExerciseFormView({ data, existing, initialElement }: { data: AppData; e
         .filter(Boolean),
       order: existing?.order ?? nextOrder(data.exercises),
       workSecPerSet: form.workSecPerSet,
+      equipment: normalizeEquipment(form.equipment),
     };
     await saveExercise(db, exercise);
     showToast(existing ? 'Exercice enregistré.' : 'Exercice ajouté à la bibliothèque.');
@@ -126,6 +141,14 @@ function ExerciseFormView({ data, existing, initialElement }: { data: AppData; e
               value={form.elementId}
               onChange={(elementId) => patch({ elementId })}
               options={[...elements.map((e) => ({ value: e.id as ID | null, label: e.name })), { value: null as ID | null, label: 'aucun' }]}
+            />
+          </Field>
+          <Field label="Matériel" hint="Au moins un suffit en séance express ; aucun coché = proposé partout.">
+            <ChipMultiSelect
+              values={form.equipment}
+              onChange={(next) => patch({ equipment: normalizeEquipment(next) })}
+              options={EQUIPMENTS.map((eq) => ({ value: eq, label: EQUIPMENT_LABEL[eq] }))}
+              ariaLabel="Matériel de l’exercice"
             />
           </Field>
         </div>

@@ -9,6 +9,7 @@ import { linkIdenticalBlocks } from '../../domain/blocks';
 import { dateOf, dayInfo } from '../../domain/cycle';
 import { DEFAULT_SESSION_TYPE_COLOR } from '../../domain/defaults';
 import { nextOrder, uniqueName } from '../../domain/editing';
+import { inferExerciseEquipment, normalizeEquipment } from '../../domain/equipment';
 import { formatDateLong, formatIntensity, formatRest, formatTarget } from '../../domain/labels';
 import { parseIntensity, parseRest, parseTargets } from '../../domain/parse';
 import { programPhase, programStartDate, templatesOf, weekOfDate } from '../../domain/programs';
@@ -21,6 +22,7 @@ import type {
   ComponentVolume,
   Element,
   ElementKind,
+  Equipment,
   Exercise,
   ID,
   Measure,
@@ -46,6 +48,7 @@ type Nature = 'skill' | 'composante' | 'autre';
 type Mesure = 'reps' | 'secondes' | 'combos' | 'aucune';
 type Unite = 's' | 'reps' | 'combos';
 type MomentFr = 'matin' | 'soir';
+type MaterielFr = 'sol' | 'paralleles' | 'barre' | 'elastiques' | 'halteres';
 
 /** Ce qui change pour une tranche du cycle : un champ absent garde la valeur de la ligne. */
 export interface TrancheFichier {
@@ -103,6 +106,8 @@ export interface ExerciceFichier {
   tempsParSerieSec: number | null;
   autresNoms: string[];
   notes: string;
+  /** Matériel compatible (au moins un suffit en séance express) ; facultatif à la lecture. */
+  materiel?: MaterielFr[];
 }
 
 export interface BlocFichier {
@@ -180,6 +185,13 @@ const NATURE: Record<ElementKind, Nature> = { skill: 'skill', component: 'compos
 const MESURE: Record<Measure, Mesure> = { reps: 'reps', seconds: 'secondes', combos: 'combos', none: 'aucune' };
 const UNITE: Record<TargetUnit, Unite> = { reps: 'reps', seconds: 's', combos: 'combos' };
 const MOMENT: Record<Moment, MomentFr> = { morning: 'matin', evening: 'soir' };
+const MATERIEL: Record<Equipment, MaterielFr> = {
+  floor: 'sol',
+  parallettes: 'paralleles',
+  bar: 'barre',
+  band: 'elastiques',
+  dumbbell: 'halteres',
+};
 
 function invert<K extends string, V extends string>(record: Record<K, V>): Record<V, K> {
   return Object.fromEntries(Object.entries(record).map(([k, v]) => [v, k])) as Record<V, K>;
@@ -189,6 +201,7 @@ const FROM_NATURE = invert(NATURE);
 const FROM_MESURE = invert(MESURE);
 const FROM_UNITE = invert(UNITE);
 const FROM_MOMENT = invert(MOMENT);
+const FROM_MATERIEL = invert(MATERIEL);
 
 const dayKey = (day: SeqDay): DayKey => `J${day}`;
 
@@ -235,6 +248,7 @@ function exerciseToFile(exercise: Exercise, elementName: (id: ID | null) => stri
     tempsParSerieSec: exercise.workSecPerSet,
     autresNoms: [...exercise.aliases],
     notes: exercise.notes,
+    materiel: normalizeEquipment(exercise.equipment).map((eq) => MATERIEL[eq]),
   };
 }
 
@@ -672,23 +686,37 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
     });
     r.list(nouveautes.exercices, 'nouveautes.exercices').forEach((value, i) => {
       const where = `nouveautes.exercices[${i + 1}]`;
-      const o = r.object(value, where, ['nom', 'element', 'mesure', 'categorie', 'rapide', 'tempsParSerieSec', 'autresNoms', 'notes']);
+      const o = r.object(value, where, ['nom', 'element', 'mesure', 'categorie', 'rapide', 'tempsParSerieSec', 'autresNoms', 'notes'], {
+        materiel: undefined,
+      });
       if (!o) return;
       const name = r.name(o.nom, `${where}.nom`);
       const element = findElement(r.name(o.element, `${where}.element`), `${where}.element`);
       const measure = r.choice(o.mesure, `${where}.mesure`, FROM_MESURE);
+      const category = r.text(o.categorie, `${where}.categorie`);
+      const aliases = r.list(o.autresNoms, `${where}.autresNoms`).map((a, k) => r.name(a, `${where}.autresNoms[${k + 1}]`));
+      const equipment =
+        o.materiel !== undefined
+          ? normalizeEquipment(
+              r
+                .list(o.materiel, `${where}.materiel`)
+                .map((m, k) => r.choice(m, `${where}.materiel[${k + 1}]`, FROM_MATERIEL))
+                .filter((eq): eq is Equipment => eq !== null),
+            )
+          : inferExerciseEquipment(name, category, aliases);
       const exercise: Exercise = {
         id: ctx.newId(),
         name,
-        category: r.text(o.categorie, `${where}.categorie`),
+        category,
         elementId: element?.id ?? null,
         measure: measure ?? 'reps',
         quick: r.bool(o.rapide, `${where}.rapide`),
         active: true,
         notes: r.text(o.notes, `${where} › notes`),
-        aliases: r.list(o.autresNoms, `${where}.autresNoms`).map((a, k) => r.name(a, `${where}.autresNoms[${k + 1}]`)),
+        aliases,
         order: nextOrder(exercises),
         workSecPerSet: o.tempsParSerieSec === null ? null : r.number(o.tempsParSerieSec, `${where}.tempsParSerieSec`, { min: 1, integer: true }),
+        equipment,
       };
       if (!name || exists(exercises, name, 'Exercice')) return;
       exercises.push(exercise);

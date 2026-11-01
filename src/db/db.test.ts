@@ -40,7 +40,7 @@ describe('migrations du schéma', () => {
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', setIndex: 2, value: 10, createdAt: 2, kind: 'normal' },
     ]);
-    expect(db.verno).toBe(8);
+    expect(db.verno).toBe(9);
     expect(await db.sets.where('sessionId').equals('ses').count()).toBe(2);
     expect(await db.sessions.get('ses')).toMatchObject({ date: '2026-10-16', status: 'done' });
     db.close();
@@ -65,9 +65,9 @@ describe('migrations du schéma', () => {
     v2.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(8);
+    expect(db.verno).toBe(9);
     expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, archived: false, sharedBlocks: {} });
-    expect(await db.exercises.get('hold')).toEqual({ ...oldExercise, workSecPerSet: null });
+    expect(await db.exercises.get('hold')).toEqual({ ...oldExercise, workSecPerSet: null, equipment: ['parallettes'] });
     expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, archived: false, sharedBlocks: {} });
     expect((await db.sessions.get('xlsx'))?.templateSnapshot).toBeNull();
     expect(await db.sets.get('s1')).toMatchObject({ value: 12, kind: 'warmup' });
@@ -88,7 +88,7 @@ describe('migrations du schéma', () => {
     v3.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(8);
+    expect(db.verno).toBe(9);
     expect(await db.sessions.get('run')).toEqual({ ...running, expressMinutes: null });
     expect(await db.sessions.get('xlsx')).toMatchObject({ source: 'xlsx', expressMinutes: null });
     expect(await db.sessions.where('status').equals('in_progress').count()).toBe(1);
@@ -132,7 +132,7 @@ describe('migrations du schéma', () => {
     v4.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(8);
+    expect(db.verno).toBe(9);
     const programs = await db.programs.toArray();
     expect(programs).toHaveLength(1);
     const [program] = programs;
@@ -170,7 +170,7 @@ describe('migrations du schéma', () => {
     await v5.table('programs').add(program);
     v5.close();
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(8);
+    expect(db.verno).toBe(9);
     expect(await db.programs.get('p1')).toEqual({ ...program, schedule: 'week', startDate: null, componentVolumes: [], components: [], componentBlockTypeId: null, componentAcceptance: {} });
     db.close();
   });
@@ -213,7 +213,7 @@ describe('migrations du schéma', () => {
     v6.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(8);
+    expect(db.verno).toBe(9);
     const [a, b, c, d] = await db.templates.bulkGet(['a', 'b', 'c', 'd']);
     expect(a!.sharedBlocks.echauf).toBeDefined();
     expect(b!.sharedBlocks).toEqual({ echauf: a!.sharedBlocks.echauf });
@@ -241,9 +241,44 @@ describe('migrations du schéma', () => {
     await v7.table('templates').add(written);
     v7.close();
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(8);
+    expect(db.verno).toBe(9);
     expect(await db.programs.get('nov')).toEqual({ ...program, components: [], componentBlockTypeId: null, componentAcceptance: {} });
     expect(await db.templates.get('st')).toEqual(written);
+    db.close();
+  });
+
+  it('version 9 : déduit le matériel des exercices existants et ajoute la Victorienne au sol sur Touch FL, sans perte', async () => {
+    const name = `migration-${Math.random()}`;
+    names.push(name);
+    const v8 = new Dexie(name);
+    v8.version(1).stores(SCHEMA_V1);
+    v8.version(5).stores({ programs: 'id, startWeek', templates: 'id, name, programId' });
+    v8.version(8).stores({});
+    await v8.open();
+    await v8.table('elements').bulkAdd([
+      { id: 'pl', name: 'Planche', kind: 'skill', order: 0 },
+      { id: 'fl', name: 'Touch FL', kind: 'skill', order: 1 },
+    ]);
+    const exBase = { category: 'Planche skill', elementId: 'pl', measure: 'seconds', quick: false, active: true, notes: '', aliases: [], workSecPerSet: null };
+    await v8.table('exercises').bulkAdd([
+      { ...exBase, id: 'full', name: 'Planche Hold', order: 0 },
+      { ...exBase, id: 'strad', name: 'Straddle planche hold', order: 1 },
+      { ...exBase, id: 'fl1', name: 'Touch FL hold full', category: 'Touch FL skill', elementId: 'fl', order: 2 },
+    ]);
+    v8.close();
+
+    const db = new StreeterDB(name);
+    expect(db.verno).toBe(9);
+    expect((await db.exercises.get('full'))?.equipment).toEqual(['parallettes']);
+    expect((await db.exercises.get('strad'))?.equipment).toEqual(['floor', 'parallettes']);
+    expect((await db.exercises.get('fl1'))?.equipment).toEqual(['bar']);
+    const victorians = (await db.exercises.toArray())
+      .filter((e) => e.name.startsWith('Victorienne au sol'))
+      .sort((a, b) => a.order - b.order);
+    expect(victorians.map((e) => [e.name, e.measure, e.elementId, e.equipment, e.order])).toEqual([
+      ['Victorienne au sol hold', 'seconds', 'fl', ['floor'], 3],
+      ['Victorienne au sol PU', 'reps', 'fl', ['floor'], 4],
+    ]);
     db.close();
   });
 

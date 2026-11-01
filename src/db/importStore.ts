@@ -1,5 +1,6 @@
 // Écriture d'un import de tableur dans la base, et lecture de ce qui existe déjà.
 import { localISODate } from '../domain/cycle';
+import { ensureFloorVictorianExercises } from '../domain/equipment';
 import { APP_SETTINGS_KEYS, PROGRAM_CONFIG_KEYS, programNameFor, settingsAtDate } from '../domain/programs';
 import type { AppSettings, Program } from '../domain/types';
 import { buildImport, type ExistingData, type ImportReport, type ImportResult } from '../io/xlsx/importWorkbook';
@@ -37,7 +38,7 @@ export async function saveImport(db: StreeterDB, result: ImportResult, source: {
     await db.elements.bulkPut(result.elements);
     await db.blockTypes.bulkPut(result.blockTypes);
     await db.sessionTypes.bulkPut(result.sessionTypes);
-    await db.exercises.bulkPut(result.exercises);
+    await db.exercises.bulkPut(ensureFloorVictorianExercises(result.exercises, result.elements, newId));
     await db.bands.bulkPut(result.bands);
     await db.templates.bulkPut(result.templates);
     const app = Object.fromEntries(APP_SETTINGS_KEYS.map((key) => [key, result.settings[key]])) as unknown as AppSettings;

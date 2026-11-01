@@ -176,7 +176,7 @@ Si je te demande seulement une retouche, rends quand même le programme complet,
 **`nouveautes`** : ce qui n'existe pas encore dans le catalogue. N'y remets pas ce qui existe déjà (l'appli garde le sien et le signale).
 
 - `elements` : `nom`, `nature` = `"skill"`, `"composante"` (compte dans le volume) ou `"autre"`.
-- `exercices` : `nom`, `element`, `mesure` = `"reps"`, `"secondes"`, `"combos"` ou `"aucune"`, `categorie` (texte), `rapide` (mis en avant le matin), `tempsParSerieSec` (durée d'une série pour l'estimation, `null` = réglage général de 30 s), `autresNoms` (synonymes), `notes` (technique). Une progression inférieure est un exercice comme un autre, de l'élément de la figure.
+- `exercices` : `nom`, `element`, `mesure` = `"reps"`, `"secondes"`, `"combos"` ou `"aucune"`, `categorie` (texte), `rapide` (mis en avant le matin), `tempsParSerieSec` (durée d'une série pour l'estimation, `null` = réglage général de 30 s), `autresNoms` (synonymes), `notes` (technique), et `materiel` facultatif (liste parmi `"sol"`, `"paralleles"`, `"barre"`, `"elastiques"`, `"halteres"` : au moins un suffit en séance express ; déduit du nom s'il est absent). Une progression inférieure est un exercice comme un autre, de l'élément de la figure.
 - `blocs` : `nom`, `alternance` (alternance planche / FL appariée par ordre), `reduitEnAllegee` (séries réduites en tranche allégée), `apres` (nom du bloc après lequel il se place, `null` : à la fin).
 - `typesSeance` : `nom`, `moment`, `description`, `couleur` (`"#rrggbb"`), `jourDeTest`.
 

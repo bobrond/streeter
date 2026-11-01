@@ -46,4 +46,18 @@ describe('filterLibrary', () => {
   it('liste les éléments d’une nature dans leur ordre', () => {
     expect(names(elementsOfKind(elements, 'skill'))).toEqual(['Planche', 'Touch FL']);
   });
+
+  it('filtre et recherche aussi par matériel', () => {
+    const withEq = [
+      exercise('Planche Hold', planche.id, { order: 0, equipment: ['parallettes'] }),
+      exercise('Straddle planche hold', planche.id, { order: 1, equipment: ['floor', 'parallettes'] }),
+      exercise('Touch FL hold full', fl.id, { order: 2, equipment: ['bar'] }),
+    ];
+    expect(names(filterLibrary(withEq, elements, { kind: 'all', elementId: null, query: '', equipment: 'floor' }).groups.flatMap((g) => g.exercises))).toEqual([
+      'Straddle planche hold',
+    ]);
+    expect(names(filterLibrary(withEq, elements, { kind: 'all', elementId: null, query: 'barre' }).groups.flatMap((g) => g.exercises))).toEqual([
+      'Touch FL hold full',
+    ]);
+  });
 });

@@ -1,11 +1,13 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { linkIdenticalBlocks } from '../domain/blocks';
+import { ensureFloorVictorianExercises, inferExerciseEquipment, normalizeEquipment } from '../domain/equipment';
 import { programFromLegacySettings } from '../domain/programs';
 import type {
   AppSettings,
   Band,
   BlockType,
   Element,
+  Equipment,
   Exercise,
   Objective,
   Program,
@@ -173,6 +175,22 @@ export class StreeterDB extends Dexie {
             program.componentAcceptance ??= {};
           }),
       );
+    // 9 (01/11/2026) : matériel par exercice (`Exercise.equipment`) et ajout des deux variantes de Victorienne au sol
+    // (« Victorienne au sol hold » et « Victorienne au sol PU ») sur l'élément Touch FL, sans nouvel index.
+    this.version(9)
+      .stores({})
+      .upgrade(async (tx) => {
+        const elements = (await tx.table('elements').toArray()) as Element[];
+        const rawExercises = (await tx.table('exercises').toArray()) as (Omit<Exercise, 'equipment'> & { equipment?: Equipment[] })[];
+        const upgraded: Exercise[] = rawExercises.map((exercise) => ({
+          ...exercise,
+          equipment: Array.isArray(exercise.equipment)
+            ? normalizeEquipment(exercise.equipment)
+            : inferExerciseEquipment(exercise.name, exercise.category, exercise.aliases),
+        }));
+        const withVictorian = ensureFloorVictorianExercises(upgraded, elements, () => crypto.randomUUID());
+        await tx.table('exercises').bulkPut(withVictorian);
+      });
   }
 }
 

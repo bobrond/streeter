@@ -1,23 +1,34 @@
-// Séance express : aperçu de la séance générée, modifiable avant de démarrer (séries par ligne, ligne retirée).
+// Séance express : aperçu de la séance générée, modifiable avant de démarrer (matériel disponible, séries par ligne,
+// ligne retirée).
 import { Fragment, useState } from 'react';
 import type { AppData } from '../../db/hooks';
 import type { Lookups } from '../../db/lookups';
 import type { DayInfo } from '../../domain/cycle';
 import { estimateDuration } from '../../domain/duration';
+import { normalizeEquipment } from '../../domain/equipment';
 import { EXPRESS_MINUTES, buildExpress, componentNeeds, expressToStart, setExpressSets, type ExpressComponent, type ExpressPlan } from '../../domain/express';
-import { MOMENT_LABEL, expressName, formatDurationRange, formatTarget, restParts } from '../../domain/labels';
-import type { Moment, PrescriptionItem, SessionTemplate } from '../../domain/types';
+import { EQUIPMENT_LABEL, MOMENT_LABEL, expressName, formatDurationRange, formatTarget, restParts } from '../../domain/labels';
+import type { Equipment, Moment, PrescriptionItem, SessionTemplate } from '../../domain/types';
+import { EQUIPMENTS } from '../../domain/types';
 import { newId } from '../../lib/id';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
+import { ChipMultiSelect } from '../../ui/form';
 import { MinusIcon, PlayIcon, PlusIcon } from '../../ui/icons';
 import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
 import { lineExerciseName } from './lineNames';
 import { periodFor, type Planned } from './planned';
 
-/** Séance express générée pour aujourd'hui à la place de `planned`. */
-function generate(minutes: number, planned: Planned, info: DayInfo, data: AppData, lookups: Lookups): ExpressPlan {
+/** Séance express générée pour aujourd'hui à la place de `planned`, avec le matériel disponible. */
+function generate(
+  minutes: number,
+  planned: Planned,
+  info: DayInfo,
+  data: AppData,
+  lookups: Lookups,
+  equipment: ReadonlySet<Equipment>,
+): ExpressPlan {
   const needs = componentNeeds({
     program: lookups.program,
     settings: data.settings,
@@ -37,6 +48,7 @@ function generate(minutes: number, planned: Planned, info: DayInfo, data: AppDat
     program: lookups.program,
     settings: data.settings,
     needs,
+    equipment,
     newId,
   });
 }
@@ -86,12 +98,14 @@ function LineRow({
   const element = lookups.elements.get(item.elementId)?.name;
   const target = item.targets.length > 0 ? item.targets.map(formatTarget).join(' ou ') : item.targetText;
   const component = plan.components.find((c) => c.itemId === item.id);
+  const adapted = Boolean(plan.adapted[item.id]);
   const removed = item.setsMin === 0;
   return (
     <li className={`flex items-center gap-3 py-2.5 ${removed ? 'opacity-50' : ''}`}>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-semibold leading-snug">{name}</span>
+          {adapted && <Badge tone="accent">adapté</Badge>}
           {component && <Badge tone={component.deficitSets > 0 ? 'accent' : 'neutral'}>{component.deficitSets > 0 ? 'retard' : 'bonus'}</Badge>}
           {removed && <Badge>retirée</Badge>}
         </div>
@@ -114,13 +128,25 @@ function LineRow({
 
 /** Lignes laissées de côté, et pourquoi. */
 function LeftOut({ plan, minutes, moment, data, lookups }: { plan: ExpressPlan; minutes: number; moment: Moment; data: AppData; lookups: Lookups }) {
+  const equipmentMissing = [
+    ...new Set([
+      ...plan.leftOut.filter((l) => l.why === 'equipment').map((l) => lineExerciseName(l.item, moment, data, lookups)),
+      ...plan.components.filter((c) => c.noEquipment && c.deficit > 0).map((c) => c.name),
+    ]),
+  ];
   const time = [...new Set(plan.leftOut.filter((l) => l.why === 'time').map((l) => lineExerciseName(l.item, moment, data, lookups)))];
   const assisted = [...new Set(plan.leftOut.filter((l) => l.why === 'assisted').map((l) => lookups.blocks.get(l.item.blockTypeId)?.name ?? '?'))];
-  const components = plan.components.filter((c) => c.deficit > c.deficitSets);
-  if (assisted.length + time.length + components.length === 0) return null;
+  const components = plan.components.filter((c) => !c.noEquipment && c.deficit > c.deficitSets);
+  if (equipmentMissing.length + assisted.length + time.length + components.length === 0) return null;
   return (
     <section className="mt-4 flex flex-col gap-2 rounded-xl border border-line p-3 text-ink-2">
       <h3 className="font-semibold text-ink">Pas repris</h3>
+      {equipmentMissing.length > 0 && (
+        <p>
+          Faute de matériel
+          <span className="block text-ink">{equipmentMissing.join(', ')}</span>
+        </p>
+      )}
       {time.length > 0 && (
         <p>
           Faute de place en {minutes} min
@@ -180,15 +206,18 @@ export function ExpressSheet({
   lookups: Lookups;
   onStart: (template: SessionTemplate, planned: Planned) => void;
 }) {
+  const [equipment, setEquipment] = useState<Equipment[]>(() => [...EQUIPMENTS]);
+  const normalizedEquipment = normalizeEquipment(equipment);
   const planned = replaceable.find((p) => p.moment === moment) ?? replaceable[0];
-  const key = planned ? `${minutes}-${planned.moment}` : '';
-  // Générée à l'ouverture et à chaque changement de durée ou de séance remplacée, pas à chaque écriture en base :
-  // les séries changées tiennent tant que la feuille reste ouverte.
+  const key = planned ? `${minutes}-${planned.moment}-${normalizedEquipment.join(',')}` : '';
+  // Générée à l'ouverture (tout le matériel coché à chaque ouverture) et à chaque changement de durée, de matériel
+  // ou de séance remplacée, pas à chaque écriture en base : les séries changées tiennent tant que la feuille reste ouverte.
   const [draft, setDraft] = useState<Draft | null>(null);
   if (!open || !planned) {
     if (draft) setDraft(null);
+    if (equipment.length !== EQUIPMENTS.length) setEquipment([...EQUIPMENTS]);
   } else if (draft?.key !== key) {
-    const plan = generate(minutes, planned, info, data, lookups);
+    const plan = generate(minutes, planned, info, data, lookups, new Set(normalizedEquipment));
     setDraft({ key, plan, template: plan.template });
   }
   const current = draft?.key === key ? draft : null;
@@ -227,22 +256,34 @@ export function ExpressSheet({
                 onChange={onMoment}
               />
             )}
+            <ChipMultiSelect
+              size="sm"
+              ariaLabel="Matériel disponible"
+              options={EQUIPMENTS.map((eq) => ({ value: eq, label: EQUIPMENT_LABEL[eq] }))}
+              values={normalizedEquipment}
+              onChange={(next) => setEquipment(normalizeEquipment(next))}
+            />
           </div>
           <p className="mt-3 text-ink-2">
             Remplace <b className="text-ink">{planned.template.name}</b> ({MOMENT_LABEL[planned.moment].toLowerCase()}){info.isDeload ? ', semaine allégée' : ''}.
           </p>
-          <p className={`mt-1 text-lg font-semibold ${over ? 'text-warn' : 'text-ink'}`}>
-            {formatDurationRange(estimate.minSec, estimate.maxSec)}
-            {over && <span className="block text-base font-normal">Plus de {minutes} min si tu prends tout le repos.</span>}
-          </p>
+          {current.template.items.length > 0 ? (
+            <p className={`mt-1 text-lg font-semibold ${over ? 'text-warn' : 'text-ink'}`}>
+              {formatDurationRange(estimate.minSec, estimate.maxSec)}
+              {over && <span className="block text-base font-normal">Plus de {minutes} min si tu prends tout le repos.</span>}
+            </p>
+          ) : (
+            <p className="mt-2 text-ink-2">Aucun exercice faisable avec ce matériel.</p>
+          )}
           <div className="mt-3 flex flex-col gap-3">
             {groupsOf(current.template).map((group, i) => {
               const block = lookups.blocks.get(group.blockId);
+              const hasPair = new Set(group.items.map((it) => it.elementId)).size >= 2;
               return (
                 <section key={`${group.blockId}-${i}`}>
                   <h3 className="font-display text-xl leading-none tracking-wide text-accent">
                     {block?.name ?? '?'}
-                    {block?.alternateSkills && <span className="ml-2 font-sans text-sm tracking-normal text-ink-3">planche et FL en alternance</span>}
+                    {block?.alternateSkills && hasPair && <span className="ml-2 font-sans text-sm tracking-normal text-ink-3">planche et FL en alternance</span>}
                   </h3>
                   <ul className="divide-y divide-line">
                     {group.items.map((item) => (

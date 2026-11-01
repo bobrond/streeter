@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { block, element, item, sessionLog, setLog, settings, template, weekPlan } from '../test/builders';
+import { block, element, exercise, item, sessionLog, setLog, settings, template, weekPlan } from '../test/builders';
 import { estimateDuration } from './duration';
 import { blockRoles, buildExpress, componentNeeds, expressToStart, setExpressSets, type ComponentNeed } from './express';
-import type { PrescriptionItem, SessionTemplate } from './types';
+import { EQUIPMENTS, type PrescriptionItem, type SessionTemplate } from './types';
 import type { PlanContext } from './volume';
 import { weekPeriod } from './period';
 
@@ -308,5 +308,217 @@ describe('buildExpress : Travail prioritaire (novembre)', () => {
     // La paire du Travail principal (sans minimum) reste là, à 2 séries ; l'assisté n'est jamais repris.
     expect(result.template.items.filter((i) => i.blockTypeId === main.id).map((i) => i.setsMin)).toEqual([2, 2]);
     expect(result.leftOut.filter((l) => l.why === 'assisted')).toHaveLength(2);
+  });
+});
+
+describe('buildExpress : matériel disponible', () => {
+  const priority = block('Travail prioritaire', 0.5);
+  const allBlocks = new Map([warmUp, priority, skill, assisted, specific, renfo].map((b) => [b.id, b]));
+
+  // Catalogue réaliste avec matériel par exercice.
+  const scapPu = exercise('Scapula PU', connexion.id, { order: 0, equipment: ['floor', 'parallettes'] });
+  const carsBar = exercise('CARs scapulaire tiré (sous barre)', connexion.id, { order: 1, equipment: ['bar'] });
+  const leanUpEx = exercise('Planche lean-up', planche.id, { order: 2, measure: 'seconds', equipment: ['parallettes'] });
+  const negEx = exercise('Planche négative', planche.id, { order: 3, measure: 'reps', equipment: ['parallettes'] });
+  const fullHold = exercise('Planche Hold', planche.id, { order: 4, measure: 'seconds', equipment: ['parallettes'] });
+  const stradHold = exercise('Straddle planche hold', planche.id, { order: 5, measure: 'seconds', equipment: ['floor', 'parallettes'] });
+  const advTuck = exercise('Adv tuck planche hold sol', planche.id, { order: 6, measure: 'seconds', equipment: ['floor', 'parallettes'] });
+  const pnEx = exercise('P/N', planche.id, { order: 7, measure: 'reps', equipment: ['parallettes'] });
+  const leanSur = exercise('Planche lean surélevé press', planche.id, { order: 8, measure: 'reps', equipment: ['floor', 'parallettes'] });
+  const flFull = exercise('Touch FL hold full', fl.id, { order: 9, measure: 'seconds', equipment: ['bar'] });
+  const flPuEx = exercise('FL PU one leg', fl.id, { order: 10, measure: 'reps', equipment: ['bar'] });
+  const pseudoFl = exercise('Pseudo touch FL hold wall', fl.id, { order: 11, measure: 'seconds', equipment: ['bar'] });
+  const vicHold = exercise('Victorienne au sol hold', fl.id, { order: 12, measure: 'seconds', equipment: ['floor'] });
+  const vicPu = exercise('Victorienne au sol PU', fl.id, { order: 13, measure: 'reps', equipment: ['floor'] });
+  const revPu = exercise('Reverse planche PU', rhomboide.id, { order: 14, measure: 'reps', equipment: ['floor'] });
+  const flScap = exercise('Adv tuck FL scapula PU', rhomboide.id, { order: 15, measure: 'reps', equipment: ['bar'] });
+  const uppercut = exercise('Uppercut', dentele.id, { order: 16, measure: 'reps', equipment: ['band'] });
+
+  const catalog = [
+    scapPu,
+    carsBar,
+    leanUpEx,
+    negEx,
+    fullHold,
+    stradHold,
+    advTuck,
+    pnEx,
+    leanSur,
+    flFull,
+    flPuEx,
+    pseudoFl,
+    vicHold,
+    vicPu,
+    revPu,
+    flScap,
+    uppercut,
+  ];
+  const exercisesById = new Map(catalog.map((e) => [e.id, e]));
+
+  const evening = template('Séance type', 'evening', [
+    line(warmUp.id, connexion.id, 1, 2, { ...free, candidateExerciseIds: [scapPu.id] }),
+    line(warmUp.id, connexion.id, 1, 2, { ...free, candidateExerciseIds: [carsBar.id] }),
+    line(priority.id, planche.id, 3, 3, {
+      candidateExerciseIds: [leanUpEx.id],
+      targets: [{ unit: 'seconds', min: 2, max: 2 }],
+      targetText: '2 s',
+    }),
+    line(priority.id, planche.id, 3, 3, {
+      candidateExerciseIds: [negEx.id],
+      targets: [{ unit: 'reps', min: 1, max: 1 }],
+      targetText: '1 rep',
+    }),
+    line(skill.id, planche.id, 3, 4, {
+      ...skillRest,
+      candidateExerciseIds: [fullHold.id],
+      lowerProgressionIds: [stradHold.id],
+      targets: [{ unit: 'seconds', min: 3, max: 6 }],
+      targetText: '3-6 s',
+    }),
+    line(skill.id, planche.id, 3, 3, {
+      ...skillRest,
+      candidateExerciseIds: [pnEx.id],
+      targets: [{ unit: 'reps', min: 2, max: 3 }],
+      targetText: '2-3 reps',
+    }),
+    line(skill.id, fl.id, 3, 4, {
+      ...skillRest,
+      candidateExerciseIds: [flFull.id],
+      targets: [{ unit: 'seconds', min: 3, max: 6 }],
+      targetText: '3-6 s',
+    }),
+    line(skill.id, fl.id, 3, 3, {
+      ...skillRest,
+      candidateExerciseIds: [flPuEx.id],
+      targets: [{ unit: 'reps', min: 2, max: 4 }],
+      targetText: '2-4 reps',
+    }),
+    line(specific.id, planche.id, 2, 3, {
+      candidateExerciseIds: [leanSur.id, advTuck.id],
+      targets: [
+        { unit: 'reps', min: 5, max: 8 },
+        { unit: 'seconds', min: 8, max: 15 },
+      ],
+      targetText: '5-8 reps ou 8-15 s',
+    }),
+    line(specific.id, fl.id, 2, 3, {
+      candidateExerciseIds: [pseudoFl.id],
+      targets: [{ unit: 'seconds', min: 10, max: 20 }],
+      targetText: '10-20 s',
+    }),
+    line(renfo.id, rhomboide.id, 2, 2, {
+      candidateExerciseIds: [flScap.id, revPu.id],
+      targets: [{ unit: 'reps', min: 8, max: 12 }],
+      targetText: '8-12 reps',
+    }),
+    line(renfo.id, dentele.id, 2, 2, {
+      candidateExerciseIds: [uppercut.id],
+      targets: [{ unit: 'reps', min: 12, max: 15 }],
+      targetText: '12-15 reps',
+    }),
+  ]);
+
+  const eqProgram: PlanContext = {
+    weekPlan: weekPlan({ 1: { evening: evening.id } }),
+    templates: new Map([[evening.id, evening]]),
+    elements,
+    blocks: allBlocks,
+    exercises: exercisesById,
+  };
+
+  it('avec tout le matériel coché, aucune ligne n’est adaptée ni retirée faute de matériel', () => {
+    const res = buildExpress({
+      minutes: 45,
+      replaced: evening,
+      name: 'Express 45 min',
+      isDeload: false,
+      cycleWeek: 1,
+      program: eqProgram,
+      settings: s,
+      needs: satisfied,
+      equipment: new Set(EQUIPMENTS),
+      newId: () => `eq-${++n}`,
+    });
+    expect(res.adapted).toEqual({});
+    expect(res.leftOut.filter((l) => l.why === 'equipment')).toEqual([]);
+  });
+
+  it('au sol uniquement : retire le Travail prioritaire, adapte Planche aux exercices sol et Touch FL à la Victorienne au sol sans doublon', () => {
+    const res = buildExpress({
+      minutes: 45,
+      replaced: evening,
+      name: 'Express 45 min',
+      isDeload: false,
+      cycleWeek: 1,
+      program: eqProgram,
+      settings: s,
+      needs: [need(rhomboide.id, { deficit: 2, done: 2 }), need(dentele.id, { deficit: 2, done: 2 })],
+      equipment: new Set(['floor']),
+      newId: () => `sol-${++n}`,
+    });
+
+    // Travail prioritaire (parallèles uniquement) et CARs sous barre retirés faute de matériel.
+    expect(res.template.items.filter((i) => i.blockTypeId === priority.id)).toEqual([]);
+    const missingIds = res.leftOut.filter((l) => l.why === 'equipment').flatMap((l) => l.item.candidateExerciseIds);
+    expect(missingIds).toEqual(expect.arrayContaining([carsBar.id, leanUpEx.id, negEx.id, pnEx.id, flPuEx.id]));
+
+    // Skill : une seule ligne adaptée pour Planche et une seule pour Touch FL (la 2e paire n'est pas dupliquée).
+    const skillItems = res.template.items.filter((i) => i.blockTypeId === skill.id);
+    expect(skillItems).toHaveLength(2);
+    const [plItem, flItem] = skillItems;
+    expect(res.adapted[plItem.id]).toBe(true);
+    expect(plItem.candidateExerciseIds).toEqual([stradHold.id, leanSur.id, advTuck.id]);
+    expect(plItem.targetText).toBe('3-6 s ou 5-8 reps');
+
+    expect(res.adapted[flItem.id]).toBe(true);
+    expect(flItem.candidateExerciseIds).toEqual([vicHold.id, vicPu.id]);
+    expect(flItem.targetText).toBe('8-15 s ou 8-10 reps');
+
+    // Renfo spé déjà absorbé : aucune ligne specific en doublon.
+    expect(res.template.items.filter((i) => i.blockTypeId === specific.id)).toEqual([]);
+
+    // Composantes : Rhomboïde garde uniquement Reverse planche PU (sol) ; Grand dentelé (élastique seul) est bloqué par matériel.
+    const rhomboComp = res.components.find((c) => c.elementId === rhomboide.id)!;
+    const denteleComp = res.components.find((c) => c.elementId === dentele.id)!;
+    expect(rhomboComp.deficitSets).toBe(2);
+    expect(res.template.items.find((i) => i.id === rhomboComp.itemId)?.candidateExerciseIds).toEqual([revPu.id]);
+    expect(denteleComp).toMatchObject({ deficitSets: 0, itemId: null, noEquipment: true });
+  });
+
+  it('sur parallèles uniquement (sans barre ni sol) : garde le Travail prioritaire et le Skill Planche, retire tout le Touch FL', () => {
+    const res = buildExpress({
+      minutes: 45,
+      replaced: evening,
+      name: 'Express 45 min',
+      isDeload: false,
+      cycleWeek: 1,
+      program: eqProgram,
+      settings: s,
+      needs: satisfied,
+      equipment: new Set(['parallettes']),
+      newId: () => `par-${++n}`,
+    });
+    expect(res.template.items.filter((i) => i.blockTypeId === priority.id)).toHaveLength(2);
+    const skillItems = res.template.items.filter((i) => i.blockTypeId === skill.id);
+    expect(skillItems.every((i) => i.elementId === planche.id)).toBe(true);
+    expect(res.adapted).toEqual({});
+    expect(res.leftOut.filter((l) => l.why === 'equipment' && l.item.elementId === fl.id)).toHaveLength(3);
+  });
+
+  it('sans aucun matériel coché, ne propose aucun exercice', () => {
+    const res = buildExpress({
+      minutes: 30,
+      replaced: evening,
+      name: 'Express 30 min',
+      isDeload: false,
+      cycleWeek: 1,
+      program: eqProgram,
+      settings: s,
+      needs: [need(rhomboide.id, { deficit: 2, done: 2 })],
+      equipment: new Set(),
+      newId: () => `vide-${++n}`,
+    });
+    expect(res.template.items).toEqual([]);
+    expect(res.components[0]).toMatchObject({ itemId: null, noEquipment: true });
   });
 });

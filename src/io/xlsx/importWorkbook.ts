@@ -11,6 +11,7 @@ import {
   UNKNOWN_BAND_COLOR,
   emptyWeekPlan,
 } from '../../domain/defaults';
+import { inferExerciseEquipment } from '../../domain/equipment';
 import { parseIntensity, parseRest, parseTargets } from '../../domain/parse';
 import { cleanSpaces, fold, nameKey, startsWithWords } from '../../domain/text';
 import type {
@@ -342,6 +343,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
         aliases: [],
         order: firstNewExerciseOrder + index,
         workSecPerSet: null,
+        equipment: inferExerciseEquipment(name, category),
       }),
       (e) => ({ ...e, category, quick: row.quick, elementId: e.elementId ?? element.id }),
     );
@@ -367,6 +369,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
       aliases: [],
       order: nextOrder(exerciseReg.all()),
       workSecPerSet: null,
+      equipment: inferExerciseEquipment(element.name, element.name),
     }));
     if (created) {
       matcher.add(entity);
@@ -672,6 +675,7 @@ export function buildImport(data: WorkbookData, existing: ExistingData, opts: Im
           aliases: [],
           order: nextOrder(exerciseReg.all()),
           workSecPerSet: null,
+          equipment: inferExerciseEquipment(name, 'Importé (journal)'),
         })).entity;
         matcher.add(exercise);
         newExercises++;

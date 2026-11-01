@@ -111,6 +111,7 @@ export function exercise(name: string, elementId: string | null, options: Partia
     aliases: [],
     order: 0,
     workSecPerSet: null,
+    equipment: [],
     ...options,
   };
 }

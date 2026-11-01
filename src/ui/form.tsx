@@ -107,6 +107,41 @@ export function ChipSelect<T extends string | number | null>({
   );
 }
 
+/** Choix multiple parmi des puces (qui passent à la ligne). */
+export function ChipMultiSelect<T extends string>({
+  options,
+  values,
+  onChange,
+  size = 'md',
+  ariaLabel,
+}: {
+  options: readonly { value: T; label: ReactNode }[];
+  values: readonly T[];
+  onChange: (values: T[]) => void;
+  size?: 'sm' | 'md';
+  ariaLabel?: string;
+}) {
+  const toggle = (value: T) => onChange(values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
+  return (
+    <div className="flex flex-wrap gap-1.5" role={ariaLabel ? 'group' : undefined} aria-label={ariaLabel}>
+      {options.map((option) => {
+        const active = values.includes(option.value);
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => toggle(option.value)}
+            className={size === 'sm' ? chipClass(active, '', 'text-sm', 'min-h-11') : chipClass(active, 'min-h-12', 'text-base')}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Ligne de liste qui ouvre un écran ou une feuille. */
 export function ListRow({
   title,
