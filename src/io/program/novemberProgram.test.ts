@@ -199,7 +199,11 @@ describe.skipIf(![XLSX_FILE, V1, V2].every((f) => existsSync(f)))('programme de 
     ]);
     expect(after.blockTypes.find((b) => b.id === p.componentBlockTypeId)?.name).toBe('Renfo composante');
     const typeName = (id: string) => after.sessionTypes.find((t) => t.id === id)?.name;
-    expect(Object.fromEntries(Object.entries(p.componentAcceptance).map(([id, a]) => [typeName(id), a]))).toEqual({ 'Séance type': 'all', 'Combo libre': 'endurance', Matin: 'endurance' });
+    // Séance type a les 4 composantes (aucun réglage : toutes) ; Combo libre et Matin, le grand dentelé et le rhomboïde.
+    expect(Object.fromEntries(Object.entries(p.componentAcceptance).map(([id, a]) => [typeName(id), a.map(elementName)]))).toEqual({
+      'Combo libre': ['Grand dentelé', 'Rhomboïde'],
+      Matin: ['Grand dentelé', 'Rhomboïde'],
+    });
     // « Séance type 5 » disparaît : elle a servi, elle est archivée.
     expect(conversion.merged.map((m) => [m.template.name, m.into.name, m.archive])).toEqual([['Séance type 5 (force en bonus)', 'Séance type', true]]);
     const templates = new Map([...v2.templates.filter((t) => t.id !== st5.id), ...conversion.templates].map((t) => [t.id, t]));

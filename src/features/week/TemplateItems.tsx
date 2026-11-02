@@ -1,4 +1,4 @@
-import { formatIntensity, formatRest, formatSets, formatTarget } from '../../domain/labels';
+import { formatRest, formatSets, formatTarget, intensityLabel } from '../../domain/labels';
 import type { PrescriptionItem, SessionTemplate } from '../../domain/types';
 import { Badge } from '../../ui/Badge';
 import type { Lookups } from '../../db/lookups';
@@ -8,7 +8,7 @@ function ItemCard({ item, lookups }: { item: PrescriptionItem; lookups: Lookups 
   const candidates = item.candidateExerciseIds.map((id) => lookups.exercises.get(id)).filter((e) => e !== undefined);
   const details = [
     item.targets.length > 0 ? item.targets.map(formatTarget).join(' ou ') : item.targetText,
-    item.intensity ? formatIntensity(item.intensity) : item.intensityText,
+    intensityLabel(item),
     `repos ${formatRest(item.restMinSec, item.restMaxSec)}`,
   ].filter((d) => d && d !== '—');
   return (

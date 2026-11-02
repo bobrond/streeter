@@ -1,7 +1,8 @@
 // Composantes réparties par l'appli (programmation par blocs, phase H2 ; règles décidées avec l'utilisateur le
 // 01/11/2026, CLAUDE.md « Programmation par blocs »). Chaque composante du programme a ses bornes par tranche (ou par
-// semaine), son type de travail et ses séries par séance ; chaque type de séance accepte toutes les composantes,
-// l'endurance seulement, ou aucune. La répartition est fixe et se recalcule à partir du programme, rien n'est stocké :
+// semaine), son type de travail et ses séries par séance ; chaque type de séance accepte les composantes choisies
+// (toutes par défaut ; depuis le 02/11/2026, et non plus selon leur type de travail, à la demande de l'utilisateur).
+// La répartition est fixe et se recalcule à partir du programme, rien n'est stocké :
 // 1. les soirs obligatoires font le minimum de chaque composante, en séances complètes, sans dépasser le maximum ;
 // 2. les matins et les soirs optionnels complètent jusqu'au maximum, en séances complètes, sans le dépasser ;
 // 3. à chaque étape, les séances les plus équilibrées (séries de composantes le plus également réparties) ; à
@@ -11,6 +12,7 @@
 import type {
   ComponentAcceptance,
   ID,
+  LegacyAcceptance,
   Moment,
   PrescriptionItem,
   ProgramComponent,
@@ -24,8 +26,6 @@ import { MOMENTS, SEQ_DAYS } from './types';
 export type ComponentPlan = Pick<ProgramConfig, 'weekPlan' | 'volumeMin' | 'volumeMax'> &
   Partial<Pick<ProgramConfig, 'components' | 'componentBlockTypeId' | 'componentAcceptance' | 'componentVolumes'>>;
 
-export const ACCEPTANCES: readonly ComponentAcceptance[] = ['all', 'endurance', 'none'];
-
 /** Bornes d'une composante : celles de son type de travail dans le programme, sinon les bornes par défaut. */
 export function componentBounds(
   settings: Pick<ProgramConfig, 'volumeMin' | 'volumeMax'> & Partial<Pick<ProgramConfig, 'componentVolumes'>>,
@@ -35,14 +35,41 @@ export function componentBounds(
   return own ? { min: own.min, max: own.max, work: own.work } : { min: settings.volumeMin, max: settings.volumeMax, work: null };
 }
 
-export function acceptanceOf(plan: Pick<ComponentPlan, 'componentAcceptance'>, sessionTypeId: ID): ComponentAcceptance {
-  return plan.componentAcceptance?.[sessionTypeId] ?? 'all';
+/** Composantes (éléments) qu'un type de séance accepte ; `null` : toutes. */
+export function acceptanceOf(plan: Pick<ComponentPlan, 'componentAcceptance'>, sessionTypeId: ID): ComponentAcceptance | null {
+  return plan.componentAcceptance?.[sessionTypeId] ?? null;
 }
 
-/** « Endurance seulement » n'accepte qu'une composante dont le travail est l'endurance. */
-export function acceptsWork(acceptance: ComponentAcceptance, work: string | null): boolean {
-  if (acceptance === 'all') return true;
-  return acceptance === 'endurance' && work === 'endurance';
+export function acceptsComponent(plan: Pick<ComponentPlan, 'componentAcceptance'>, sessionTypeId: ID, elementId: ID): boolean {
+  const accepted = acceptanceOf(plan, sessionTypeId);
+  return accepted === null || accepted.includes(elementId);
+}
+
+/**
+ * Réglage d'un type de séance à enregistrer : `null` (toutes) s'il accepte toutes les composantes du programme, sinon
+ * les siennes dans l'ordre du programme.
+ */
+export function normalizeAcceptance(accepted: readonly ID[], components: readonly Pick<ProgramComponent, 'elementId'>[]): ComponentAcceptance | null {
+  const ordered = components.map((c) => c.elementId).filter((id, i, all) => accepted.includes(id) && all.indexOf(id) === i);
+  return components.every((c) => accepted.includes(c.elementId)) ? null : ordered;
+}
+
+/**
+ * Ancien réglage (avant le schéma 10) : toutes, l'endurance seulement, aucune. « Endurance seulement » devient la liste
+ * des composantes du programme dont le travail est l'endurance ; « toutes » disparaît (valeur par défaut).
+ */
+export function upgradeAcceptance(
+  program: Pick<ComponentPlan, 'volumeMin' | 'volumeMax' | 'componentVolumes' | 'components'> & { componentAcceptance?: Record<ID, unknown> },
+): Record<ID, ComponentAcceptance> {
+  const upgraded: Record<ID, ComponentAcceptance> = {};
+  for (const [typeId, value] of Object.entries(program.componentAcceptance ?? {})) {
+    if (Array.isArray(value)) upgraded[typeId] = value.filter((id): id is ID => typeof id === 'string');
+    else if ((value as LegacyAcceptance) === 'none') upgraded[typeId] = [];
+    else if ((value as LegacyAcceptance) === 'endurance') {
+      upgraded[typeId] = (program.components ?? []).filter((c) => componentBounds(program, c.elementId).work === 'endurance').map((c) => c.elementId);
+    }
+  }
+  return upgraded;
 }
 
 export const slotKey = (seqDay: SeqDay, moment: Moment): string => `${seqDay}:${moment}`;
@@ -177,8 +204,7 @@ export function distributeComponents(plan: ComponentPlan, templates: ReadonlyMap
   const totals = new Map<ID, ComponentTotals>(components.map((c) => [c.id, { evening: 0, extra: 0 }]));
   if (components.length === 0) return { slots, bySlot, totals };
   const setsOf = (c: ProgramComponent) => Math.max(1, Math.floor(c.setsPerSession) || 1);
-  const accepts = (slot: DistributionSlot, c: ProgramComponent) =>
-    acceptsWork(acceptanceOf(plan, slot.template.sessionTypeId), componentBounds(plan, c.elementId).work);
+  const accepts = (slot: DistributionSlot, c: ProgramComponent) => acceptsComponent(plan, slot.template.sessionTypeId, c.elementId);
 
   const place = (group: DistributionSlot[], count: (c: ProgramComponent) => number, field: keyof ComponentTotals) => {
     const demands: Demand[] = components.map((c, index) => ({

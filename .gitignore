@@ -17,3 +17,5 @@ docs/programme_*.json
 # Vault de suivi (second cerveau) : privé, il reste sur ce PC et ne doit jamais être publié.
 vault/
 .obsidian/
+# Sauvegardes de l'appli (séances, notes) : privées.
+docs/streeter_*.txt

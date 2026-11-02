@@ -40,10 +40,25 @@ export function parseTargets(text: string): Target[] {
   return targets;
 }
 
-/** « RPE ≤ 5 », « RPE 8-9 », « 1-2 reps en réserve »… ; `null` si rien de reconnu. */
+/**
+ * Intensité d'une ligne : « RPE ≤ 5 », « RPE 8-9 », « 1-2 reps en réserve »… ; avec plusieurs alternatives séparées
+ * par « ou » (une par alternative de cible), la première lue. `null` si rien de reconnu.
+ */
 export function parseIntensity(text: string): Intensity | null {
+  return parseIntensities(text).find((intensity) => intensity !== null) ?? null;
+}
+
+/**
+ * Intensités d'une ligne, une par alternative séparée par « ou », dans l'ordre des alternatives de la cible
+ * (« 2 reps en réserve ou RPE 8-9 » pour « 6-10 reps ou 15-30 s ») ; `null` pour une alternative non lue.
+ */
+export function parseIntensities(text: string): (Intensity | null)[] {
   const t = fold(text);
-  if (isEmptyMark(t)) return null;
+  if (isEmptyMark(t)) return [];
+  return t.split(/\bou\b/).map(parseOneIntensity);
+}
+
+function parseOneIntensity(t: string): Intensity | null {
   const rpe = t.match(new RegExp(`rpe\\s*(<=|≤|<)?\\s*${RANGE}`));
   if (rpe) {
     const a = num(rpe[2]);

@@ -1,7 +1,7 @@
 // Tableau de la séance : blocs, paires planche / FL et supersets, un exercice par carte, une ligne par série
 // (numéro ou type, précédent, valeur, ✓). Lignes de 56 px ; glisser une ligne à gauche révèle « Supprimer ».
 import type { Lookups } from '../../db/lookups';
-import { UNIT_SHORT, formatDateShort, formatIntensity, formatRest, formatSetValue, formatSets, formatTarget } from '../../domain/labels';
+import { UNIT_SHORT, formatDateShort, formatRest, formatSetValue, formatSets, formatTarget, intensityLabel } from '../../domain/labels';
 import { capReached, targetFor, type SessionPlan } from '../../domain/session';
 import type { PendingRow, TableRow } from '../../domain/sessionTable';
 import type { ID, Moment, SetKind } from '../../domain/types';
@@ -142,7 +142,7 @@ function Line({ line, lookups, proposed, moment, handlers }: { line: LineView; l
   const details = [
     `${formatSets(item.setsMin, item.setsMax)} séries`,
     target ? formatTarget(target) : item.targets.length > 0 ? item.targets.map(formatTarget).join(' ou ') : item.targetText,
-    item.intensity ? formatIntensity(item.intensity) : item.intensityText,
+    intensityLabel(item, target?.unit ?? null),
     `repos ${formatRest(item.restMinSec, item.restMaxSec)}`,
   ].filter((d) => d && d !== '—');
   const done = line.progress?.done ?? 0;

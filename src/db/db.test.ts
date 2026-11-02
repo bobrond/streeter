@@ -40,7 +40,7 @@ describe('migrations du schéma', () => {
       { ...oldSet, kind: 'normal' },
       { ...oldSet, id: 's2', setIndex: 2, value: 10, createdAt: 2, kind: 'normal' },
     ]);
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBe(10);
     expect(await db.sets.where('sessionId').equals('ses').count()).toBe(2);
     expect(await db.sessions.get('ses')).toMatchObject({ date: '2026-10-16', status: 'done' });
     db.close();
@@ -65,7 +65,7 @@ describe('migrations du schéma', () => {
     v2.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBe(10);
     expect(await db.templates.get('tpl')).toEqual({ ...oldTemplate, archived: false, sharedBlocks: {} });
     expect(await db.exercises.get('hold')).toEqual({ ...oldExercise, workSecPerSet: null, equipment: ['parallettes'] });
     expect((await db.sessions.get('ses'))?.templateSnapshot).toEqual({ ...oldTemplate, archived: false, sharedBlocks: {} });
@@ -88,7 +88,7 @@ describe('migrations du schéma', () => {
     v3.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBe(10);
     expect(await db.sessions.get('run')).toEqual({ ...running, expressMinutes: null });
     expect(await db.sessions.get('xlsx')).toMatchObject({ source: 'xlsx', expressMinutes: null });
     expect(await db.sessions.where('status').equals('in_progress').count()).toBe(1);
@@ -132,7 +132,7 @@ describe('migrations du schéma', () => {
     v4.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBe(10);
     const programs = await db.programs.toArray();
     expect(programs).toHaveLength(1);
     const [program] = programs;
@@ -170,7 +170,7 @@ describe('migrations du schéma', () => {
     await v5.table('programs').add(program);
     v5.close();
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBe(10);
     expect(await db.programs.get('p1')).toEqual({ ...program, schedule: 'week', startDate: null, componentVolumes: [], components: [], componentBlockTypeId: null, componentAcceptance: {} });
     db.close();
   });
@@ -213,7 +213,7 @@ describe('migrations du schéma', () => {
     v6.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBe(10);
     const [a, b, c, d] = await db.templates.bulkGet(['a', 'b', 'c', 'd']);
     expect(a!.sharedBlocks.echauf).toBeDefined();
     expect(b!.sharedBlocks).toEqual({ echauf: a!.sharedBlocks.echauf });
@@ -241,7 +241,7 @@ describe('migrations du schéma', () => {
     await v7.table('templates').add(written);
     v7.close();
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBe(10);
     expect(await db.programs.get('nov')).toEqual({ ...program, components: [], componentBlockTypeId: null, componentAcceptance: {} });
     expect(await db.templates.get('st')).toEqual(written);
     db.close();
@@ -268,7 +268,7 @@ describe('migrations du schéma', () => {
     v8.close();
 
     const db = new StreeterDB(name);
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBe(10);
     expect((await db.exercises.get('full'))?.equipment).toEqual(['parallettes']);
     expect((await db.exercises.get('strad'))?.equipment).toEqual(['floor', 'parallettes']);
     expect((await db.exercises.get('fl1'))?.equipment).toEqual(['bar']);
@@ -279,6 +279,38 @@ describe('migrations du schéma', () => {
       ['Victorienne au sol hold', 'seconds', 'fl', ['floor'], 3],
       ['Victorienne au sol PU', 'reps', 'fl', ['floor'], 4],
     ]);
+    db.close();
+  });
+
+  it('version 10 : composantes acceptées par type de séance plutôt que par type de travail, sans perte', async () => {
+    const name = `migration-${Math.random()}`;
+    names.push(name);
+    const v9 = new Dexie(name);
+    v9.version(1).stores(SCHEMA_V1);
+    v9.version(5).stores({ programs: 'id, startWeek', templates: 'id, name, programId' });
+    v9.version(9).stores({});
+    await v9.open();
+    const component = (id: string, elementId: string) => ({ id, elementId, setsPerSession: 2 });
+    const program = {
+      id: 'nov',
+      name: 'Novembre 2026',
+      startWeek: 5,
+      weekPlan: {},
+      volumeMin: 4,
+      volumeMax: 6,
+      componentVolumes: [
+        { elementId: 'gd', work: 'endurance', min: 8, max: 10 },
+        { elementId: 'da', work: 'force', min: 4, max: 6 },
+      ],
+      components: [component('c1', 'gd'), component('c2', 'da')],
+      componentBlockTypeId: 'renfo',
+      componentAcceptance: { st: 'all', cl: 'endurance', repos: 'none' },
+    };
+    await v9.table('programs').add(program);
+    v9.close();
+    const db = new StreeterDB(name);
+    expect(db.verno).toBe(10);
+    expect(await db.programs.get('nov')).toEqual({ ...program, componentAcceptance: { cl: ['gd'], repos: [] } });
     db.close();
   });
 

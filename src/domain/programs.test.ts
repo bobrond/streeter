@@ -118,10 +118,10 @@ describe('programme suivant', () => {
 
   it('copie les composantes réparties sous de nouveaux identifiants', () => {
     const component = { id: 'c1', elementId: 'gd', setsPerSession: 2, candidateExerciseIds: ['ex'], candidatesText: 'Ex', targetText: '', targets: [], intensityText: '', intensity: null, restText: '60 s', restMinSec: 60, restMaxSec: 60, notes: '' };
-    const source = { ...october, components: [component], componentBlockTypeId: 'renfo', componentAcceptance: { combo: 'endurance' as const } };
+    const source = { ...october, components: [component], componentBlockTypeId: 'renfo', componentAcceptance: { combo: ['gd'] } };
     const { program: copy } = duplicateProgram(source, [], { newId: () => 'nouveau', name: 'Décembre 2026', startWeek: 9, now: 1 });
     expect(copy.components).toEqual([{ ...component, id: 'nouveau' }]);
-    expect(copy).toMatchObject({ componentBlockTypeId: 'renfo', componentAcceptance: { combo: 'endurance' } });
+    expect(copy).toMatchObject({ componentBlockTypeId: 'renfo', componentAcceptance: { combo: ['gd'] } });
     expect(source.components[0].id).toBe('c1');
   });
 

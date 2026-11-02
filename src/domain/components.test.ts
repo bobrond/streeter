@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { block, element, item, sessionLog, settings, template, weekPlan } from '../test/builders';
-import { componentFromLine, distributeComponents, placeDemands, slotComponentLines, slotKey, withComponents } from './components';
+import { componentFromLine, distributeComponents, normalizeAcceptance, placeDemands, slotComponentLines, slotKey, upgradeAcceptance, withComponents } from './components';
 import { practicedTemplate } from './deload';
 import { buildExpress, componentNeeds } from './express';
 import { tranchePeriod } from './period';
@@ -39,7 +39,7 @@ function november() {
     componentVolumes: [volume(gd.id, 'endurance', 8, 10), volume(rh.id, 'endurance', 8, 10), volume(da.id, 'force', 4, 6), volume(et.id, 'force', 4, 6)],
     components: [component(gd.id), component(rh.id), component(da.id), component(et.id)],
     componentBlockTypeId: renfo.id,
-    componentAcceptance: { cl: 'endurance', matin: 'endurance' },
+    componentAcceptance: { cl: [gd.id, rh.id], matin: [gd.id, rh.id] },
   });
   return { plan, templates, st, cl, matin };
 }
@@ -106,11 +106,40 @@ describe('répartition des composantes', () => {
     ]);
     expect(programIssues(context, plan).filter((i) => i.kind === 'component_volume')).toEqual([]);
     // Combo libre n'accepte plus rien : le grand dentelé et le rhomboïde n'ont plus que 3 soirs, 6 séries.
-    const strict = { ...plan, componentAcceptance: { cl: 'none' as const, matin: 'endurance' as const } };
+    const strict = { ...plan, componentAcceptance: { cl: [], matin: [gd.id, rh.id] } };
     expect(programIssues({ ...context, componentPlan: strict }, strict).filter((i) => i.kind === 'component_volume')).toEqual([
       { kind: 'component_volume', elementId: gd.id, status: 'under_min' },
       { kind: 'component_volume', elementId: rh.id, status: 'under_min' },
     ]);
+  });
+
+  it('composantes par séance, quel que soit leur type de travail : tout en hypertrophie (novembre, 02/11) ; séances équilibrées', () => {
+    const { plan, templates } = november();
+    const hypertrophy = {
+      ...plan,
+      componentVolumes: [gd, rh, da, et].map((e) => volume(e.id, 'hypertrophie', 4, 6)),
+      componentAcceptance: { st: [da.id, et.id], cl: [gd.id, rh.id], matin: [gd.id, rh.id] },
+    };
+    const d = distributeComponents(hypertrophy, templates);
+    const at = (day: 1 | 2 | 3 | 4 | 5, moment: 'evening' | 'morning' = 'evening') => names(d.bySlot.get(slotKey(day, moment)));
+    expect([at(1), at(2), at(3), at(4), at(5), at(1, 'morning'), at(2, 'morning')]).toEqual([
+      ['Deltoïde ant', 'Extension thoracique'],
+      ['Grand dentelé', 'Rhomboïde'],
+      ['Deltoïde ant'],
+      ['Grand dentelé', 'Rhomboïde'],
+      ['Extension thoracique'],
+      ['Grand dentelé'],
+      ['Rhomboïde'],
+    ]);
+  });
+
+  it('ancien réglage par type de travail : « endurance seulement » devient la liste des composantes en endurance', () => {
+    const { plan } = november();
+    const legacy = { ...plan, componentAcceptance: { st: 'all', cl: 'endurance', matin: 'none' } as Record<string, unknown> };
+    expect(upgradeAcceptance(legacy)).toEqual({ cl: [gd.id, rh.id], matin: [] });
+    expect(upgradeAcceptance({ ...plan, componentAcceptance: { cl: [rh.id] } })).toEqual({ cl: [rh.id] });
+    expect(normalizeAcceptance([et.id, gd.id], plan.components!)).toEqual([gd.id, et.id]);
+    expect(normalizeAcceptance([et.id, da.id, rh.id, gd.id], plan.components!)).toBeNull();
   });
 
   it('séances complètes : un minimum de 5 fait 6 séries ; jamais au-delà du maximum', () => {

@@ -1,6 +1,6 @@
 // Composantes d'un programme, réparties par l'appli (phase H2) : pour chaque composante, son travail (force ou
-// endurance), son volume par tranche, ses séries par séance, ses exercices et sa prescription ; ce que chaque type de
-// séance accepte ; la répartition d'une tranche. Un programme dont les composantes sont écrites dans ses séances
+// endurance), son volume par tranche, ses séries par séance, ses exercices et sa prescription ; les composantes que
+// chaque type de séance accepte ; la répartition d'une tranche. Un programme dont les composantes sont écrites dans ses séances
 // (novembre avant H2) passe aux composantes réparties après un aperçu, avec « Annuler ».
 import { useMemo, useState } from 'react';
 import { db } from '../../db/db';
@@ -9,13 +9,13 @@ import { useLookups, type Lookups } from '../../db/lookups';
 import { applyComponentConversion, restoreProgram, updateProgram } from '../../db/programStore';
 import { convertToComponents, type ComponentConversion } from '../../domain/componentConversion';
 import {
-  ACCEPTANCES,
   acceptanceOf,
-  acceptsWork,
+  acceptsComponent,
   componentBounds,
   componentDistribution,
   componentFromLine,
   componentLine,
+  normalizeAcceptance,
   slotKey,
   type ComponentPlan,
   type DistributionSlot,
@@ -23,15 +23,15 @@ import {
 import { localISODate } from '../../domain/cycle';
 import { deloadSets } from '../../domain/deload';
 import { emptyItemForm, formToItem, itemToForm, type ItemForm } from '../../domain/editing';
-import { ACCEPTANCE_LABEL, formatIntensity, formatRest, formatTarget, joinFrench, workLabel } from '../../domain/labels';
+import { acceptanceText, formatRest, formatTarget, intensityLabel, joinFrench, workLabel } from '../../domain/labels';
 import { parseIntensity, parseRest, parseTargets } from '../../domain/parse';
 import { programPhase } from '../../domain/programs';
-import type { BlockType, ComponentAcceptance, ComponentVolume, ID, Program, ProgramComponent, SessionTemplate } from '../../domain/types';
+import type { BlockType, ComponentVolume, ID, Program, ProgramComponent, SessionTemplate } from '../../domain/types';
 import { useNow } from '../../lib/device';
 import { newId } from '../../lib/id';
 import { goBack, navigate } from '../../lib/router';
 import { Button } from '../../ui/Button';
-import { ChipSelect, Field, TextArea, TextInput } from '../../ui/form';
+import { ChipMultiSelect, ChipSelect, Field, TextArea, TextInput } from '../../ui/form';
 import { CloseIcon, NextIcon, PlusIcon, TrashIcon } from '../../ui/icons';
 import { ValueStepper } from '../../ui/inputs';
 import { Screen } from '../../ui/Screen';
@@ -43,7 +43,7 @@ import { INTENSITY_PRESETS, REST_PRESETS, TARGET_PRESETS } from './presets';
 import { ProgramChecks } from './ProgramChecks';
 import { programContext, withProgram, type ProgramContext } from './programContext';
 
-const WORKS = ['endurance', 'force'] as const;
+const WORKS = ['force', 'hypertrophie', 'endurance'] as const;
 
 /** Bloc des composantes d'un programme qui n'en a pas encore : celui dont le nom parle de composante, sinon le dernier. */
 function defaultComponentBlock(blockTypes: readonly BlockType[]): ID | null {
@@ -54,7 +54,7 @@ function defaultComponentBlock(blockTypes: readonly BlockType[]): ID | null {
 function prescriptionText(c: ProgramComponent): string {
   return [
     c.targets.length > 0 ? c.targets.map(formatTarget).join(' ou ') : c.targetText,
-    c.intensity ? formatIntensity(c.intensity) : c.intensityText,
+    intensityLabel(c),
     c.restText ? `repos ${formatRest(c.restMinSec, c.restMaxSec)}` : '',
   ]
     .filter((part) => part && part !== '—')
@@ -116,7 +116,7 @@ export function ComponentsScreen({ data, programId }: { data: AppData; programId
 
           <section className="mt-2 flex flex-col gap-2">
             <h2 className="font-display text-2xl leading-none tracking-wider text-ink-3">Ce que chaque séance accepte</h2>
-            <p className="text-sm text-ink-3">Réglage par type de séance, pour ce programme.</p>
+            <p className="text-sm text-ink-3">Réglage par type de séance, pour ce programme : une composante ne va que dans les séances qui l’acceptent.</p>
             {programSessionTypes(program, context.templates).map((typeId) => (
               <AcceptanceRow key={typeId} program={program} sessionTypeId={typeId} templates={context.templates} lookups={lookups} />
             ))}
@@ -180,12 +180,26 @@ function ComponentCard({ component, program, lookups, per, onEdit }: { component
   );
 }
 
-/** Ce qu'un type de séance accepte des composantes du programme : toutes, l'endurance seulement, aucune. */
-export function AcceptanceChips({ program, sessionTypeId }: { program: Program; sessionTypeId: ID }) {
-  const value = acceptanceOf(program, sessionTypeId);
-  const change = (next: ComponentAcceptance) =>
-    void updateProgram(db, program.id, { componentAcceptance: { ...program.componentAcceptance, [sessionTypeId]: next } });
-  return <ChipSelect value={value} onChange={change} options={ACCEPTANCES.map((a) => ({ value: a, label: ACCEPTANCE_LABEL[a] }))} />;
+/** Composantes du programme qu'un type de séance accepte : une puce par composante, toutes par défaut. */
+export function AcceptanceChips({ program, sessionTypeId, lookups }: { program: Program; sessionTypeId: ID; lookups: Lookups }) {
+  const elementIds = [...new Set(program.components.map((c) => c.elementId))];
+  const values = acceptanceOf(program, sessionTypeId) ?? elementIds;
+  const change = (next: ID[]) => {
+    const accepted = normalizeAcceptance(next, program.components);
+    const componentAcceptance = { ...program.componentAcceptance };
+    if (accepted === null) delete componentAcceptance[sessionTypeId];
+    else componentAcceptance[sessionTypeId] = accepted;
+    void updateProgram(db, program.id, { componentAcceptance });
+  };
+  return (
+    <ChipMultiSelect
+      size="sm"
+      ariaLabel="Composantes acceptées"
+      values={values.filter((id) => elementIds.includes(id))}
+      onChange={change}
+      options={elementIds.map((id) => ({ value: id, label: lookups.elements.get(id)?.name ?? '?' }))}
+    />
+  );
 }
 
 function AcceptanceRow({ program, sessionTypeId, templates, lookups }: { program: Program; sessionTypeId: ID; templates: readonly SessionTemplate[]; lookups: Lookups }) {
@@ -199,7 +213,7 @@ function AcceptanceRow({ program, sessionTypeId, templates, lookups }: { program
         <span className="font-semibold">{type?.name ?? 'Type inconnu'}</span>
       </span>
       {others.length > 0 && <span className="text-sm text-ink-3">Séances : {joinFrench(sessions)}</span>}
-      <AcceptanceChips program={program} sessionTypeId={sessionTypeId} />
+      <AcceptanceChips program={program} sessionTypeId={sessionTypeId} lookups={lookups} />
     </div>
   );
 }
@@ -261,7 +275,7 @@ export function DistributionTable({
     notes.push(`${name(c)} : ${totals(c).evening} séries le soir, sous son minimum de ${min} : pas assez de séances du soir qui l’acceptent.`);
   }
   const below = components.filter((c) => totals(c).evening >= componentBounds(plan, c.elementId).min && totals(c).evening + totals(c).extra < componentBounds(plan, c.elementId).max);
-  const unaccepted = below.filter((c) => !extras.some((s) => acceptsWork(acceptanceOf(plan, s.template.sessionTypeId), componentBounds(plan, c.elementId).work)));
+  const unaccepted = below.filter((c) => !extras.some((s) => acceptsComponent(plan, s.template.sessionTypeId, c.elementId)));
   if (unaccepted.length > 0 && extras.length > 0) {
     const total = (c: ProgramComponent) => totals(c).evening + totals(c).extra;
     const same = unaccepted.every((c) => total(c) === total(unaccepted[0]));
@@ -374,7 +388,7 @@ function ConversionPreview({ conversion, context, lookups }: { conversion: Compo
         <span className="font-semibold text-ink">Ce que chaque séance accepte, d’après ses lignes</span>
         {programSessionTypes(converted, [...templates.values()].filter((t) => t.programId === converted.id)).map((typeId) => (
           <span key={typeId}>
-            {lookups.sessionTypes.get(typeId)?.name ?? '?'} : {ACCEPTANCE_LABEL[acceptanceOf(converted, typeId)].toLowerCase()}
+            {lookups.sessionTypes.get(typeId)?.name ?? '?'} : {acceptanceText(acceptanceOf(converted, typeId), (id) => lookups.elements.get(id)?.name.toLowerCase() ?? '?')}
           </span>
         ))}
       </div>
@@ -542,7 +556,7 @@ function ComponentSheet({
         <Field label="RPE / marge">
           <Presets values={INTENSITY_PRESETS} current={form.intensityText} onPick={(intensityText) => patch({ intensityText })} />
           <TextInput value={form.intensityText} onChange={(intensityText) => patch({ intensityText })} placeholder="RPE 5-6" />
-          <Reading ok={intensity !== null}>{intensity ? `Lu : ${formatIntensity(intensity)}` : 'Texte libre.'}</Reading>
+          <Reading ok={intensity !== null}>{intensity ? `Lu : ${intensityLabel({ intensityText: form.intensityText, intensity, targets: [] })}` : 'Texte libre.'}</Reading>
         </Field>
         <Field label="Repos">
           <Presets values={REST_PRESETS} current={form.restText} onPick={(restText) => patch({ restText })} />

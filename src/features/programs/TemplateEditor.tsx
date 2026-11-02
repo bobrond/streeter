@@ -13,7 +13,8 @@ import { estimateDuration } from '../../domain/duration';
 import { duplicateItem, reorderItem, templateDays } from '../../domain/editing';
 import { MOMENT_LABEL, formatDurationRange, formatRange, formatSets, formatTarget, joinFrench, restParts } from '../../domain/labels';
 import { buildPlan } from '../../domain/session';
-import type { ID, PrescriptionItem, SessionTemplate } from '../../domain/types';
+import { parseIntensities } from '../../domain/parse';
+import type { ID, Intensity, PrescriptionItem, SessionTemplate } from '../../domain/types';
 import { newId } from '../../lib/id';
 import { goBack, navigate } from '../../lib/router';
 import { Badge } from '../../ui/Badge';
@@ -47,8 +48,16 @@ export function TemplateEditor({ data, templateId }: { data: AppData; templateId
 
 type SheetState = { kind: 'item'; target: ItemSheetTarget } | { kind: 'line'; itemId: ID } | { kind: 'candidates'; itemId: ID } | { kind: 'template' } | null;
 
-/** Valeur d'une cellule : intensité « RPE 8-9 » ou « 1-2 reps » en réserve, texte libre sinon. */
+/**
+ * Valeur d'une cellule : intensité « RPE 8-9 » ou « 1-2 reps » en réserve, texte libre sinon ; une intensité par
+ * alternative de cible : « 2 en rés. / RPE 8-9 ».
+ */
 function intensityCell(item: PrescriptionItem): { label: string; value: string } {
+  const alternatives = parseIntensities(item.intensityText);
+  if (alternatives.length > 1) {
+    const short = (i: Intensity | null) => (i === null ? '?' : i.kind === 'rpe' ? `RPE ${formatRange(i.min, i.max)}` : `${formatRange(i.min, i.max)} en rés.`);
+    return { label: 'Intensité', value: alternatives.map(short).join(' / ') };
+  }
   if (item.intensity?.kind === 'rpe') return { label: 'RPE', value: formatRange(item.intensity.min, item.intensity.max) };
   if (item.intensity?.kind === 'rir') {
     const max = item.intensity.max ?? item.intensity.min ?? 0;
@@ -216,7 +225,7 @@ function ComponentBlock({ template, context, lookups, href }: { template: Sessio
         <Badge>Réparti par l’appli</Badge>
       </div>
       <p className="text-sm text-ink-2">Les séances {type ? `de type « ${type.name} »` : 'de ce type'} acceptent :</p>
-      <AcceptanceChips program={program} sessionTypeId={template.sessionTypeId} />
+      <AcceptanceChips program={program} sessionTypeId={template.sessionTypeId} lookups={lookups} />
       {groups.size === 0 ? (
         <p className="text-sm text-ink-2">Hors du déroulé : faite à une place, la séance reçoit les composantes de cette place.</p>
       ) : (

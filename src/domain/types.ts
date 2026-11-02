@@ -188,8 +188,12 @@ export interface ComponentVolume {
   max: number;
 }
 
-/** Ce qu'un type de séance accepte des composantes réparties par l'appli : toutes, l'endurance seulement, aucune. */
-export type ComponentAcceptance = 'all' | 'endurance' | 'none';
+/**
+ * Composantes réparties qu'un type de séance accepte : les éléments (composantes) choisis, `[]` pour aucune. Avant le
+ * 02/11/2026 (schéma 10), un type de travail : toutes, l'endurance seulement, aucune (`LegacyAcceptance`).
+ */
+export type ComponentAcceptance = ID[];
+export type LegacyAcceptance = 'all' | 'endurance' | 'none';
 
 /**
  * Composante répartie par l'appli (programmation par blocs, phase H2) : ses bornes et son type de travail sont ceux de
@@ -237,7 +241,7 @@ export interface ProgramConfig {
   components: ProgramComponent[];
   /** Bloc des lignes de composantes réparties ; `null` sans composante répartie. */
   componentBlockTypeId: ID | null;
-  /** Par type de séance : composantes qu'il accepte ; absent : toutes. */
+  /** Par type de séance : composantes (éléments) qu'il accepte ; absent : toutes. */
   componentAcceptance: Record<ID, ComponentAcceptance>;
   morningMaxMinutes: number;
   weekPlan: WeekPlan;

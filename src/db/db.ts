@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { linkIdenticalBlocks } from '../domain/blocks';
+import { upgradeAcceptance } from '../domain/components';
 import { ensureFloorVictorianExercises, inferExerciseEquipment, normalizeEquipment } from '../domain/equipment';
 import { programFromLegacySettings } from '../domain/programs';
 import type {
@@ -191,6 +192,18 @@ export class StreeterDB extends Dexie {
         const withVictorian = ensureFloorVictorianExercises(upgraded, elements, () => crypto.randomUUID());
         await tx.table('exercises').bulkPut(withVictorian);
       });
+    // 10 (02/11/2026) : un type de séance accepte des composantes choisies (`componentAcceptance` : liste d'éléments)
+    // et non plus un type de travail ; « endurance seulement » devient la liste des composantes en endurance.
+    this.version(10)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table('programs')
+          .toCollection()
+          .modify((program: Program) => {
+            program.componentAcceptance = upgradeAcceptance(program);
+          }),
+      );
   }
 }
 

@@ -1,14 +1,19 @@
 // Libellés et formats français.
 import { diffDays } from './cycle';
 import type { ObjectiveStatus } from './objectives';
-import type { ComponentAcceptance, Equipment, Intensity, Measure, Moment, SeqDay, Target, TargetUnit } from './types';
+import { parseIntensities } from './parse';
+import type { ComponentAcceptance, Equipment, Intensity, Measure, Moment, PrescriptionItem, SeqDay, Target, TargetUnit } from './types';
 import { EQUIPMENTS } from './types';
 import type { VolumeStatus } from './volume';
 
 export const MOMENT_LABEL: Record<Moment, string> = { morning: 'Matin', evening: 'Soir' };
 
-/** Ce qu'un type de séance accepte des composantes réparties. */
-export const ACCEPTANCE_LABEL: Record<ComponentAcceptance, string> = { all: 'Toutes', endurance: 'Endurance seulement', none: 'Aucune' };
+/** Ce qu'un type de séance accepte des composantes réparties : « toutes », « aucune », ou leurs noms. */
+export function acceptanceText(accepted: ComponentAcceptance | null, name: (elementId: string) => string): string {
+  if (accepted === null) return 'toutes';
+  if (accepted.length === 0) return 'aucune';
+  return joinFrench(accepted.map(name));
+}
 
 /** « Force », « Endurance » ; un autre type de travail tel quel, avec une majuscule. */
 export function workLabel(work: string | null): string {
@@ -83,6 +88,22 @@ export function formatIntensity(intensity: Intensity): string {
   if (intensity.kind === 'rpe') return `RPE ${formatRange(intensity.min, intensity.max)}`;
   const value = formatRange(intensity.min, intensity.max);
   return `${value} rep${intensity.max !== null && intensity.max > 1 ? 's' : ''} en réserve`;
+}
+
+/**
+ * Intensité d'une ligne à afficher. Avec une intensité par alternative de cible (autant d'alternatives que de cibles,
+ * séparées par « ou ») : celle de l'unité donnée (celle de l'exercice choisi), sinon toutes (« 2 reps en réserve ou
+ * RPE 8-9 »). Sans unité ni alternative : l'intensité lue, sinon le texte tel quel.
+ */
+export function intensityLabel(item: Pick<PrescriptionItem, 'intensityText' | 'intensity' | 'targets'>, unit?: TargetUnit | null): string {
+  const parsed = parseIntensities(item.intensityText);
+  if (parsed.length > 1) {
+    const parts = item.intensityText.split(/\s+ou\s+/i);
+    const texts = parsed.map((intensity, i) => (intensity ? formatIntensity(intensity) : (parts[i] ?? '').trim()));
+    const index = unit && item.targets.length === texts.length ? item.targets.findIndex((t) => t.unit === unit) : -1;
+    return index >= 0 ? texts[index] : texts.filter(Boolean).join(' ou ');
+  }
+  return item.intensity ? formatIntensity(item.intensity) : item.intensityText;
 }
 
 export function formatSeconds(sec: number): string {

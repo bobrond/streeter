@@ -186,7 +186,7 @@ describe('import d’un fichier programme', () => {
       'semaineType.J4.matin : « Max J1 » est une séance du soir',
     ]);
     expect(errorsOf('Voici le programme : à venir')[0]).toMatch(/^Ce n'est pas du JSON valide/);
-    expect(errorsOf({ ...novemberFile(), version: 3 })).toEqual(["Fichier au format version 3, plus récent que celui de l'appli (version 2) : mets l'appli à jour."]);
+    expect(errorsOf({ ...novemberFile(), version: 4 })).toEqual(["Fichier au format version 4, plus récent que celui de l'appli (version 3) : mets l'appli à jour."]);
   });
 
   it('refuse une date qui n’est pas un J1, ou un nouveau programme qui commencerait cette semaine', () => {
@@ -427,7 +427,7 @@ describe('format version 2', () => {
   it('exporte un programme en séquence et le relit à l’identique', () => {
     const imported = read(sequenceFile());
     const exported = programToFile(imported.program, imported.templates, { ...catalog }, appSettings());
-    expect(exported.version).toBe(2);
+    expect(exported.version).toBe(3);
     expect(exported.semaineType).toBeUndefined();
     expect(exported.sequence).toEqual(['Max J1', 'Max J1']);
     expect(exported.programme.matins).toEqual({ dureeMaxMin: 20, seances: ['Matin A'] });
@@ -475,5 +475,52 @@ describe('format version 2', () => {
     ]);
     const exported = programToFile(imported.program, imported.templates, { ...catalog, exercises: [...catalog.exercises, ...imported.newExercises] }, appSettings());
     expect(exported.catalogue?.exercices.find((e) => e.nom === 'Victorienne au sol hold')?.materiel).toEqual(['sol']);
+  });
+});
+
+describe('format version 3', () => {
+  it('lit encore les fichiers version 2, avec les mêmes clés', () => {
+    const file = { ...novemberFile(), version: 2 };
+    expect(read(file).program).toMatchObject({ name: 'Novembre 2026', startWeek: 5 });
+  });
+
+  it('garde une intensité par alternative de cible, la première servant d’intensité de la ligne', () => {
+    const file = novemberFile();
+    file.seances[0].lignes[2].cible = '6-10 reps ou 15-30 s';
+    file.seances[0].lignes[2].intensite = '2 reps en réserve ou RPE 8-9';
+    const line = read(file).templates.find((t) => t.name === 'Max J1')!.items.find((i) => i.elementId === dentele.id)!;
+    expect(line).toMatchObject({ intensityText: '2 reps en réserve ou RPE 8-9', intensity: { kind: 'rir', min: 2, max: 2 } });
+    expect(line.targets.map((t) => t.unit)).toEqual(['reps', 'seconds']);
+  });
+});
+
+describe('composantes d’un programme remplacé', () => {
+  const distributed = {
+    ...october,
+    components: [{ id: 'c-gd', elementId: dentele.id, setsPerSession: 2, candidateExerciseIds: [wallSlide.id], candidatesText: 'Wall slide', targetText: '', targets: [], intensityText: '', intensity: null, restText: '', restMinSec: null, restMaxSec: null, notes: '' }],
+    componentBlockTypeId: renfo.id,
+    componentAcceptance: { [matinA.id]: [] },
+  };
+  const retouche = () => {
+    const file = programToFile(october, [maxTpl, morningTpl], catalog, appSettings());
+    delete file.catalogue;
+    return file;
+  };
+
+  it('les lignes de composantes du fichier font foi : la répartition par l’appli est retirée', () => {
+    const imported = read(retouche(), context({ programs: [distributed] }));
+    expect(imported.replaces?.id).toBe(october.id);
+    expect(imported.program).toMatchObject({ components: [], componentBlockTypeId: null, componentAcceptance: {} });
+    expect(imported.warnings).toEqual(["Les composantes sont écrites dans les séances du fichier : elles remplacent la répartition par l'appli, qui est retirée de ce programme."]);
+  });
+
+  it('un fichier sans ligne de composante garde la répartition par l’appli', () => {
+    const file = retouche();
+    for (const seance of file.seances) seance.lignes = seance.lignes.filter((l) => l.element !== 'Grand dentelé');
+    file.seances = file.seances.filter((s) => s.lignes.length > 0);
+    file.semaineType!.J4 = { matin: null, soir: null };
+    const imported = read(file, context({ programs: [distributed] }));
+    expect(imported.program).toMatchObject({ components: distributed.components, componentBlockTypeId: renfo.id, componentAcceptance: { [matinA.id]: [] } });
+    expect(imported.warnings).toEqual([]);
   });
 });

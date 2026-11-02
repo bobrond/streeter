@@ -1,10 +1,13 @@
-// Fichier programme (format « streeter-programme », version 2), échangé avec l'agent de programmation de l'utilisateur.
+// Fichier programme (format « streeter-programme », version 3), échangé avec l'agent de programmation de l'utilisateur.
 // Le format est fixé par la consigne donnée à l'agent (docs/consigne_agent_programmation.md) : des noms plutôt que des
 // identifiants, les textes de cible, d'intensité et de repos lus comme à l'import du tableur. L'export ajoute un
 // `catalogue`, ignoré à l'import. La version 1 (semaine type seulement) reste lue.
 // Version 2 (28/10/2026) : déroulé en séquence de séances (`sequence`, `matins.seances`, cycle en tranches), volume
 // par type de travail (`programme.volumes`), séries sans minimum (`series.min` à 0), repères par tranche
 // (`parTranche`) et progressions inférieures (`progressionsInferieures`) sur une ligne.
+// Version 3 (02/11/2026), mêmes clés : une intensité par alternative de cible (« 2 reps en réserve ou RPE 8-9 »), et
+// les lignes de composantes écrites dans les séances font foi (un programme remplacé perd alors sa répartition par
+// l'appli). Les versions 1 et 2 restent lues.
 import { linkIdenticalBlocks } from '../../domain/blocks';
 import { dateOf, dayInfo } from '../../domain/cycle';
 import { DEFAULT_SESSION_TYPE_COLOR } from '../../domain/defaults';
@@ -40,7 +43,7 @@ import type {
 import { SEQ_DAYS } from '../../domain/types';
 
 export const PROGRAM_FILE_FORMAT = 'streeter-programme';
-export const PROGRAM_FILE_VERSION = 2;
+export const PROGRAM_FILE_VERSION = 3;
 /** Fichiers acceptés : le .json enregistré, le .txt envoyé par le menu de partage. */
 export const PROGRAM_FILE_ACCEPT = '.json,.txt,application/json,text/plain';
 
@@ -598,14 +601,15 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
   if (typeof head.version === 'number' && head.version > PROGRAM_FILE_VERSION) {
     return { ok: false, errors: [`Fichier au format version ${head.version}, plus récent que celui de l'appli (version ${PROGRAM_FILE_VERSION}) : mets l'appli à jour.`] };
   }
-  const v2 = head.version === 2;
-  // Version 2 : `sequence` ou `semaineType`, l'un des deux ; version 1 : `semaineType`.
+  // Versions 2 et 3 (mêmes clés ; la 3 permet une intensité par alternative de cible et dit que les lignes de
+  // composantes font foi) : `sequence` ou `semaineType`, l'un des deux ; version 1 : `semaineType`.
+  const v2 = head.version === 2 || head.version === 3;
   const root = v2
     ? r.object(raw, '', ['format', 'version', 'programme', 'seances'], { sequence: undefined, semaineType: undefined, objectifs: [], nouveautes: {}, demandesAppli: [], catalogue: null })
     : r.object(raw, '', ['format', 'version', 'programme', 'semaineType', 'seances', 'objectifs', 'nouveautes', 'demandesAppli'], { objectifs: [], nouveautes: {}, demandesAppli: [], catalogue: null });
   if (!root) return { ok: false, errors: r.errors };
   if (root.format !== PROGRAM_FILE_FORMAT) return { ok: false, errors: [`« format » doit valoir « ${PROGRAM_FILE_FORMAT} ».`] };
-  if (root.version !== 1 && root.version !== 2) return { ok: false, errors: [`« version » doit valoir ${PROGRAM_FILE_VERSION} (ou 1 pour un ancien fichier).`] };
+  if (root.version !== 1 && root.version !== 2 && root.version !== 3) return { ok: false, errors: [`« version » doit valoir ${PROGRAM_FILE_VERSION} (ou 1 ou 2 pour un ancien fichier).`] };
   const isSequence = v2 && root.sequence !== undefined;
   if (v2 && root.sequence !== undefined && root.semaineType !== undefined) r.error('', '« sequence » et « semaineType » ensemble : un seul des deux');
   if (v2 && root.sequence === undefined && root.semaineType === undefined) r.error('', 'clé « sequence » absente');
@@ -969,15 +973,22 @@ export function readProgramFile(text: string, ctx: ProgramImportContext): Progra
   const others = ctx.programs.filter((prog) => prog.id !== replaces?.id);
   const name = uniqueName(programName, others);
   if (name !== programName) r.warn(`Un autre programme s'appelle déjà « ${programName} » : celui-ci s'appellera « ${name} ».`);
+  // Composantes : les lignes écrites dans les séances du fichier font foi (demande de l'utilisateur, 02/11/2026). Un
+  // programme remplacé ne garde ses composantes réparties par l'appli que si le fichier n'en écrit aucune.
+  const componentElements = new Set([...ctx.elements, ...newElements].filter((e) => e.kind === 'component').map((e) => e.id));
+  const writesComponents = templates.some((t) => t.items.some((item) => componentElements.has(item.elementId)));
+  const keepsDistribution = !writesComponents && (replaces?.components.length ?? 0) > 0;
+  if (writesComponents && (replaces?.components.length ?? 0) > 0) {
+    r.warn("Les composantes sont écrites dans les séances du fichier : elles remplacent la répartition par l'appli, qui est retirée de ce programme.");
+  }
   const program: Program = {
     ...config,
     schedule: isSequence ? 'sequence' : 'week',
     startDate,
     componentVolumes,
-    // Le format version 2 ne décrit pas les composantes réparties : un programme remplacé garde les siennes.
-    components: replaces?.components ?? [],
-    componentBlockTypeId: replaces?.componentBlockTypeId ?? null,
-    componentAcceptance: replaces?.componentAcceptance ?? {},
+    components: keepsDistribution ? replaces!.components : [],
+    componentBlockTypeId: keepsDistribution ? replaces!.componentBlockTypeId : null,
+    componentAcceptance: keepsDistribution ? replaces!.componentAcceptance : {},
     id: programId,
     name,
     startWeek,

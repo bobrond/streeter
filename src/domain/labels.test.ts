@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expressName, formatClock, formatDayMonth, formatRelativeDay, formatDuration, formatDurationRange, formatRange, formatRest, restParts, formatSetValue, formatTarget, formatValue, formatValueList, joinFrench } from './labels';
+import { expressName, formatClock, formatDayMonth, formatRelativeDay, formatDuration, formatDurationRange, formatRange, formatRest, restParts, formatSetValue, formatTarget, formatValue, formatValueList, intensityLabel, joinFrench } from './labels';
 
 describe('formats', () => {
   it('énumère à la française', () => {
@@ -73,5 +73,27 @@ describe('jours relatifs et séance express', () => {
 
   it('nomme une séance express d’après la durée et la séance remplacée', () => {
     expect(expressName(30, 'Max')).toBe('Express 30 min · Max');
+  });
+});
+
+describe('intensité d’une ligne', () => {
+  const targets = [
+    { unit: 'reps' as const, min: 6, max: 10 },
+    { unit: 'seconds' as const, min: 15, max: 30 },
+  ];
+  const line = { intensityText: '2 reps en réserve ou RPE 8-9', intensity: { kind: 'rir' as const, min: 2, max: 2 }, targets };
+
+  it('donne celle de l’alternative de cible de l’exercice choisi, sinon toutes', () => {
+    expect(intensityLabel(line, 'reps')).toBe('2 reps en réserve');
+    expect(intensityLabel(line, 'seconds')).toBe('RPE 8-9');
+    expect(intensityLabel(line, 'combos')).toBe('2 reps en réserve ou RPE 8-9');
+    expect(intensityLabel(line)).toBe('2 reps en réserve ou RPE 8-9');
+    // Autant d'intensités que de cibles seulement : sinon, toutes.
+    expect(intensityLabel({ ...line, targets: targets.slice(0, 1) }, 'reps')).toBe('2 reps en réserve ou RPE 8-9');
+  });
+
+  it('une seule intensité : celle lue, sinon le texte', () => {
+    expect(intensityLabel({ intensityText: 'RPE 8-9', intensity: { kind: 'rpe', min: 8, max: 9 }, targets }, 'reps')).toBe('RPE 8-9');
+    expect(intensityLabel({ intensityText: '—', intensity: null, targets: [] })).toBe('—');
   });
 });

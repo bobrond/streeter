@@ -1,5 +1,6 @@
 // Sauvegarde JSON complète : toutes les tables, avec un numéro de version de format.
 import { linkIdenticalBlocks } from '../../domain/blocks';
+import { upgradeAcceptance } from '../../domain/components';
 import { ensureFloorVictorianExercises, inferExerciseEquipment, normalizeEquipment } from '../../domain/equipment';
 import { programFromLegacySettings } from '../../domain/programs';
 import type { Element, Equipment, Exercise, SessionTemplate } from '../../domain/types';
@@ -18,8 +19,9 @@ export const BACKUP_APP = 'streeter';
  * 8 (01/11/2026) : composantes réparties (`components`, `componentBlockTypeId`, `componentAcceptance`) sur chaque
  * programme.
  * 9 (01/11/2026) : matériel par exercice (`equipment`) et ajout des variantes de Victorienne au sol sur Touch FL.
+ * 10 (02/11/2026) : composantes acceptées par type de séance (`componentAcceptance`, liste d'éléments).
  */
-export const BACKUP_FORMAT_VERSION = 9;
+export const BACKUP_FORMAT_VERSION = 10;
 
 export const BACKUP_TABLES = [
   'settings',
@@ -157,6 +159,15 @@ function migrate(backup: Backup, newId: () => string): Backup {
       ? ensureFloorVictorianExercises(upgraded as unknown as Exercise[], current.tables.elements as unknown as Element[], newId)
       : upgraded;
     current = { ...current, formatVersion: 9, tables: { ...current.tables, exercises } };
+  }
+  if (current.formatVersion < 10) {
+    // Format 9 → 10 : comme la version 10 de la base, « endurance seulement » devient la liste des composantes en
+    // endurance, « toutes » disparaît (valeur par défaut), « aucune » devient une liste vide.
+    const programs = current.tables.programs.map((record) => {
+      const program = record as Record<string, unknown>;
+      return isObject(program.componentAcceptance) ? { ...program, componentAcceptance: upgradeAcceptance(program as unknown as Parameters<typeof upgradeAcceptance>[0]) } : program;
+    });
+    current = { ...current, formatVersion: 10, tables: { ...current.tables, programs } };
   }
   return current;
 }

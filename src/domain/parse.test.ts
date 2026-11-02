@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseIntensity, parseRest, parseSeqDay, parseTargets, parseYes } from './parse';
+import { parseIntensities, parseIntensity, parseRest, parseSeqDay, parseTargets, parseYes } from './parse';
 
 describe('parseTargets', () => {
   it.each([
@@ -94,5 +94,18 @@ describe('parseYes', () => {
     expect(parseYes('Oui')).toBe(true);
     expect(parseYes('Non')).toBe(false);
     expect(parseYes(null)).toBe(false);
+  });
+});
+
+describe('intensité par alternative de cible', () => {
+  it('lit une intensité par alternative, dans l’ordre ; la première sert d’intensité de la ligne', () => {
+    expect(parseIntensities('2 reps en réserve ou RPE 8-9')).toEqual([
+      { kind: 'rir', min: 2, max: 2 },
+      { kind: 'rpe', min: 8, max: 9 },
+    ]);
+    expect(parseIntensity('2 reps en réserve ou RPE 8-9')).toEqual({ kind: 'rir', min: 2, max: 2 });
+    expect(parseIntensities('RPE 8-9')).toEqual([{ kind: 'rpe', min: 8, max: 9 }]);
+    expect(parseIntensities('—')).toEqual([]);
+    expect(parseIntensities('Au feeling ou RPE 7')).toEqual([null, { kind: 'rpe', min: 7, max: 7 }]);
   });
 });

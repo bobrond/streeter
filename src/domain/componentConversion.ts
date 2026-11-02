@@ -3,7 +3,7 @@
 // ne diffère plus de Séance type une fois ses composantes retirées ; elle disparaît de la séquence. Les séances déjà
 // faites gardent leur copie ; les programmes passés gardent leurs composantes écrites (on ne les convertit pas).
 import { blockKey, detachAllBlocks } from './blocks';
-import { componentBounds, componentFromLine } from './components';
+import { componentFromLine, normalizeAcceptance } from './components';
 import type { ComponentAcceptance, Element, ID, Program, ProgramComponent, SessionTemplate } from './types';
 import { SEQ_DAYS } from './types';
 
@@ -17,18 +17,12 @@ export interface ComponentConversion {
   removedLines: number;
 }
 
-/** Ce qu'un type de séance accepte d'après ses lignes : aucune composante, l'endurance seulement, ou toutes. */
-function acceptanceFromWorks(works: readonly (string | null)[]): ComponentAcceptance {
-  if (works.length === 0) return 'none';
-  return works.every((work) => work === 'endurance') ? 'endurance' : 'all';
-}
-
 /**
  * Composantes réparties tirées des lignes écrites d'un programme, ou `null` s'il n'en a pas (ou déjà des composantes
  * réparties). Pour chaque composante, sa prescription est celle de sa première ligne obligatoire d'un soir obligatoire
  * (dans l'ordre du déroulé, puis les matins, puis les autres séances), ses séries par séance le minimum de cette
- * ligne ; son bloc devient celui des composantes. Chaque type de séance accepte ce que ses séances avaient : aucune
- * composante, l'endurance seulement, ou toutes. Les séances devenues identiques (même type, moment, notes et lignes)
+ * ligne ; son bloc devient celui des composantes. Chaque type de séance accepte les composantes que ses séances
+ * avaient (toutes : aucun réglage). Les séances devenues identiques (même type, moment, notes et lignes)
  * sont fusionnées dans la première du déroulé.
  */
 export function convertToComponents(
@@ -68,10 +62,10 @@ export function convertToComponents(
 
   const componentAcceptance: Record<ID, ComponentAcceptance> = { ...program.componentAcceptance };
   for (const typeId of new Set(active.map((t) => t.sessionTypeId))) {
-    const works = active
-      .filter((t) => t.sessionTypeId === typeId)
-      .flatMap((t) => t.items.filter((item) => isComponent(item.elementId)).map((item) => componentBounds(program, item.elementId).work));
-    componentAcceptance[typeId] = acceptanceFromWorks(works);
+    const lines = active.filter((t) => t.sessionTypeId === typeId).flatMap((t) => t.items.filter((item) => isComponent(item.elementId)));
+    const accepted = normalizeAcceptance(lines.map((item) => item.elementId), components);
+    if (accepted === null) delete componentAcceptance[typeId];
+    else componentAcceptance[typeId] = accepted;
   }
 
   let removedLines = 0;

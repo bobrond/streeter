@@ -8,7 +8,7 @@ import type { Lookups } from '../../db/lookups';
 import { saveTemplate } from '../../db/programStore';
 import { blockPartners, syncSharedBlocks, templateNames } from '../../domain/blocks';
 import { emptyItemForm, formErrors, formToItem, insertItem, itemToForm, type ItemForm } from '../../domain/editing';
-import { formatIntensity, formatRest, formatTarget } from '../../domain/labels';
+import { formatRest, formatTarget, intensityLabel } from '../../domain/labels';
 import { KIND_ORDER } from '../../domain/library';
 import { parseIntensity, parseRest, parseTargets } from '../../domain/parse';
 import type { ID, SessionTemplate } from '../../domain/types';
@@ -192,7 +192,7 @@ function ItemSheetForm({ target, template, data, lookups, onClose }: { target: I
           <Field label="RPE / marge">
             <Presets values={INTENSITY_PRESETS} current={form.intensityText} onPick={(intensityText) => patch({ intensityText })} />
             <TextInput value={form.intensityText} onChange={(intensityText) => patch({ intensityText })} placeholder="RPE 8-9 ou 1-2 reps en réserve" />
-            <Reading ok={intensity !== null}>{intensity ? `Lu : ${formatIntensity(intensity)}` : 'Texte libre.'}</Reading>
+            <Reading ok={intensity !== null}>{intensity ? `Lu : ${intensityLabel({ intensityText: form.intensityText, intensity, targets: [] })}` : 'Texte libre.'}</Reading>
           </Field>
         )}
         {show('rest') && (

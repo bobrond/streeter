@@ -12,7 +12,7 @@ import { acceptanceOf, componentBounds, slotComponentLines, withComponents } fro
 import { dateOf, dayInfo, localISODate } from '../../domain/cycle';
 import { estimateDuration } from '../../domain/duration';
 import { templateDays, uniqueName } from '../../domain/editing';
-import { ACCEPTANCE_LABEL, MOMENT_LABEL, formatDateLong, formatDurationRange, joinFrench, seqDayLabel, workLabel } from '../../domain/labels';
+import { MOMENT_LABEL, acceptanceText, formatDateLong, formatDurationRange, joinFrench, seqDayLabel, workLabel } from '../../domain/labels';
 import { tranchePeriod } from '../../domain/period';
 import { programPhase, programStartDate } from '../../domain/programs';
 import { projectedCycleEnd, sequenceIds, type SequenceInfo } from '../../domain/sequence';
@@ -198,10 +198,11 @@ function templateUsage(template: SessionTemplate, settings: Settings): string {
 }
 
 /** « Soir · 6 blocs, dont 3 communs », puis « séances 1, 3 et 5 » (gardé sur une ligne). */
-function SessionMeta({ template, context }: { template: SessionTemplate; context: ProgramContext }) {
+function SessionMeta({ template, context, lookups }: { template: SessionTemplate; context: ProgramContext; lookups: Lookups }) {
   const { blocks, shared } = blockSummary(template, context.templates);
+  const elementName = (id: string) => lookups.elements.get(id)?.name.toLowerCase() ?? '?';
   const blockText = `${blocks} bloc${blocks > 1 ? 's' : ''}${shared > 0 ? `, dont ${shared} commun${shared > 1 ? 's' : ''}` : ''}`;
-  const components = context.program.components.length > 0 ? ` · composantes : ${ACCEPTANCE_LABEL[acceptanceOf(context.program, template.sessionTypeId)].toLowerCase()}` : '';
+  const components = context.program.components.length > 0 ? ` · composantes : ${acceptanceText(acceptanceOf(context.program, template.sessionTypeId), elementName)}` : '';
   return (
     <>
       {MOMENT_LABEL[template.moment]} · {blockText} · <span className="whitespace-nowrap">{templateUsage(template, context.settings)}</span>
@@ -220,7 +221,7 @@ function TemplateRow({ template, context, lookups, onMenu }: { template: Session
           <span className="min-w-0 font-semibold">{template.name}</span>
         </span>
         <span className="block text-sm text-ink-2">
-          <SessionMeta template={template} context={context} />
+          <SessionMeta template={template} context={context} lookups={lookups} />
         </span>
       </button>
       <button type="button" aria-label={`Options de ${template.name}`} onClick={onMenu} className="flex size-12 shrink-0 items-center justify-center rounded-xl text-ink-2 active:bg-card-2">

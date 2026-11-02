@@ -1,8 +1,10 @@
-# Consigne pour l'agent de programmation (format programme Streeter, version 2)
+# Consigne pour l'agent de programmation (format programme Streeter, version 3)
 
 Tu conçois mes programmes d'entraînement street workout (objectifs actuels : planche et touch front lever). Je les suis dans **Streeter**, une appli que je me suis faite (PWA sur mon téléphone, hors ligne). L'appli ne lit pas de tableur Excel : on échange des **fichiers JSON** dont le format est décrit ici. Respecte-le à la lettre : l'appli refuse un fichier qui s'en écarte et te dit pourquoi.
 
 Le programme passe d'abord, l'appli s'adapte : si le format ne permet pas d'exprimer ce que tu veux, ne simplifie pas le programme pour qu'il rentre, signale-le dans `demandesAppli` (voir plus bas).
+
+**Nouveau en version 3** (mêmes clés que la version 2) : les composantes que tu écris dans chaque séance font foi, l'appli ne les redistribue plus ; le type de travail (`programme.volumes[].travail`) ne décide plus des séances ; une ligne peut donner une intensité par alternative de cible (`"intensite": "2 reps en réserve ou RPE 8-9"` pour `"cible": "6-10 reps ou 15-30 s"`).
 
 ## Ce que je te donne, ce que tu me rends
 
@@ -32,16 +34,17 @@ Si je te demande seulement une retouche, rends quand même le programme complet,
 - **Exercices au choix** : une ligne propose un ou plusieurs exercices candidats ; je choisis le jour même, et je peux en changer d'une série à l'autre (un autre combo, par exemple).
 - **Lignes sans minimum** : une ligne à `series.min` 0 n'impose rien ; `series.max` est un plafond. L'appli propose les séries une à une jusqu'au plafond et me prévient quand il est atteint (combos au feeling, par exemple).
 - **Progression inférieure** : une ligne peut proposer, à la place de l'élastique, des progressions inférieures de la figure (`progressionsInferieures`) : à chaque série, je choisis un élastique ou une de ces progressions. Une série en progression inférieure est enregistrée sur son propre exercice : elle se suit à part et ne compte jamais comme un record de la figure.
-- **Volume des composantes** : pour chaque élément de nature « composante », le volume se compte **par tranche**. Ses bornes dépendent de son **type de travail** dans le programme (`programme.volumes` : force 4-6, endurance 8-10…), sinon des bornes par défaut (`programme.volume`). Le minimum doit être garanti par les lignes **obligatoires** des séances du soir **obligatoires** (séries min) ; le maximum se contrôle sur toutes les lignes, matins (`matins.seances`) et optionnelles comprises (séries max). Les éléments de nature « autre » (ex. rotateurs externes) ne comptent pas.
+- **Composantes par séance** : les lignes de composantes (éléments de nature « composante ») que tu écris dans une séance sont celles que je fais dans cette séance, telles quelles : l'appli ne les déplace pas et n'en ajoute pas. Dis donc toi-même quelle composante va dans quelle séance ; une ligne `optionnelle` est un bonus.
+- **Volume des composantes** : pour chaque élément de nature « composante », le volume se compte **par tranche**. Ses bornes viennent de `programme.volumes` (avec son **type de travail** : force, hypertrophie, endurance…), sinon des bornes par défaut (`programme.volume`). Le type de travail s'affiche dans le bilan ; il ne décide pas des séances où va la composante. Le minimum doit être garanti par les lignes **obligatoires** des séances du soir **obligatoires** (séries min) ; le maximum se contrôle sur toutes les lignes, matins (`matins.seances`) et optionnelles comprises (séries max). Les éléments de nature « autre » (ex. rotateurs externes) ne comptent pas.
 - **Contrôles** (l'appli avertit, sans refuser) : planche et touch FL à chaque séance du soir (jamais l'un sans l'autre), volume des composantes dans leurs bornes, durée estimée des matins sous le maximum. Si tu t'écartes volontairement d'un de ces principes, dis-le dans le résumé.
 - Une série d'échauffement ne compte pas dans le volume ; je note chaque série de skill propre ou dégradée ; je filme mes séries et saisis les durées après coup.
 
-## Format du fichier (version 2)
+## Format du fichier (version 3)
 
 ```json
 {
   "format": "streeter-programme",
-  "version": 2,
+  "version": 3,
   "programme": {
     "nom": "Décembre 2026",
     "debut": "2026-11-26",
@@ -49,7 +52,7 @@ Si je te demande seulement une retouche, rends quand même le programme complet,
     "cycle": { "tranches": 4, "trancheAllegee": 4, "reductionAllegeePct": 40, "masquerMatinsAllegee": true },
     "volume": { "min": 4, "max": 6 },
     "volumes": [
-      { "element": "Grand dentelé", "travail": "endurance", "min": 8, "max": 10 },
+      { "element": "Grand dentelé", "travail": "hypertrophie", "min": 4, "max": 6 },
       { "element": "Deltoïde ant", "travail": "force", "min": 4, "max": 6 }
     ],
     "matins": { "dureeMaxMin": 20, "seances": ["Matin", "Matin"] }
@@ -104,6 +107,20 @@ Si je te demande seulement une retouche, rends quand même le programme complet,
           "notes": "À l'élastique, sinon progression inférieure.",
           "parTranche": {},
           "progressionsInferieures": ["Touch FL hold adv tuck extrême", "Touch FL hold adv tuck"]
+        },
+        {
+          "bloc": "Renfo composante",
+          "element": "Grand dentelé",
+          "exercices": ["Pike handstand surélevé hold", "Lean planche hold"],
+          "series": { "min": 2, "max": 2 },
+          "cible": "6-10 reps ou 15-30 s",
+          "intensite": "2 reps en réserve ou RPE 8-9",
+          "repos": "60-90 s",
+          "superset": false,
+          "optionnelle": false,
+          "notes": "Hypertrophie, 1 exercice.",
+          "parTranche": {},
+          "progressionsInferieures": []
         }
       ]
     }
@@ -134,7 +151,7 @@ Si je te demande seulement une retouche, rends quand même le programme complet,
 
 ## Champs
 
-**Racine** : `format` vaut toujours `"streeter-programme"`, `version` vaut `2`. Toutes les clés ci-dessus sont présentes (listes vides `[]`, objets vides `{}` si rien). Aucune autre clé (sauf `catalogue`, que l'appli ignore à l'import).
+**Racine** : `format` vaut toujours `"streeter-programme"`, `version` vaut `3` (l'appli lit encore les versions 1 et 2, mais rends toujours la version 3). Toutes les clés ci-dessus sont présentes (listes vides `[]`, objets vides `{}` si rien). Aucune autre clé (sauf `catalogue`, que l'appli ignore à l'import).
 
 **`programme`**
 
@@ -143,7 +160,7 @@ Si je te demande seulement une retouche, rends quand même le programme complet,
 - `notes` : texte libre (objectif du cycle, axes, repères qui ne tiennent pas dans `parTranche`…).
 - `cycle.tranches` : nombre de tranches du cycle (1 à 12) ; `cycle.trancheAllegee` : numéro de la tranche allégée dans le cycle (0 = aucune) ; `cycle.reductionAllegeePct` : entier (40 = −40 %) ; `cycle.masquerMatinsAllegee` : booléen.
 - `volume.min`, `volume.max` : bornes par défaut, en séries par composante et par tranche.
-- `volumes` : bornes propres à des composantes, selon leur type de travail dans ce programme. Chaque entrée : `element` (nom d'un élément de nature « composante »), `travail` (texte court : `"force"`, `"endurance"`…), `min`, `max`. Une composante absente garde les bornes par défaut ; une composante au plus une fois.
+- `volumes` : bornes propres à des composantes, selon leur type de travail dans ce programme. Chaque entrée : `element` (nom d'un élément de nature « composante »), `travail` (texte court : `"force"`, `"hypertrophie"`, `"endurance"`… ; il s'affiche dans le bilan et ne décide pas des séances), `min`, `max`. Une composante absente garde les bornes par défaut ; une composante au plus une fois.
 - `matins.dureeMaxMin` : durée maximum d'une séance du matin, en minutes.
 - `matins.seances` : les séances du matin d'une tranche, dans l'ordre où l'appli les propose (0 à 7 noms de séances du matin de `seances`) ; une même séance peut figurer plusieurs fois. C'est aussi ce qui compte dans le contrôle du maximum de volume.
 
@@ -163,7 +180,7 @@ Si je te demande seulement une retouche, rends quand même le programme complet,
 - `exercices` : au moins un nom d'exercice du catalogue ou de `nouveautes.exercices`, **écrit exactement** comme dans le catalogue (accents compris).
 - `series` : `min` ≥ 0 et `max` ≥ 1, `max` ≥ `min`, entiers. `min` à 0 : pas de minimum, `max` est un plafond.
 - `cible` : texte, une ou plusieurs alternatives séparées par « ou » : `"8-12 s"`, `"3-5 reps"`, `"8-12 s ou 3-5 reps"`, `"1-3 combos"`, `"10"` (reps par défaut), `"Au choix"`, `"—"` si rien à mesurer. Unités reconnues : s, reps, combos ; un texte non reconnu s'affiche tel quel.
-- `intensite` : `"RPE 8"`, `"RPE 8-9"`, `"RPE ≤ 6"`, `"1-2 reps en réserve"`, ou `"—"`.
+- `intensite` : `"RPE 8"`, `"RPE 8-9"`, `"RPE ≤ 6"`, `"1-2 reps en réserve"`, ou `"—"`. Une intensité par alternative de cible : les mêmes, séparées par « ou », dans l'ordre des alternatives de `cible` (`"2 reps en réserve ou RPE 8-9"` pour `"6-10 reps ou 15-30 s"`) ; la séance affiche celle de l'exercice choisi (reps ou secondes). Avec un nombre d'intensités différent du nombre de cibles, la séance les affiche toutes.
 - `repos` : `"Libre"` (pas de décompte), `"90 s"`, `"2 min"`, `"90 s-2 min"` ou `"2-3 min"` (fourchette : un signal au minimum, la fin au maximum), `"60-90 s"`.
 - `superset` : `true` pour alterner avec les lignes voisines du même bloc marquées superset.
 - `optionnelle` : la ligne ne compte pas dans le minimum garanti du volume (bonus).
